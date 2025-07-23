@@ -1,0 +1,45 @@
+name: Build Linux Executable for Jetson Orin NX
+
+on:
+  push:
+    branches: [ jetson_gpu ]
+  pull_request:
+    branches: [ jetson_gpu ]
+
+jobs:
+  build-linux-executable-arm64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build in ARM64 Docker container
+        uses: addnab/docker-run-action@v3
+        with:
+          image: arm64v8/ubuntu:24.04
+          options: --platform=arm64 -v ${{ github.workspace }}:/workspace -w /workspace
+          run: |
+            apt-get update
+            apt-get install -y python3.12 python3.12-dev python3.12-venv python3-pip build-essential libglib2.0-0 libsm6 libxrender1 libxext6
+            python3.12 -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install pyinstaller
+            pyinstaller app.py --name 4isafecross --distpath dist/
+
+      - name: Upload executable artifact (ARM64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 4isafecross-linux-arm64-executable
+          path: dist/4isafecross
+
+# Note: Ce workflow utilise QEMU et un conteneur Docker arm64v8/ubuntu pour générer un exécutable ARM64 compatible Jetson Orin NX.
