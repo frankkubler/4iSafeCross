@@ -1,0 +1,10 @@
+[Unit]
+Description=Set POE GPIO at boot
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/set_poe_gpio.sh
+
+[Install]
+WantedBy=multi-user.target

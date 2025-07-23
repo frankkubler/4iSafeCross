@@ -1,0 +1,13 @@
+# À copier dans /etc/logrotate.d/4isafecross.logrotate sur la machine Linux cible
+# Pour tester la rotation manuellement :
+# sudo logrotate -f /etc/logrotate.d/4isafecross.logrotate
+/home/user-4itec/github/4iSafeCross/logs/service_stdout.log
+/home/user-4itec/github/4iSafeCross/logs/service_stderr.log {
+    su root root
+    size 10M
+    rotate 5
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
