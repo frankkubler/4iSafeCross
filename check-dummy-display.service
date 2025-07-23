@@ -1,0 +1,10 @@
+[Unit]
+#Description=Configure dummy screen (check hdmi or not)
+After=systemd-user-sessions.service
+#After=systemd-user-sessions.service graphical.target
+[Service]
+ExecStart=/usr/local/bin/switch-display.sh
+
+[Install]
+WantedBy=multi-user.target
+

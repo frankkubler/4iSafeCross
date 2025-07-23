@@ -1,0 +1,12 @@
+__pycache__
+/logs/*
+!logs/
+/logs/*.log
+__pycache__/app.cpython-312.pyc
+static/ffmpeg/bin/ffmpeg.exe
+static/ffmpeg/bin/ffplay.exe
+static/ffmpeg/bin/ffprobe.exe
+/detections
+__pycache__/app.cpython-312.pyc
+.python-version
+uv.lock
