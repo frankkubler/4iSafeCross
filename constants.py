@@ -28,8 +28,9 @@ ZONES_DEFAULT = [
 # Définition des zones de détection par caméra (exemple pour 2 caméras)
 ZONES_BY_CAMERA = {
     0: [
-        {"name": "zone3_cam0", "rect": (0, 0, 1920, 180), "color": (255, 255, 0)},      # Cyan
-        {"name": "zone2_cam0", "rect": (0, 180, 1920, 740), "color": (0, 255, 255)},   # Jaune
+        {"name": "zone3_cam0", "rect": (0, 0, 1920, 180), "color": (255, 255, 0)},
+        {"name": "zone2_cam0", "polygon": [(0, 180), (1600, 180), (1920, 740), (0, 740)], "color": (0, 255, 255)},# Cyan
+        # {"name": "zone2_cam0", "rect": (0, 180, 1920, 740), "color": (0, 255, 255)},   # Jaune
         {"name": "zone1_cam0", "rect": (0, 380, 1920, 1080), "color": (255, 0, 255)},  # Magenta
     ],
     1: [

@@ -19,6 +19,7 @@ import psutil
 import glob
 import asyncio
 import copy
+import numpy as np
 
 # Initialisation du MAIN_LOOP global pour l'application
 MAIN_LOOP = asyncio.new_event_loop()
@@ -244,15 +245,26 @@ def gen_frames(cid):
             # Tracer les zones spécifiques à la caméra
             zones = zones_by_camera.get(cid, [])
             for i, zone in enumerate(zones):
-                x1, y1, x2, y2 = zone["rect"]
-                # S'assurer que la zone ne dépasse pas l'image
-                x1 = max(0, min(w - 1, x1))
-                y1 = max(0, min(h - 1, y1))
-                x2 = max(0, min(w - 1, x2))
-                y2 = max(0, min(h - 1, y2))
                 color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 4)
-                cv2.putText(frame, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+                if "polygon" in zone:
+                    # On s'assure que les points sont dans l'image
+                    pts = [
+                        (max(0, min(w - 1, int(xy[0]))), max(0, min(h - 1, int(xy[1]))))
+                        for xy in zone["polygon"]
+                    ]
+                    pts_np = np.array([pts], dtype=np.int32)
+                    cv2.polylines(frame, pts_np, isClosed=True, color=color, thickness=4)
+                    # Afficher le nom de la zone au premier point
+                    cv2.putText(frame, zone["name"], (pts[0][0], pts[0][1] + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+                elif "rect" in zone:
+                    x1, y1, x2, y2 = zone["rect"]
+                    # S'assurer que la zone ne dépasse pas l'image
+                    x1 = max(0, min(w - 1, x1))
+                    y1 = max(0, min(h - 1, y1))
+                    x2 = max(0, min(w - 1, x2))
+                    y2 = max(0, min(h - 1, y2))
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 4)
+                    cv2.putText(frame, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
             # Récupérer l'état du mouvement depuis le thread d'inférence
             motion = False
             if cid in inference_threads:
