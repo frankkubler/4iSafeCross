@@ -10,7 +10,7 @@ CHAT_ID = "***REMOVED-CHAT-ID***"
 MOTIONTRESHOLD = 10000  # seuil de détection de mouvement pour zone logisitique HAM 
 APP_NAME = "4iSafeCross"
 APP_VERSION = "0.1"
-
+INF_THRESHOLD = 0.4  # seuil d'inférence pour la détection d'objet
 RTSP_LOGIN = "admin"
 RTSP_PASSWORD = "***REMOVED-PASSWORD***"
 RTSP_HOST = ["192.168.2.156", "192.168.2.157"]  # IP fixes des caméras utilisées par défaut (modifiable ici)

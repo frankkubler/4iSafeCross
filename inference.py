@@ -5,7 +5,7 @@ import logging
 import requests
 import io
 import cv2
-from constants import MOTIONTRESHOLD
+from constants import MOTIONTRESHOLD, INF_THRESHOLD
 
 
 class InferenceServerThread(threading.Thread):
@@ -26,6 +26,7 @@ class InferenceServerThread(threading.Thread):
         # self.old_motion_bool = False
         self.past_detections = []
         self.detections = []
+        self.confidence_threshold = INF_THRESHOLD
         self.class_id = 1 if "rf_detr" in self.fonction else 0
 
     @property
@@ -60,11 +61,10 @@ class InferenceServerThread(threading.Thread):
             buffer.seek(0)
             current_detections = []
             try:
-                confidence_value = 0.3  # ou la valeur souhaitée
                 response = requests.post(
                     self.url,
                     files={"frame": buffer.getvalue()},
-                    params={"confidence": confidence_value}
+                    params={"confidence": self.confidence_threshold}
                 )
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])
