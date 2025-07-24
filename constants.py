@@ -7,7 +7,7 @@
 TOKEN = "6741846240:AAGe2Mcw4sbTmuOCHhN1xJ07Onf9TrSv_fo"  # production bot
 CHAT_ID = "-4115471727"
 
-MOTIONTRESHOLD = 15000  # seuil de détection de mouvement pour zone logisitique HAM 
+MOTIONTRESHOLD = 10000  # seuil de détection de mouvement pour zone logisitique HAM 
 APP_NAME = "4iSafeCross"
 APP_VERSION = "0.1"
 
@@ -29,8 +29,8 @@ ZONES_BY_CAMERA = {
     0: [
         # {"name": "zone3_cam0", "rect": (0, 0, 1920, 180), "color": (255, 255, 0)},
         {"name": "zone3_cam0", "polygon": 
-            [(1105, 30), (1105, 110), (1238, 290), (1920, 1080), (0, 1080),
-             (0, 388), (443, 388), (443, 225), (743, 225), (743, 30)],
+            [(1105, 60), (1105, 110), (1238, 290), (1920, 1080), (0, 1080),
+             (0, 388), (443, 388), (443, 225), (743, 225), (743, 60)],
             "color": (255, 255, 0)},
         {"name": "zone2_cam0", "polygon": [(1101, 111), (1479, 108),
                                         (1484, 314), (1583, 314),
@@ -38,7 +38,7 @@ ZONES_BY_CAMERA = {
                                         "color": (0, 255, 255)},  # Cyan
         # {"name": "zone2_cam0", "rect": (0, 180, 1920, 740), "color": (0, 255, 255)},   # Jaune
         # {"name": "zone1_cam0", "rect": (0, 380, 1920, 1080), "color": (255, 0, 255)},  # Magenta
-        {"name": "zone1_cam0", "polygon": [(0, 380), (1400, 380), (1920, 1080), (0, 1080)], "color": (255, 0, 255)},  # Magenta
+        {"name": "zone1_cam0", "polygon": [(0, 280), (1400, 280), (1920, 1080), (0, 1080)], "color": (255, 0, 255)},  # Magenta
     ],
     1: [
         {"name": "zone3_cam1", "rect": (0, 0, 800, 600), "color": (255, 255, 0)},      # Cyan
