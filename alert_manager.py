@@ -42,18 +42,19 @@ class AlerteManager:
     def set_telegram_alert_enabled(self, enabled: bool):
         self.telegram_alert_enabled = enabled
 
-    def _get_relay_nums_from_zone(self, zone_name):
-        # Retourne une liste de relais à activer/éteindre selon la zone
-        if "zone1" in zone_name or "zone3" in zone_name:
-            return [0, 1, 2]
+    def _get_relay_num_from_zone(self, zone_name):
+        if "zone1" in zone_name:
+            return 0
         elif "zone2" in zone_name:
-            return [1]
+            return 1
+        elif "zone3" in zone_name:
+            return 2
         elif "zone4" in zone_name:
-            return [3]
+            return 3
         elif "zone5" in zone_name:
-            return [4]
+            return 4
         self.logger.warning(f"Zone {zone_name} non reconnue pour le relais")
-        return []  # Si la zone n'est pas reconnue, on ne fait rien
+        return None  # Si la zone n'est pas reconnue, on ne fait rien
 
     async def on_detection(self, timestamp, frame=None, detections=None, cid=None):
         # Gestion du relais
@@ -68,14 +69,13 @@ class AlerteManager:
         # self.logger.info(f"Détection reçue à {timestamp} pour la caméra {cid} avec {len(zone_names_detected)} zones détectées : {zone_names_detected}")
         # Activer le relais pour chaque zone détectée
         for zone_name in zone_names_detected:
-            relay_nums = self._get_relay_nums_from_zone(zone_name)
+            relay_num = self._get_relay_num_from_zone(zone_name)
             self.logger.debug(f"self.relay_on : {self.relay_on.get(zone_name)}")
             if not self.relay_on.get(zone_name, False):
                 now = datetime.now()
-                if relay_nums:
-                    for relay_num in relay_nums:
-                        self.relays.action_on(relay_num)
-                        self.logger.info(f"Activation du relais pour la zone {zone_name} (relais numéro {relay_num})")
+                if relay_num is not None:
+                    self.relays.action_on(relay_num)
+                    self.logger.info(f"Activation du relais pour la zone {zone_name} (relais numéro {relay_num})")
                 else:
                     self.relays.action_on()  # fallback si zone inconnue
                     self.logger.warning(f"Activation du relais pour la zone {zone_name} relais fallback 0")
@@ -141,7 +141,7 @@ class AlerteManager:
         if not zone_names:
             zone_names = list(self.relay_on.keys())
 
-        # Lance une tâche asyncio pour éteindre le(s) relais après 11s
+        # Lance une tâche asyncio pour éteindre le relais après 10s
         async def delayed_off(zone_name):
             try:
                 # Attendre exactement 11 secondes après la dernière détection pour cette zone
@@ -150,10 +150,9 @@ class AlerteManager:
                     await asyncio.sleep(delay)
                 if time.time() - self.last_detection_time_by_zone.get(zone_name, 0) >= 11:
                     self.logger.info(f"Aucune détection récente pour la zone {zone_name} :{time.time() - self.last_detection_time_by_zone.get(zone_name, 0)}")
-                    relay_nums = self._get_relay_nums_from_zone(zone_name)
-                    if relay_nums:
-                        for relay_num in relay_nums:
-                            self.relays.action_off(relay_num)
+                    relay_num = self._get_relay_num_from_zone(zone_name)
+                    if relay_num is not None:
+                        self.relays.action_off(relay_num)
                     else:
                         self.relays.action_off()  # fallback si zone inconnue
                     self.relay_on[zone_name] = False
