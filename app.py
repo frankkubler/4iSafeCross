@@ -89,9 +89,16 @@ def get_zone_for_detection(det, zones):
     y_centre = int((det[1] + det[3]) / 2)
     matched_zones = []
     for zone in zones:
-        x1, y1, x2, y2 = zone["rect"]
-        if x1 <= x_centre <= x2 and y1 <= y_centre <= y2:
-            matched_zones.append(zone["name"])
+        if "polygon" in zone:
+            pts = np.array(zone["polygon"], dtype=np.int32)
+            # cv2.pointPolygonTest attend un tableau Nx2
+            inside = cv2.pointPolygonTest(pts, (x_centre, y_centre), False)
+            if inside >= 0:
+                matched_zones.append(zone["name"])
+        elif "rect" in zone:
+            x1, y1, x2, y2 = zone["rect"]
+            if x1 <= x_centre <= x2 and y1 <= y_centre <= y2:
+                matched_zones.append(zone["name"])
     return matched_zones
 
 
