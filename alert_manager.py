@@ -159,8 +159,11 @@ class AlerteManager:
                         time_on = self.relay_on_time.get(relay_num)
                         if time_on is not None:
                             await asyncio.sleep(11)
+                            # Log de diagnostic : afficher les zones actives restantes avant extinction
+                            self.logger.info(f"[DIAG] Avant extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]}")
                             # Vérifier à nouveau qu'aucune zone n'est active pour ce relais
                             if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
+                                self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (zone {zone_name})")
                                 self.relays.action_off(relay_num)
                                 self.relay_on[relay_num] = False
                                 time_off = datetime.now()
