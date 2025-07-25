@@ -169,10 +169,12 @@ class AlerteManager:
                                 insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
                                 self.relay_on_time[relay_num] = None
                                 # Log de diagnostic : afficher les zones actives restantes après extinction
+                                last_detection = self.last_detection_time_by_zone.get(zone_name)
+                                last_detection_str = datetime.fromtimestamp(last_detection).strftime('%Y-%m-%d %H:%M:%S.%f') if last_detection else 'None'
                                 self.logger.info(
                                     f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
-                                    f"Début détection (time_on) : {time_on.strftime('%Y-%m-%d %H:%M:%S.%f') if time_on else 'None'} | "
-                                    f"Fin détection (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')}"
+                                    f"Dernière détection (zone {zone_name}) : {last_detection_str} | "
+                                    f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')}"
                                 )
             except asyncio.CancelledError:
                 self.logger.info(f"delayed_off annulé (détection relancée) pour {zone_name}")
