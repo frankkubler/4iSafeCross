@@ -14,11 +14,13 @@ class AlerteManager:
         # ...existing code...
         self.relays = relays
         self.last_detection_time = 0
-        # self.relay_on devient un dict par zone
-        self.relay_on = {}  # {zone_name: False}
+        # self.relay_on devient un dict par relais
+        self.relay_on = {}  # {relay_num: False}
+        self.relay_on_time = {}  # {relay_num: datetime}
         self.timer_task = {}  # {zone_name: asyncio.Task}
-        self.relay_on_time = {}  # {zone_name: datetime}
         self.last_detection_time_by_zone = {}  # {zone_name: timestamp}
+        # Pour chaque relais, garder la liste des zones actives qui l'utilisent
+        self.relay_active_zones = {}  # {relay_num: set(zone_names_actives)}
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         # Dictionnaire pour suivre le dernier temps de détection par caméra
         self.camera_last_detection = {}
@@ -31,30 +33,35 @@ class AlerteManager:
         # Format : (x1, y1, x2, y2) en pixels sur l'image
         self.zones = zones if zones is not None else []
         # Initialiser relay_on et timer_task pour chaque zone
+        relay_nums = set()
+        for zone in self.zones:
+            for relay_num in self._get_relay_nums_from_zone(zone["name"]):
+                relay_nums.add(relay_num)
+        for relay_num in relay_nums:
+            self.relay_on[relay_num] = False
+            self.relay_on_time[relay_num] = None
+            self.relay_active_zones[relay_num] = set()
         for zone in self.zones:
             name = zone["name"]
-            self.relay_on[name] = False
             self.timer_task[name] = None
-            self.relay_on_time[name] = None
             self.last_detection_time_by_zone[name] = 0
         init_db()  # Initialise la base de données à la création du manager
 
     def set_telegram_alert_enabled(self, enabled: bool):
         self.telegram_alert_enabled = enabled
 
-    def _get_relay_num_from_zone(self, zone_name):
-        if "zone1" in zone_name:
-            return 0
+    def _get_relay_nums_from_zone(self, zone_name):
+        # Retourne une liste de relais à activer/éteindre selon la zone
+        if "zone1" in zone_name or "zone3" in zone_name:
+            return [0, 1, 2]
         elif "zone2" in zone_name:
-            return 1
-        elif "zone3" in zone_name:
-            return 2
+            return [1]
         elif "zone4" in zone_name:
-            return 3
+            return [3]
         elif "zone5" in zone_name:
-            return 4
+            return [4]
         self.logger.warning(f"Zone {zone_name} non reconnue pour le relais")
-        return None  # Si la zone n'est pas reconnue, on ne fait rien
+        return []  # Si la zone n'est pas reconnue, on ne fait rien
 
     async def on_detection(self, timestamp, frame=None, detections=None, cid=None):
         # Gestion du relais
@@ -69,18 +76,17 @@ class AlerteManager:
         # self.logger.info(f"Détection reçue à {timestamp} pour la caméra {cid} avec {len(zone_names_detected)} zones détectées : {zone_names_detected}")
         # Activer le relais pour chaque zone détectée
         for zone_name in zone_names_detected:
-            relay_num = self._get_relay_num_from_zone(zone_name)
-            self.logger.debug(f"self.relay_on : {self.relay_on.get(zone_name)}")
-            if not self.relay_on.get(zone_name, False):
-                now = datetime.now()
-                if relay_num is not None:
+            relay_nums = self._get_relay_nums_from_zone(zone_name)
+            for relay_num in relay_nums:
+                # Ajouter la zone comme active pour ce relais
+                self.relay_active_zones.setdefault(relay_num, set()).add(zone_name)
+                self.logger.debug(f"self.relay_on : {self.relay_on.get(relay_num)}")
+                if not self.relay_on.get(relay_num, False):
+                    now = datetime.now()
                     self.relays.action_on(relay_num)
                     self.logger.info(f"Activation du relais pour la zone {zone_name} (relais numéro {relay_num})")
-                else:
-                    self.relays.action_on()  # fallback si zone inconnue
-                    self.logger.warning(f"Activation du relais pour la zone {zone_name} relais fallback 0")
-                self.relay_on[zone_name] = True
-                self.relay_on_time[zone_name] = now  # Enregistre le temps d'allumage
+                    self.relay_on[relay_num] = True
+                    self.relay_on_time[relay_num] = now  # Enregistre le temps d'allumage
             # Mise à jour du timestamp de détection par zone
             self.last_detection_time_by_zone[zone_name] = timestamp
             # Annuler le timer d'extinction pour cette zone
@@ -139,30 +145,31 @@ class AlerteManager:
     async def on_no_more_detection(self, timestamp, zone_names=None):
         # zone_names : liste des zones pour lesquelles il n'y a plus de détection
         if not zone_names:
-            zone_names = list(self.relay_on.keys())
+            zone_names = list(self.last_detection_time_by_zone.keys())
 
-        # Lance une tâche asyncio pour éteindre le relais après 10s
+        # Lance une tâche asyncio pour éteindre le(s) relais après 10s
         async def delayed_off(zone_name):
             try:
-                # Attendre exactement 11 secondes après la dernière détection pour cette zone
-                delay = 11 - (time.time() - self.last_detection_time_by_zone.get(zone_name, 0))
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                if time.time() - self.last_detection_time_by_zone.get(zone_name, 0) >= 11:
-                    self.logger.info(f"Aucune détection récente pour la zone {zone_name} :{time.time() - self.last_detection_time_by_zone.get(zone_name, 0)}")
-                    relay_num = self._get_relay_num_from_zone(zone_name)
-                    if relay_num is not None:
-                        self.relays.action_off(relay_num)
-                    else:
-                        self.relays.action_off()  # fallback si zone inconnue
-                    self.relay_on[zone_name] = False
-                    # Calcul de la durée d'allumage
-                    time_on = self.relay_on_time.get(zone_name)
-                    if time_on:
-                        time_off = datetime.now()
-                        duration = (time_off - time_on).total_seconds()
-                        insert_relay_event(str(zone_name), duration, time_on, time_off)
-                        self.relay_on_time[zone_name] = None
+                relay_nums = self._get_relay_nums_from_zone(zone_name)
+                for relay_num in relay_nums:
+                    # Retirer la zone de la liste des zones actives pour ce relais
+                    self.relay_active_zones.setdefault(relay_num, set()).discard(zone_name)
+                    # Si plus aucune zone n'est active pour ce relais, on lance/extinction après 11s
+                    if not self.relay_active_zones[relay_num]:
+                        time_on = self.relay_on_time.get(relay_num)
+                        if time_on is not None:
+                            elapsed = (datetime.now() - time_on).total_seconds()
+                            delay = 11 - elapsed
+                            if delay > 0:
+                                await asyncio.sleep(delay)
+                            # Vérifier à nouveau qu'aucune zone n'est active pour ce relais
+                            if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
+                                self.relays.action_off(relay_num)
+                                self.relay_on[relay_num] = False
+                                time_off = datetime.now()
+                                duration = (time_off - time_on).total_seconds()
+                                insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
+                                self.relay_on_time[relay_num] = None
             except asyncio.CancelledError:
                 self.logger.info(f"delayed_off annulé (détection relancée) pour {zone_name}")
                 pass
@@ -180,13 +187,17 @@ class AlerteManager:
         # zones : liste de dicts {"name": ..., "rect": [x1, y1, x2, y2]}
         self.zones = zones
         self.logger.info(f"Zones mises à jour : {self.zones}")
-        # Réinitialiser relay_on et timer_task pour chaque zone
-        self.relay_on = {}
+        # Réinitialiser relay_on, relay_on_time, relay_active_zones pour chaque relay_num
+        relay_nums = set()
+        for zone in self.zones:
+            for relay_num in self._get_relay_nums_from_zone(zone["name"]):
+                relay_nums.add(relay_num)
+        self.relay_on = {relay_num: False for relay_num in relay_nums}
+        self.relay_on_time = {relay_num: None for relay_num in relay_nums}
+        self.relay_active_zones = {relay_num: set() for relay_num in relay_nums}
         self.timer_task = {}
         self.last_detection_time_by_zone = {}
         for zone in self.zones:
             name = zone["name"]
-            self.relay_on[name] = False
             self.timer_task[name] = None
-            self.relay_on_time[name] = None
             self.last_detection_time_by_zone[name] = 0
