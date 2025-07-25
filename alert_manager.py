@@ -18,6 +18,7 @@ class AlerteManager:
         self.relay_on = {}  # {relay_num: False}
         self.relay_on_time = {}  # {relay_num: datetime}
         self.timer_task = {}  # {zone_name: asyncio.Task}
+        self.relay_timer_task = {}  # {relay_num: asyncio.Task}
         self.last_detection_time_by_zone = {}  # {zone_name: timestamp}
         # Pour chaque relais, garder la liste des zones actives qui l'utilisent
         self.relay_active_zones = {}  # {relay_num: set(zone_names_actives)}
@@ -147,47 +148,50 @@ class AlerteManager:
         if not zone_names:
             zone_names = list(self.last_detection_time_by_zone.keys())
 
-        # Lance une tâche asyncio pour éteindre le(s) relais après 11s
-        async def delayed_off(zone_name):
+        # Nouvelle logique : extinction indépendante par relais
+        async def delayed_off_relay(relay_num):
             try:
-                relay_nums = self._get_relay_nums_from_zone(zone_name)
-                for relay_num in relay_nums:
-                    # Retirer la zone de la liste des zones actives pour ce relais
-                    self.relay_active_zones.setdefault(relay_num, set()).discard(zone_name)
-                    # Si plus aucune zone n'est active pour ce relais, on lance/extinction après 11s
-                    if not self.relay_active_zones[relay_num]:
-                        time_on = self.relay_on_time.get(relay_num)
-                        if time_on is not None:
-                            await asyncio.sleep(11)
-                            # Vérifier à nouveau qu'aucune zone n'est active pour ce relais
-                            if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
-                                self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (zone {zone_name})")
-                                self.relays.action_off(relay_num)
-                                self.relay_on[relay_num] = False
-                                time_off = datetime.now()
-                                duration = (time_off - time_on).total_seconds()
-                                insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
-                                self.relay_on_time[relay_num] = None
-                                # Log de diagnostic : afficher les zones actives restantes après extinction
-                                last_detection = self.last_detection_time_by_zone.get(zone_name)
-                                last_detection_str = datetime.fromtimestamp(last_detection).strftime('%Y-%m-%d %H:%M:%S.%f') if last_detection else 'None'
-                                self.logger.info(
-                                    f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
-                                    f"Dernière détection (zone {zone_name}) : {last_detection_str} | "
-                                    f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')}"
-                                )
+                await asyncio.sleep(11)
+                # Vérifier qu'aucune zone n'est active pour ce relais
+                if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
+                    time_on = self.relay_on_time.get(relay_num)
+                    time_off = datetime.now()
+                    self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (toutes zones)")
+                    self.relays.action_off(relay_num)
+                    self.relay_on[relay_num] = False
+                    duration = (time_off - time_on).total_seconds() if time_on else 0
+                    insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
+                    self.relay_on_time[relay_num] = None
+                    # Log de diagnostic : afficher les zones actives restantes après extinction
+                    self.logger.info(
+                        f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
+                        f"Dernière détection (toutes zones) : {max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)} | "
+                        f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')}"
+                    )
             except asyncio.CancelledError:
-                self.logger.info(f"delayed_off annulé (détection relancée) pour {zone_name}")
+                self.logger.info(f"delayed_off annulé (détection relancée) pour relais {relay_num}")
                 pass
 
+        # Pour chaque zone où il n'y a plus de détection, retirer la zone des relais concernés
+        relays_to_check = set()
         for zone_name in zone_names:
-            if self.timer_task.get(zone_name) and not self.timer_task[zone_name].done():
-                self.timer_task[zone_name].cancel()
-                try:
-                    await self.timer_task[zone_name]
-                except asyncio.CancelledError:
-                    pass
-            self.timer_task[zone_name] = asyncio.create_task(delayed_off(zone_name))
+            relay_nums = self._get_relay_nums_from_zone(zone_name)
+            for relay_num in relay_nums:
+                self.relay_active_zones.setdefault(relay_num, set()).discard(zone_name)
+                relays_to_check.add(relay_num)
+
+        # Pour chaque relais concerné, si plus aucune zone n'est active, (re)lancer le timer d'extinction
+        for relay_num in relays_to_check:
+            if not self.relay_active_zones[relay_num]:
+                # Annuler le timer existant s'il existe
+                if self.relay_timer_task.get(relay_num) and not self.relay_timer_task[relay_num].done():
+                    self.relay_timer_task[relay_num].cancel()
+                    try:
+                        await self.relay_timer_task[relay_num]
+                    except asyncio.CancelledError:
+                        pass
+                # Lancer un nouveau timer
+                self.relay_timer_task[relay_num] = asyncio.create_task(delayed_off_relay(relay_num))
 
     def set_zones(self, zones):
         # zones : liste de dicts {"name": ..., "rect": [x1, y1, x2, y2]}
