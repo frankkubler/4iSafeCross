@@ -271,7 +271,7 @@ Ce script ajoute le paramètre `usbcore.autosuspend=-1` à la fin du fichier `/b
 
 ## Auteurs
 
-- 4iTec
+- 4itec
 
 ## Licence
 
