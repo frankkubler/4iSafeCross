@@ -147,7 +147,7 @@ class AlerteManager:
         if not zone_names:
             zone_names = list(self.last_detection_time_by_zone.keys())
 
-        # Lance une tâche asyncio pour éteindre le(s) relais après 10s
+        # Lance une tâche asyncio pour éteindre le(s) relais après 11s
         async def delayed_off(zone_name):
             try:
                 relay_nums = self._get_relay_nums_from_zone(zone_name)
@@ -158,10 +158,7 @@ class AlerteManager:
                     if not self.relay_active_zones[relay_num]:
                         time_on = self.relay_on_time.get(relay_num)
                         if time_on is not None:
-                            elapsed = (datetime.now() - time_on).total_seconds()
-                            delay = 11 - elapsed
-                            if delay > 0:
-                                await asyncio.sleep(delay)
+                            await asyncio.sleep(11)
                             # Vérifier à nouveau qu'aucune zone n'est active pour ce relais
                             if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
                                 self.relays.action_off(relay_num)
