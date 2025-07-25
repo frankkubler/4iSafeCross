@@ -163,9 +163,18 @@ class AlerteManager:
                     insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
                     self.relay_on_time[relay_num] = None
                     # Log de diagnostic : afficher les zones actives restantes après extinction
+                    # Format lisible pour la dernière détection (toutes zones)
+                    last_det_ts = max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)
+                    if last_det_ts:
+                        try:
+                            last_det_str = datetime.fromtimestamp(last_det_ts).strftime('%Y-%m-%d %H:%M:%S.%f')
+                        except Exception:
+                            last_det_str = str(last_det_ts)
+                    else:
+                        last_det_str = 'None'
                     self.logger.info(
                         f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
-                        f"Dernière détection (toutes zones) : {max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)} | "
+                        f"Dernière détection (toutes zones) : {last_det_str} | "
                         f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')}"
                     )
             except asyncio.CancelledError:
