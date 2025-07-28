@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 import asyncio
 import requests
-from constants import TOKEN, CHAT_ID
+from utils.constants import TOKEN, CHAT_ID
 import logging
 import cv2
 import time
@@ -11,7 +11,7 @@ import io
 import psutil
 import platform
 import sys
-from utils import get_non_local_ips, get_docker_info, get_service_status
+from utils.utils import get_non_local_ips, get_docker_info, get_service_status
 
 
 class BotThread():

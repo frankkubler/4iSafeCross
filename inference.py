@@ -5,7 +5,7 @@ import logging
 import requests
 import io
 import cv2
-from constants import MOTIONTRESHOLD, INF_THRESHOLD
+from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD
 
 
 class InferenceServerThread(threading.Thread):
