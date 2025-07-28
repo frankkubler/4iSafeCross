@@ -1,10 +1,10 @@
 from flask import Flask, render_template, Response, request, jsonify, send_from_directory
-from camera_manager import CameraManager
-from inference import InferenceServerThread
-from alert_manager import AlerteManager
+from src.camera_manager import CameraManager
+from src.inference import InferenceServerThread
+from src.alert_manager import AlerteManager
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
-from relay_pilot import YoctoMultiRelay
-from bot_aiogram import BotThread
+from src.relay_pilot import YoctoMultiRelay
+from src.bot_aiogram import BotThread
 import threading
 import cv2
 import logging
