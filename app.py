@@ -2,7 +2,7 @@ from flask import Flask, render_template, Response, request, jsonify, send_from_
 from camera_manager import CameraManager
 from inference import InferenceServerThread
 from alert_manager import AlerteManager
-from utils import get_non_local_ips, get_docker_info, get_service_status
+from utils.utils import get_non_local_ips, get_docker_info, get_service_status
 from relay_pilot import YoctoMultiRelay
 from bot_aiogram import BotThread
 import threading
@@ -13,7 +13,7 @@ import sys
 import os
 from datetime import datetime
 import time
-from constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
+from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
                        RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM,
                        ZONES_BY_CAMERA)
 import psutil

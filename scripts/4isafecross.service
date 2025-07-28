@@ -8,8 +8,8 @@ Description=4isafecross service
 After=network.target systemd-udev-settle.service
 
 [Service]
-WorkingDirectory=/home/user-4itec/github/4iSafeCross/
-ExecStart=/home/user-4itec/github/4iSafeCross/4isafecross.sh
+WorkingDirectory=/home/user-4itec/github/4iSafeCross/scripts
+ExecStart=/home/user-4itec/github/4iSafeCross/scripts/4isafecross.sh
 Restart=always
 RestartSec=3
 StandardOutput=append:/home/user-4itec/github/4iSafeCross/logs/service_stdout.log

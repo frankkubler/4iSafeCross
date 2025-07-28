@@ -2,15 +2,15 @@
 
 
 # Chemin vers votre script Python
-SCRIPT="$HOME/github/person_detection_app/person_detection_dev.py"
-SCRIPT_PATH="$HOME/github/4iSafeCross/"
+#SCRIPT="$HOME/github/person_detection_app/person_detection_dev.py"
+APP_PATH="$HOME/github/4iSafeCross/"
 
 
 # Liste des paramètres à transmettre à votre script Python
 PARAMETRES="--threads=4 --host=0.0.0.0 --port=5050"
 
 # Changer de répertoire vers le chemin du script
-cd $SCRIPT_PATH
+cd $APP_PATH
 
 # Exécuter le script Python dans l'environnement virtuel
 DISPLAY=:1 "$HOME/.local/bin/uv" run waitress-serve $PARAMETRES app:app

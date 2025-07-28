@@ -1,7 +1,7 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from utils import save_frame_to_file
+from utils.utils import save_frame_to_file
 from datetime import datetime
 import logging
 import cv2

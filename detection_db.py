@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from constants import DB_PATH
+from utils.constants import DB_PATH
 
 
 def init_db():
