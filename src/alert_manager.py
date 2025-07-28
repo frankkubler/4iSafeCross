@@ -6,7 +6,7 @@ from datetime import datetime
 import logging
 import cv2
 import asyncio
-from detection_db import init_db, insert_relay_event  # , insert_detection
+from src.detection_db import init_db, insert_relay_event  # , insert_detection
 
 
 class AlerteManager:
