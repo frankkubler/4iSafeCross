@@ -18,28 +18,28 @@ RTSP_PORT = 554
 RTSP_STREAM = "stream1"
 DB_PATH = 'db/detections.db'
 
-# Définition des zones de détection par caméra (exemple pour 2 caméras)
-ZONES_BY_CAMERA = {
-    0: [
-        # {"name": "zone3_cam0", "rect": (0, 0, 1920, 180), "color": (255, 255, 0)},
-        {"name": "zone3_cam0", "polygon": 
-            [(1105, 40), (1105, 110), (1238, 290),(1270, 330), (1385, 331), (1697, 732), (1757, 830), (1920, 1080), (0, 1080),
-             (0, 388), (443, 388), (443, 225), (743, 225), (743, 40)],
-            "color": (255, 255, 0)},
-        {"name": "zone2_cam0", "polygon": [(1101, 111), (1479, 108),
-                                        (1484, 314), (1583, 314),
-                                        (1920, 661), (1920, 1080)],
-                                        "color": (0, 255, 255)},  # Cyan
-        # {"name": "zone2_cam0", "rect": (0, 180, 1920, 740), "color": (0, 255, 255)},   # Jaune
-        # {"name": "zone1_cam0", "rect": (0, 380, 1920, 1080), "color": (255, 0, 255)},  # Magenta
-        {"name": "zone1_cam0", "polygon": [(0, 225), (1200, 225), (1270, 330), (1385, 331), (1697, 732), (1757, 830), (1920, 1080), (0, 1080)], "color": (255, 0, 255)},  # Magenta
-    ],
-    1: [
-        {"name": "zone3_cam1", "rect": (0, 0, 800, 600), "color": (255, 255, 0)},      # Cyan
-        {"name": "zone2_cam1", "rect": (801, 0, 1600, 600), "color": (0, 255, 255)},   # Jaune
-        {"name": "zone1_cam1", "rect": (0, 601, 1600, 1200), "color": (255, 0, 255)},  # Magenta
-    ],
-}
+# # Définition des zones de détection par caméra (exemple pour 2 caméras)
+# ZONES_BY_CAMERA = {
+#     0: [
+#         # {"name": "zone3_cam0", "rect": (0, 0, 1920, 180), "color": (255, 255, 0)},
+#         {"name": "zone3_cam0", "polygon": 
+#             [(1105, 40), (1105, 110), (1238, 290),(1270, 330), (1385, 331), (1697, 732), (1757, 830), (1920, 1080), (0, 1080),
+#              (0, 388), (443, 388), (443, 225), (743, 225), (743, 40)],
+#             "color": (255, 255, 0)},
+#         {"name": "zone2_cam0", "polygon": [(1101, 111), (1479, 108),
+#                                         (1484, 314), (1583, 314),
+#                                         (1920, 661), (1920, 1080)],
+#                                         "color": (0, 255, 255)},  # Cyan
+#         # {"name": "zone2_cam0", "rect": (0, 180, 1920, 740), "color": (0, 255, 255)},   # Jaune
+#         # {"name": "zone1_cam0", "rect": (0, 380, 1920, 1080), "color": (255, 0, 255)},  # Magenta
+#         {"name": "zone1_cam0", "polygon": [(0, 225), (1200, 225), (1270, 330), (1385, 331), (1697, 732), (1757, 830), (1920, 1080), (0, 1080)], "color": (255, 0, 255)},  # Magenta
+#     ],
+#     1: [
+#         {"name": "zone3_cam1", "rect": (0, 0, 800, 600), "color": (255, 255, 0)},      # Cyan
+#         {"name": "zone2_cam1", "rect": (801, 0, 1600, 600), "color": (0, 255, 255)},   # Jaune
+#         {"name": "zone1_cam1", "rect": (0, 601, 1600, 1200), "color": (255, 0, 255)},  # Magenta
+#     ],
+# }
 
 # Schéma explicatif pour la définition des zones par caméra :
 #
