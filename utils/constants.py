@@ -51,6 +51,8 @@ ZONES_BY_CAMERA = load_zones_by_camera_from_ini(ZONES_INI_PATH)
 # Chargement classique de config.ini (chemin relatif)
 config = configparser.ConfigParser()
 config.read('config/config.ini', encoding='utf-8')
+print("Config file loaded:", os.path.abspath('config/config.ini'))
+print("Sections trouvées:", config.sections())
 
 LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 
