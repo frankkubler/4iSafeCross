@@ -43,7 +43,7 @@
 
 ### Prérequis
 
-Le PC jetson doit être flashé avec la [méthode 1](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/) avec le JetPack 6.1 L4T 36.4 (Attention : le flash doit se faire avec un PC Ubuntu 22.04 (la même version que ce que contien le JetPack)) 
+Le PC jetson doit être flashé avec la [méthode 1](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/) avec le JetPack 6.1 L4T 36.4 (Attention : le flash doit se faire avec un PC Ubuntu 22.04 (la même identique à celle du JetPack)) 
 
 Le serveur d'inférence doit être installé dans un docker [inf_jetson_rf-detr](https://github.com/4itec-org/inf_jetson_rf-detr)
 
