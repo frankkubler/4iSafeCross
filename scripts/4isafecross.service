@@ -9,7 +9,10 @@ After=network.target systemd-udev-settle.service
 
 [Service]
 WorkingDirectory=/home/user-4itec/github/4iSafeCross/scripts
-ExecStart=/home/user-4itec/github/4iSafeCross/scripts/4isafecross.sh
+# for python scripts
+#ExecStart=/home/user-4itec/github/4iSafeCross/scripts/4isafecross.sh
+# for bin app
+ExecStart=/home/user-4itec/github/4iSafeCross/app.bin
 Restart=always
 RestartSec=3
 StandardOutput=append:/home/user-4itec/github/4iSafeCross/logs/service_stdout.log
