@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
-                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM)
+                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA)
 import psutil
 import glob
 import asyncio
@@ -46,14 +46,9 @@ def logs_settings():
     # file_handler = logging.handlers.RotatingFileHandler(
     #     log_file_path, maxBytes=5 * 1024 * 1024, backupCount=5
     # )
-    import configparser
-    config = configparser.ConfigParser()
-    config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'), encoding='utf-8')
-    log_level_str = config.get('logging', 'level', fallback='INFO').upper()
-    log_level = getattr(logging, log_level_str, logging.INFO)
     os.makedirs('logs', exist_ok=True)
     console_handler = logging.StreamHandler(sys.stdout)
-    logging.basicConfig(level=log_level,
+    logging.basicConfig(level=LOG_LEVEL,
                         format='Line: %(lineno)d - %(message)s - %(levelname)s - %(name)s - %(asctime)s',
                         handlers=[console_handler])
     # Function to log uncaught exceptions
@@ -81,38 +76,7 @@ telegram_bot = BotThread(overwrite_file=False)
 threading.Thread(target=telegram_bot.run, daemon=True).start()
 
 # Définir les zones pour chaque caméra
-# Définir les zones pour chaque caméra
-
-# --- Chargement dynamique des zones depuis un fichier INI ---
-import configparser
-
-def load_zones_by_camera_from_ini(ini_path):
-    config = configparser.ConfigParser()
-    config.read(ini_path, encoding='utf-8')
-    zones_by_camera = {}
-    for section in config.sections():
-        zone = {"name": section}
-        if "rect" in config[section]:
-            zone["rect"] = tuple(map(int, config[section]["rect"].split(',')))
-        if "polygon" in config[section]:
-            import re
-            poly_str = config[section]["polygon"].replace(' ', '')
-            pts = re.findall(r'\((\d+),(\d+)\)', poly_str)
-            zone["polygon"] = [ (int(x), int(y)) for x, y in pts ]
-        if "color" in config[section]:
-            zone["color"] = tuple(map(int, config[section]["color"].split(',')))
-        # Détection des zones par caméra
-        if "_cam" in section:
-            try:
-                cam_id = int(section.split("_cam")[-1])
-                zones_by_camera.setdefault(cam_id, []).append(zone)
-            except Exception:
-                pass
-    return zones_by_camera
-
-# Chemin du fichier zones.ini (à adapter si besoin)
-ini_path = os.path.join(os.path.dirname(__file__), 'config', 'zones.ini')
-zones_by_camera = load_zones_by_camera_from_ini(ini_path)
+zones_by_camera = ZONES_BY_CAMERA
 
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []))
