@@ -28,4 +28,3 @@ Group=user-4itec
 
 [Install]
 WantedBy=multi-user.target
-user-4itec@user4itec-deskto
