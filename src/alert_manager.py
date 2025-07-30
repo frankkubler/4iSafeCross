@@ -151,10 +151,21 @@ class AlerteManager:
         # Nouvelle logique : extinction indépendante par relais
         async def delayed_off_relay(relay_num):
             try:
-                await asyncio.sleep(11)
+                # Protection : garantir au moins 11 secondes d'allumage
+                time_on = self.relay_on_time.get(relay_num)
+                now = datetime.now()
+                if time_on:
+                    elapsed = (now - time_on).total_seconds()
+                    if elapsed < 11:
+                        wait_time = 11 - elapsed
+                        self.logger.info(f"Protection : attente supplémentaire de {wait_time:.2f}s pour garantir 11s d'allumage du relais {relay_num}")
+                        await asyncio.sleep(wait_time)
+                    else:
+                        await asyncio.sleep(0)
+                else:
+                    await asyncio.sleep(11)
                 # Vérifier qu'aucune zone n'est active pour ce relais
                 if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
-                    time_on = self.relay_on_time.get(relay_num)
                     time_off = datetime.now()
                     self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (toutes zones)")
                     self.relays.action_off(relay_num)
@@ -163,7 +174,6 @@ class AlerteManager:
                     insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
                     self.relay_on_time[relay_num] = None
                     # Log de diagnostic : afficher les zones actives restantes après extinction
-                    # Format lisible pour la dernière détection (toutes zones)
                     last_det_ts = max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)
                     if last_det_ts:
                         try:
