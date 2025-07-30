@@ -269,6 +269,16 @@ Ce script ajoute le paramètre `usbcore.autosuspend=-1` à la fin du fichier `/b
 
 > Vérifiez que le chemin du fichier de configuration correspond à votre distribution (Jetson, etc.).
 
+## Création de l'exécutable avec Nuitka
+Pour compiler l'application en un exécutable autonome, utilisez Nuitka. Assurez-vous d'avoir installé Nuitka et ses dépendances.
+### Commande de compilation
+
+```sh
+uv run nuitka --standalone   --include-data-dir=config=config --include-data-dir=templates=templates   --include-data-dir=static=static   --include-data-dir=db=db   --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so   --output-dir=dist app.py
+```
+Le dossier dist/app.dist/ contiendra l'exécutable et tous les fichiers nécessaires.  
+
+
 ## Auteurs
 
 - 4itec
