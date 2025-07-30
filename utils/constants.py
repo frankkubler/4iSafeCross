@@ -40,7 +40,8 @@ def get_config_path(filename):
     else:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         print(f"Base directory for config: {base_dir}")
-    return os.path.join(base_dir, '..', 'config', filename)
+        path = os.path.join(base_dir, '..', 'config', filename)
+    return path
 
 
 ZONES_INI_PATH = get_config_path('zones.ini')
