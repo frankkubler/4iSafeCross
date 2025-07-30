@@ -1,6 +1,6 @@
 # 4iSafeCross
 
-**4iSafeCross** est une application de supervision et de détection intelligente pour caméras de surveillance, intégrant la gestion de flux RTSP, la détection d'événements par IA, l'alerte Telegram, et une interface web de contrôle en temps réel.
+**4iSafeCross** est une application de supervision et de détection intelligente pour caméras de surveillance, intégrant la gestion de flux RTSP, la détection d'événements par IA, l'alerte Telegram, et une interface web de contrôle en temps réel, sur machine Nvidia Jetson Orin NX (ARM) .
 
 ## Fonctionnalités principales
 
@@ -181,11 +181,12 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l’arrière de 
 
 - **eth0** est toujours le port le plus à gauche lorsque vous regardez l’arrière de la machine.
 - L’ordre des ports va de gauche à droite : eth0, eth1, eth2, eth3, eth4.
-
+- **eth0** DHCP pour l'accès internet et la supervision distante.(connecter à un routeur ou switch)
 - **eth1** Les adresses IP fixes des caméras utilisées par défaut sont :
 > - Caméra 0 : 192.168.2.156
 > - Caméra 1 : 192.168.2.157
-> Vous pouvez modifier ces adresses dans le fichier [`constants.py`](constants.py), variable `RTSP_HOST`.
+> Vous pouvez modifier ces adresses dans le fichier [`config/zones.ini`](config/zones.ini), variable `RTSP_HOST`.
+- **eth2** est réservé pour la connexion RDP de maintenance, avec l’adresse IP 192.168.3.122. (masque 255.255.255.0) user : user-4itec / mdp : 4itec2025!
 
 ## Gestion de la rotation des logs (logrotate)
 
@@ -298,10 +299,9 @@ Pour compiler l'application en un exécutable autonome, utilisez Nuitka. Assurez
 ### Commande de compilation
 
 ```sh
-uv run nuitka --standalone   --include-data-dir=config=config --include-data-dir=templates=templates   --include-data-dir=static=static   --include-data-dir=db=db   --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so   --output-dir=dist app.py
+uv run nuitka --standalone   --include-data-dir=config=config --include-data-dir=templates=templates   --include-data-dir=static=static   --include-data-dir=db=db --include-data-dir=logs=logs --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so   --output-dir=dist app.py
 ```
 Le dossier dist/app.dist/ contiendra l'exécutable et tous les fichiers nécessaires.  
-
 
 ## Auteurs
 
