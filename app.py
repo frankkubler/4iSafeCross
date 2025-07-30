@@ -46,6 +46,7 @@ def logs_settings():
     # file_handler = logging.handlers.RotatingFileHandler(
     #     log_file_path, maxBytes=5 * 1024 * 1024, backupCount=5
     # )
+    os.makedirs('logs', exist_ok=True)
     console_handler = logging.StreamHandler(sys.stdout)
 
     logging.basicConfig(level=logging.INFO,
