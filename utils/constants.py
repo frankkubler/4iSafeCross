@@ -45,10 +45,9 @@ def get_config_path(filename):
 ZONES_INI_PATH = get_config_path('zones.ini')
 ZONES_BY_CAMERA = load_zones_by_camera_from_ini(ZONES_INI_PATH)
 
-# Gestion robuste du chemin pour config.ini
-CONFIG_INI_PATH = get_config_path('config.ini')
+# Chargement classique de config.ini (chemin relatif)
 config = configparser.ConfigParser()
-config.read(CONFIG_INI_PATH, encoding='utf-8')
+config.read('config/config.ini', encoding='utf-8')
 
 LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 

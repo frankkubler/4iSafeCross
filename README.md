@@ -1,6 +1,7 @@
 # 4iSafeCross
 
-**4iSafeCross** est une application de supervision et de détection intelligente pour caméras de surveillance, intégrant la gestion de flux RTSP, la détection d'événements par IA, l'alerte Telegram, et une interface web de contrôle en temps réel, sur machine Nvidia Jetson Orin NX (ARM) .
+**4iSafeCross** est une application de supervision et de détection intelligente pour caméras de surveillance, intégrant la gestion de flux RTSP, la détection d'événements par IA, l'alerte Telegram, et une interface web de contrôle en temps réel, sur machine Nvidia Jetson Orin NX [reServer Indutrial J4012](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/)
+.
 
 ## Fonctionnalités principales
 
@@ -16,24 +17,37 @@
 
 ```
 .
+
 ├── app.py                # Serveur principal Flask
-├── bot_aiogram.py        # Bot Telegram (aiogram)
-├── camera_manager.py     # Gestion des flux caméras
-├── inference.py          # Thread d'inférence IA
-├── alert_manager.py      # Gestion des alertes et relais
-├── constants.py          # Constantes globales
+├── pyproject.toml        # Métadonnées et dépendances
+├── requirements.txt      # Dépendances Python
+├── uv.lock               # Fichier de verrouillage uv
+├── README.md             # Documentation
+├── config/
+│   ├── config.ini        # Configuration principale
+│   └── zones.ini         # Définition des zones de détection
+├── db/
+│   └── detections.db     # Base de données des détections
+├── detections/           # Captures d'images des détections
+├── logs/                 # Logs applicatifs
+├── scripts/              # Scripts utilitaires et automation
+├── src/                  # Code source Python (modules, gestion, IA, etc.)
+├── static/               # Fichiers statiques (CSS, JS, images)
 ├── templates/
 │   └── index.html        # Interface web principale
-├── models/               # Modèles IA (YOLO, RF-DETR, etc.)
-├── requirements.txt      # Dépendances Python
-├── pyproject.toml        # Métadonnées et dépendances
-└── README.md
+├── utils/                # Fonctions utilitaires
+└── __pycache__/          # Fichiers compilés Python
 ```
 
 ## Installation
 
 ### Prérequis
 
+Le PC jetson doit être flashé avec la [méthode 1](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/) avec le JetPack 6.1 L4T 36.4 (Attention : le flash doit se faire avec un PC Ubuntu 22.04 (la même version que ce que contien le JetPack)) 
+
+Le serveur d'inférence doit être installé dans un docker [inf_jetson_rf-detr](https://github.com/4itec-org/inf_jetson_rf-detr)
+
+### Environnement
 - Python 3.10.12
 - [uv](https://github.com/astral-sh/uv) (gestionnaire de dépendances ultra-rapide)
 - Accès réseau aux caméras RTSP/IP
