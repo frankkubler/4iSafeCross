@@ -6,7 +6,6 @@
 #CHAT_ID = "-4161590134"  # dev_4itec_supervision
 import configparser
 import ast
-
 import os
 import re
 
@@ -32,12 +31,24 @@ def load_zones_by_camera_from_ini(ini_path):
                 pass
     return zones_by_camera
 
-# Chemin du fichier zones.ini
-ZONES_INI_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'zones.ini')
+
+# Gestion robuste du chemin pour zones.ini (compatible script et Nuitka)
+import sys
+def get_config_path(filename):
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, '..', 'config', filename)
+
+
+ZONES_INI_PATH = get_config_path('zones.ini')
 ZONES_BY_CAMERA = load_zones_by_camera_from_ini(ZONES_INI_PATH)
 
+# Gestion robuste du chemin pour config.ini
+CONFIG_INI_PATH = get_config_path('config.ini')
 config = configparser.ConfigParser()
-config.read('config/config.ini', encoding='utf-8')
+config.read(CONFIG_INI_PATH, encoding='utf-8')
 
 LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 
