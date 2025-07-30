@@ -354,7 +354,7 @@ def index():
         if idx in inference_threads:
             threshold = getattr(inference_threads[idx], 'white_pixels_threshold', MOTIONTRESHOLD)
         cam_infos.append({'id': cam_id, 'idx': idx, 'white_pixels_threshold': threshold})
-    return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION)
+    return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled)
 
 
 @app.route('/video_feed/<int:cid>')
@@ -414,7 +414,7 @@ def toggle_stream(cid):
     return jsonify({'status': 'ok', 'enabled': enabled})
 
 
-telegram_alert_enabled = True
+telegram_alert_enabled = False
 
 @app.route('/toggle_telegram_alert', methods=['POST'])
 def toggle_telegram_alert():
