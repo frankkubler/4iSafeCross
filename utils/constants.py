@@ -41,6 +41,7 @@ def get_config_path(filename):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         print(f"Base directory for config: {base_dir}")
         path = os.path.join(base_dir, '..', 'config', filename)
+        print(f"Config path: {path}")
     return path
 
 
