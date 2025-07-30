@@ -46,10 +46,14 @@ def logs_settings():
     # file_handler = logging.handlers.RotatingFileHandler(
     #     log_file_path, maxBytes=5 * 1024 * 1024, backupCount=5
     # )
+    import configparser
+    config = configparser.ConfigParser()
+    config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'), encoding='utf-8')
+    log_level_str = config.get('logging', 'level', fallback='INFO').upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
     os.makedirs('logs', exist_ok=True)
     console_handler = logging.StreamHandler(sys.stdout)
-
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=log_level,
                         format='Line: %(lineno)d - %(message)s - %(levelname)s - %(name)s - %(asctime)s',
                         handlers=[console_handler])
     # Function to log uncaught exceptions
