@@ -55,10 +55,10 @@ uv sync
 
 ### Configuration
 
-Modifiez les paramètres dans [`constants.py`](constants.py) :
-- Identifiants RTSP (`RTSP_LOGIN`, `RTSP_PASSWORD`, `RTSP_HOST`, etc.)
-- Seuils de détection (`MOTIONTRESHOLD`)
-- Token Telegram (`TOKEN`, `CHAT_ID`)
+Modifiez les paramètres dans [`config/config.ini`](config/config.ini) :
+- Identifiants RTSP (`LOGIN`, `PASSWORD`, `HOST`, etc. dans la section [RTSP])
+- Seuils de détection (`MOTIONTRESHOLD`, `INF_THRESHOLD` dans la section [APP])
+- Token Telegram (`TOKEN`, `CHAT_ID` dans la section [TELEGRAM])
 
 ### Rendre les scripts exécutables
 
@@ -220,7 +220,19 @@ Pour éviter que les fichiers de logs ne saturent le disque, un fichier de confi
 
 ## Définition et schéma des zones de détection
 
-Les zones de détection pour chaque caméra sont configurables dans le fichier [`constants.py`](constants.py), section `ZONES_BY_CAMERA`. Vous pouvez modifier ou ajouter des zones selon vos besoins et la résolution de chaque caméra.
+Les zones de détection pour chaque caméra sont configurables dans le fichier [`config/zones.ini`](config/zones.ini). Chaque zone peut être définie comme un rectangle (rect) ou un polygone (polygon), selon la forme souhaitée et la résolution de chaque caméra, sans toucher au code Python.
+
+**Exemple de format dans zones.ini** :
+
+```ini
+[zone1_cam0]
+rect = x1,y1,x2,y2
+color = 255,0,255
+
+[zone2_cam0]
+polygon = (x1,y1)(x2,y2)(x3,y3)...
+color = 0,255,255
+```
 
 ### Exemple de schéma de zones
 
@@ -243,7 +255,19 @@ Les zones de détection pour chaque caméra sont configurables dans le fichier [
     - `(x2, y2)` = coin inférieur droit
 - Les flèches (→, ↓) indiquent le sens croissant des axes X et Y.
 
-> Pour personnaliser les zones, éditez le dictionnaire `ZONES_BY_CAMERA` dans [`constants.py`](constants.py). Utilisez un outil de visualisation d’image pour tester les coordonnées si besoin.
+## Configuration du niveau de log
+
+Le niveau de log de l’application peut être modifié dans le fichier [`config/config.ini`](config/config.ini), sans toucher au code Python.
+
+**Exemple de section dans config.ini** :
+
+```ini
+[logging]
+level = INFO  # ou DEBUG, WARNING, ERROR
+```
+
+Adaptez la valeur selon le niveau de détail souhaité pour les logs.
+
 
 ## Désactivation de l'autosuspend USB
 

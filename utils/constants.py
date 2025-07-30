@@ -4,19 +4,57 @@
 
 #TOKEN = "7161709928:AAEBcG3agiQU-G0Ar12sIu-yDQrwBVP6S3Q"  # dev bot
 #CHAT_ID = "-4161590134"  # dev_4itec_supervision
-TOKEN = "6741846240:AAGe2Mcw4sbTmuOCHhN1xJ07Onf9TrSv_fo"  # production bot
-CHAT_ID = "-4115471727"
+import configparser
+import ast
 
-MOTIONTRESHOLD = 10000  # seuil de détection de mouvement pour zone logisitique HAM 
-APP_NAME = "4iSafeCross"
-APP_VERSION = "0.1"
-INF_THRESHOLD = 0.4  # seuil d'inférence pour la détection d'objet
-RTSP_LOGIN = "admin"
-RTSP_PASSWORD = "4iTec2025!"
-RTSP_HOST = ["192.168.2.156", "192.168.2.157"]  # IP fixes des caméras utilisées par défaut (modifiable ici)
-RTSP_PORT = 554
-RTSP_STREAM = "stream1"
-DB_PATH = 'db/detections.db'
+import os
+import re
+
+def load_zones_by_camera_from_ini(ini_path):
+    config = configparser.ConfigParser()
+    config.read(ini_path, encoding='utf-8')
+    zones_by_camera = {}
+    for section in config.sections():
+        zone = {"name": section}
+        if "rect" in config[section]:
+            zone["rect"] = tuple(map(int, config[section]["rect"].split(',')))
+        if "polygon" in config[section]:
+            poly_str = config[section]["polygon"].replace(' ', '')
+            pts = re.findall(r'\((\d+),(\d+)\)', poly_str)
+            zone["polygon"] = [ (int(x), int(y)) for x, y in pts ]
+        if "color" in config[section]:
+            zone["color"] = tuple(map(int, config[section]["color"].split(',')))
+        if "_cam" in section:
+            try:
+                cam_id = int(section.split("_cam")[-1])
+                zones_by_camera.setdefault(cam_id, []).append(zone)
+            except Exception:
+                pass
+    return zones_by_camera
+
+# Chemin du fichier zones.ini
+ZONES_INI_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'zones.ini')
+ZONES_BY_CAMERA = load_zones_by_camera_from_ini(ZONES_INI_PATH)
+
+config = configparser.ConfigParser()
+config.read('config/config.ini', encoding='utf-8')
+
+LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
+
+TOKEN = config.get('TELEGRAM', 'TOKEN')
+CHAT_ID = config.get('TELEGRAM', 'CHAT_ID')
+
+MOTIONTRESHOLD = config.getint('APP', 'MOTIONTRESHOLD')
+APP_NAME = config.get('APP', 'APP_NAME')
+APP_VERSION = config.get('APP', 'APP_VERSION')
+INF_THRESHOLD = config.getfloat('APP', 'INF_THRESHOLD')
+RTSP_LOGIN = config.get('RTSP', 'LOGIN')
+RTSP_PASSWORD = config.get('RTSP', 'PASSWORD')
+RTSP_HOST = ast.literal_eval(config.get('RTSP', 'HOST'))
+RTSP_PORT = config.getint('RTSP', 'PORT')
+RTSP_STREAM = config.get('RTSP', 'STREAM')
+DB_PATH = config.get('APP', 'DB_PATH')
+
 
 # # Définition des zones de détection par caméra (exemple pour 2 caméras)
 # ZONES_BY_CAMERA = {
