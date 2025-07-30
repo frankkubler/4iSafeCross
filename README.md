@@ -1,7 +1,6 @@
 # 4iSafeCross
 
 **4iSafeCross** est une application de supervision et de détection intelligente pour caméras de surveillance, intégrant la gestion de flux RTSP, la détection d'événements par IA, l'alerte Telegram, et une interface web de contrôle en temps réel, sur machine Nvidia Jetson Orin NX [reServer Indutrial J4012](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/)
-.
 
 ## Fonctionnalités principales
 
