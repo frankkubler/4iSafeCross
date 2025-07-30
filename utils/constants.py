@@ -39,6 +39,7 @@ def get_config_path(filename):
         base_dir = os.path.dirname(sys.executable)
     else:
         base_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"Base directory for config: {base_dir}")
     return os.path.join(base_dir, '..', 'config', filename)
 
 
