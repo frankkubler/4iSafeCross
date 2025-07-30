@@ -1,5 +1,5 @@
 # sudo cp 4isafecross.service /etc/systemd/system/
-# systemctl daemon-reload
+# sudo systemctl daemon-reload
 # sudo systemctl enable 4isafecross.service
 # sudo systemctl start 4isafecross.service
 
@@ -8,17 +8,24 @@ Description=4isafecross service
 After=network.target systemd-udev-settle.service
 
 [Service]
-WorkingDirectory=/home/user-4itec/github/4iSafeCross/scripts
-# for python scripts
+# for python app
+#WorkingDirectory=/home/user-4itec/github/4iSafeCross/scripts
 #ExecStart=/home/user-4itec/github/4iSafeCross/scripts/4isafecross.sh
 # for bin app
-ExecStart=/home/user-4itec/github/4iSafeCross/app.bin
+WorkingDirectory=/home/user-4itec/4iSafeCross/
+ExecStart=/home/user-4itec/4iSafeCross/app.bin
 Restart=always
 RestartSec=3
-StandardOutput=append:/home/user-4itec/github/4iSafeCross/logs/service_stdout.log
-StandardError=append:/home/user-4itec/github/4iSafeCross/logs/service_stderr.log
+# for python app
+#StandardOutput=append:/home/user-4itec/github/4iSafeCross/logs/service_stdout.log
+#StandardError=append:/home/user-4itec/github/4iSafeCross/logs/service_stderr.log
+# for bin app
+StandardOutput=append:/home/user-4itec/4iSafeCross/logs/service_stdout.log
+StandardError=append:/home/user-4itec/4iSafeCross/logs/service_stderr.log
+
 User=user-4itec
 Group=user-4itec
 
 [Install]
 WantedBy=multi-user.target
+user-4itec@user4itec-deskto
