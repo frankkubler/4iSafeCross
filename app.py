@@ -14,8 +14,7 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
-                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM,
-                       ZONES_BY_CAMERA)
+                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM)
 import psutil
 import glob
 import asyncio
@@ -77,7 +76,38 @@ telegram_bot = BotThread(overwrite_file=False)
 threading.Thread(target=telegram_bot.run, daemon=True).start()
 
 # Définir les zones pour chaque caméra
-zones_by_camera = ZONES_BY_CAMERA
+# Définir les zones pour chaque caméra
+
+# --- Chargement dynamique des zones depuis un fichier INI ---
+import configparser
+
+def load_zones_by_camera_from_ini(ini_path):
+    config = configparser.ConfigParser()
+    config.read(ini_path, encoding='utf-8')
+    zones_by_camera = {}
+    for section in config.sections():
+        zone = {"name": section}
+        if "rect" in config[section]:
+            zone["rect"] = tuple(map(int, config[section]["rect"].split(',')))
+        if "polygon" in config[section]:
+            import re
+            poly_str = config[section]["polygon"].replace(' ', '')
+            pts = re.findall(r'\((\d+),(\d+)\)', poly_str)
+            zone["polygon"] = [ (int(x), int(y)) for x, y in pts ]
+        if "color" in config[section]:
+            zone["color"] = tuple(map(int, config[section]["color"].split(',')))
+        # Détection des zones par caméra
+        if "_cam" in section:
+            try:
+                cam_id = int(section.split("_cam")[-1])
+                zones_by_camera.setdefault(cam_id, []).append(zone)
+            except Exception:
+                pass
+    return zones_by_camera
+
+# Chemin du fichier zones.ini (à adapter si besoin)
+ini_path = os.path.join(os.path.dirname(__file__), 'config', 'zones.ini')
+zones_by_camera = load_zones_by_camera_from_ini(ini_path)
 
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []))

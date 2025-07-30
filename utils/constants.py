@@ -18,12 +18,6 @@ RTSP_PORT = 554
 RTSP_STREAM = "stream1"
 DB_PATH = 'db/detections.db'
 
-# Définition des zones de détection par défaut
-ZONES_DEFAULT = [
-    {"name": "zone3", "rect": (0, 0, 640, 480), "color": (255, 255, 0)},    # Cyan
-    {"name": "zone2", "rect": (641, 0, 1280, 480), "color": (0, 255, 255)},   # Jaune
-    {"name": "zone1", "rect": (0, 481, 640, 960), "color": (255, 0, 255)},    # Magenta
-]
 # Définition des zones de détection par caméra (exemple pour 2 caméras)
 ZONES_BY_CAMERA = {
     0: [
