@@ -12,6 +12,8 @@ import re
 def load_zones_by_camera_from_ini(ini_path):
     config = configparser.ConfigParser()
     config.read(ini_path, encoding='utf-8')
+    print("Zones config file loaded:", os.path.abspath(ini_path))
+    print("Sections trouvées dans zones.ini:", config.sections())
     zones_by_camera = {}
     for section in config.sections():
         zone = {"name": section}
