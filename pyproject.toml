@@ -8,6 +8,7 @@ dependencies = [
     "aiogram>=3.20.0.post0",
     "flask>=3.1.1",
     "gunicorn>=23.0.0",
+    "nuitka",
     "opencv-python>=4.11.0.86",
     "psutil>=7.0.0",
     "pygobject<3.51.0; platform_system != 'Windows'",
