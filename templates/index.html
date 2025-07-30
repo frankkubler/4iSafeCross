@@ -254,7 +254,7 @@
                     document.getElementById('debug-panel-content').textContent = 'Erreur lors de la récupération des infos debug.';
                 });
         }
-        let telegramAlertEnabled = true;
+        let telegramAlertEnabled = {{ 'true' if telegram_alert_enabled else 'false' }};
         function toggleTelegramAlert() {
             telegramAlertEnabled = !telegramAlertEnabled;
             fetch('/toggle_telegram_alert', {
@@ -361,7 +361,13 @@
     <div class="main-content">
         <button onclick="quitServer()" style="position:fixed;top:20px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#c00;color:#fff;border:none;border-radius:6px;cursor:pointer;">Quitter</button>
         <button onclick="showDebugPanel()" style="position:fixed;top:90px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#0074d9;color:#fff;border:none;border-radius:6px;cursor:pointer;">Debug</button>
-        <button id="btn_telegram_alert" onclick="toggleTelegramAlert()" style="position:fixed;top:160px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#ff9800;color:#fff;border:none;border-radius:6px;cursor:pointer;">Désactiver alertes Telegram</button>
+        <button id="btn_telegram_alert" onclick="toggleTelegramAlert()" style="position:fixed;top:160px;right:20px;padding:10px 20px;font-size:16px;z-index:200;{{ 'background:#ff9800;' if telegram_alert_enabled else 'background:#888;' }}color:#fff;border:none;border-radius:6px;cursor:pointer;">{{ 'Désactiver alertes Telegram' if telegram_alert_enabled else 'Activer alertes Telegram' }}</button>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Synchronise le bouton Telegram à l'état initial
+            var btn = document.getElementById('btn_telegram_alert');
+            btn.textContent = telegramAlertEnabled ? 'Désactiver alertes Telegram' : 'Activer alertes Telegram';
+            btn.style.background = telegramAlertEnabled ? '#ff9800' : '#888';
+        });
         <div class="cam-container">
             {% for cam in cam_infos %}
             <div>
