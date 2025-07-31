@@ -7,7 +7,7 @@ import logging
 import cv2
 import asyncio
 from src.detection_db import init_db, insert_relay_event  # , insert_detection
-
+from utils.coco_classes import COCO_CLASSES
 
 class AlerteManager:
     def __init__(self, relays, telegram_bot=None, zones=None):
@@ -115,7 +115,7 @@ class AlerteManager:
                 cv2.rectangle(current_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 # Optionnel : afficher la confiance
                 if len(det) > 5:
-                    label = f"{det[4]:.2f} {det[5]}"
+                    label = f"{det[4]:.2f} {COCO_CLASSES.get(det[5], 'unknown')}"
                     cv2.putText(current_frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 # Afficher le(s) nom(s) de zone si présent à la fin de la détection
                 if len(det) > 5 and isinstance(det[-1], list):
