@@ -76,7 +76,7 @@ class InferenceServerThread(threading.Thread):
                         # Filtrer pour ne garder que les détections avec class_id == 0 (personnes)
                         current_detections = np.array([
                             [d["x_min"], d["y_min"], d["x_max"], d["y_max"], d["confidence"], d["class_id"]]
-                            for d in detections if d["class_id"]in self.class_id
+                            for d in detections if d["class_id"] in self.class_id
                         ])
                         if len(current_detections) > 0:
                             self.is_detection = True
