@@ -37,10 +37,10 @@ class InferenceServerThread(threading.Thread):
     def motion(self):
         return self._motion
 
-    def _call_detection_callback(self, detections):
+    def _call_detection_callback(self, result):
         """Appelle le callback de détection s'il est défini."""
         if self.detection_callback:
-            self.detection_callback(detections)
+            self.detection_callback(result)
             # self.logger.info(f"Appel de la fonction de rappel avec {len(detections)} détections.")
 
     def run(self):
@@ -51,7 +51,8 @@ class InferenceServerThread(threading.Thread):
                 time.sleep(0.1)
                 continue
             # Détection de mouvement
-            motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
+            roi, motion_bool, white_pixels, x_pad, y_pad, x, y, w, h = self.motion_detector.get_motion_roi_info(frame, padding=40)
+            # motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
             self._motion = motion_bool  # Met à jour l'attribut privé
             # self.logger.info(f"Détection de mouvement : {motion_bool} avec {whites_pixels} pixels blancs")
             if not motion_bool:
@@ -60,6 +61,7 @@ class InferenceServerThread(threading.Thread):
                 self.logger.debug("Aucune détection de mouvement et pas de détection en cours.")
                 time.sleep(0.1)
                 continue
+            
             buffer = io.BytesIO()
             np.save(buffer, frame, allow_pickle=True)
             buffer.seek(0)
@@ -115,7 +117,12 @@ class InferenceServerThread(threading.Thread):
                     self.logger.info(f"Plus de détection depuis {time.asctime(time.localtime(top_detection))}")
                 # Callback pour transmettre les résultats
 
-            self._call_detection_callback(self.detections)
+            self._call_detection_callback({
+                "detections": self.detections,
+                "roi": roi,
+                "x_pad": x_pad,
+                "y_pad": y_pad
+            })
             self.past_detections = self.detections
             self.detections = []
             # self.old_motion_bool = motion_bool
@@ -159,7 +166,7 @@ class MotionDetector:
         self.fgbg = cv2.createBackgroundSubtractorMOG2()
         # self.fgbg = cv2.bgsegm.createBackgroundSubtractorGMG()
         # self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        self.motion = False
+        # self.motion = False
         self.logger = logging.getLogger(__name__)
 
     def detect(self, frame, white_pixels_threshold=MOTIONTRESHOLD) -> bool:
@@ -173,6 +180,8 @@ class MotionDetector:
         Returns:
             A tuple containing a boolean representing motion detection and the number of white pixels in the motion mask.
         """
+        motion = False
+        # Vérification de la validité de la frame
         if frame is None or not isinstance(frame, np.ndarray):
             self.logger.warning("Frame invalide pour la détection de mouvement (None ou non-numpy array)")
             return False, 0
@@ -185,6 +194,27 @@ class MotionDetector:
         # cv2.imshow('background', background)
         # cv2.imshow('Motion Mask', motion_mask)
         white_pixels = cv2.countNonZero(motion_mask)
-        self.motion = True if white_pixels > white_pixels_threshold else False
-        self.logger.debug(f'{self.motion} with  {white_pixels}')
+        motion = True if white_pixels > white_pixels_threshold else False
+        self.logger.debug(f'{motion} with  {white_pixels}')
         return self.motion, white_pixels
+
+    def get_motion_roi_info(self, frame, padding=40):
+        """
+        Détecte le mouvement et retourne roi, motion, white_pixels, x_pad, y_pad, x, y, w, h (zone exacte sans pad).
+        """
+        motion, white_pixels = self.detect(frame)
+        motion_mask = self.fgbg.apply(frame, -1)
+        contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        roi = None
+        x_pad, y_pad = 0, 0
+        x, y, w, h = 0, 0, 0, 0
+        if contours:
+            largest_contour = max(contours, key=cv2.contourArea)
+            if cv2.contourArea(largest_contour) > 100:
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                x_pad = max(x - padding, 0)
+                y_pad = max(y - padding, 0)
+                w_pad = min(w + 2 * padding, frame.shape[1] - x_pad)
+                h_pad = min(h + 2 * padding, frame.shape[0] - y_pad)
+                roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
+        return roi, motion, white_pixels, x_pad, y_pad, x, y, w, h
