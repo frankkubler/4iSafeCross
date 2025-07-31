@@ -107,8 +107,13 @@ def detection_callback_factory(cid, main_loop=None):
     # previous_detection devient un dict par zone
     previous_detection = {}
 
-    def detection_callback(detections):
+    def detection_callback(detection_result):
         nonlocal previous_detection
+        # Extraire les valeurs du dictionnaire
+        detections = detection_result.get("detections", [])
+        roi = detection_result.get("roi", None)
+        x_pad = detection_result.get("x_pad", None)
+        y_pad = detection_result.get("y_pad", None)
         # Stocker les détections dans la structure partagée
         with shared_detections_lock:
             # Ajoute la zone à la fin de chaque détection
@@ -129,6 +134,15 @@ def detection_callback_factory(cid, main_loop=None):
                 detections_with_zone.append(det_with_zone)
             shared_detections[cid] = detections_with_zone
 
+        with shared_motion_roi_lock:
+            w = roi.shape[1] if roi is not None else 0
+            h = roi.shape[0] if roi is not None else 0
+            shared_motion_roi[cid] = {
+                "x_pad": x_pad if x_pad is not None else 0,
+                "y_pad": y_pad if y_pad is not None else 0,
+                "w": w,
+                "h": h
+            }
         now = datetime.now()
         current_timestamp = now.timestamp()
 
@@ -218,6 +232,9 @@ inference_stop_events = {}
 # Dictionnaire partagé pour stocker les détections par caméra
 shared_detections = {}
 shared_detections_lock = threading.Lock()
+shared_motion_roi = {}
+shared_motion_roi_lock = threading.Lock()
+
 
 # Dictionnaire pour activer/désactiver le stream de chaque caméra
 stream_enabled = {}
@@ -255,6 +272,14 @@ def gen_frames(cid):
             h, w = frame.shape[:2]
             with shared_detections_lock:
                 detections = shared_detections.get(cid, [])
+            with shared_motion_roi_lock:
+                roi_info = shared_motion_roi.get(cid, None)
+            if roi_info and roi_info["w"] > 0 and roi_info["h"] > 0:
+                x_pad = roi_info["x_pad"]
+                y_pad = roi_info["y_pad"]
+                w_roi = roi_info["w"]
+                h_roi = roi_info["h"]
+                cv2.rectangle(frame, (x_pad, y_pad), (x_pad + w_roi, y_pad + h_roi), (0, 0, 255), 2)
             # Tracer les zones spécifiques à la caméra
             zones = zones_by_camera.get(cid, [])
             for i, zone in enumerate(zones):
