@@ -285,7 +285,12 @@ def gen_frames(cid):
                 y_pad = roi_info["y_pad"]
                 w_roi = roi_info["w"]
                 h_roi = roi_info["h"]
-                cv2.rectangle(frame, (x_pad, y_pad), (x_pad + w_roi, y_pad + h_roi), (0, 0, 255), 2)
+                # Clamp les coordonnées pour rester dans l'image
+                x1 = max(0, min(w - 1, x_pad))
+                y1 = max(0, min(h - 1, y_pad))
+                x2 = max(0, min(w - 1, x_pad + w_roi))
+                y2 = max(0, min(h - 1, y_pad + h_roi))
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
             # Tracer les zones spécifiques à la caméra
             zones = zones_by_camera.get(cid, [])
             for i, zone in enumerate(zones):
