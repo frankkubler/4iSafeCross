@@ -71,7 +71,7 @@ RTSP_HOST = ast.literal_eval(config.get('RTSP', 'HOST'))
 RTSP_PORT = config.getint('RTSP', 'PORT')
 RTSP_STREAM = config.get('RTSP', 'STREAM')
 DB_PATH = config.get('APP', 'DB_PATH')
-
+DETECTION = config.get('APP', 'DETECTION', fallback='simple')
 
 # # Définition des zones de détection par caméra (exemple pour 2 caméras)
 # ZONES_BY_CAMERA = {

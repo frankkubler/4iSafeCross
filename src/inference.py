@@ -5,7 +5,7 @@ import logging
 import requests
 import io
 import cv2
-from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD
+from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD, DETECTION
 
 
 class InferenceServerThread(threading.Thread):
@@ -27,7 +27,11 @@ class InferenceServerThread(threading.Thread):
         self.past_detections = []
         self.detections = []
         self.confidence_threshold = INF_THRESHOLD
-        self.class_id = 1 if "rf_detr" in self.fonction else 0
+        if DETECTION == 'extended':
+            self.class_id = [1, 3, 6, 7, 8]
+        else:
+            self.class_id = [1]       
+        # self.class_id = 1 if "rf_detr" in self.fonction else 0
 
     @property
     def motion(self):
@@ -72,7 +76,7 @@ class InferenceServerThread(threading.Thread):
                         # Filtrer pour ne garder que les détections avec class_id == 0 (personnes)
                         current_detections = np.array([
                             [d["x_min"], d["y_min"], d["x_max"], d["y_max"], d["confidence"], d["class_id"]]
-                            for d in detections if d["class_id"] == self.class_id
+                            for d in detections if d["class_id"]in self.class_id
                         ])
                         if len(current_detections) > 0:
                             self.is_detection = True
