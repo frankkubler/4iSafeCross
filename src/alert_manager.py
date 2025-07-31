@@ -186,11 +186,14 @@ class AlerteManager:
                 self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (toutes zones)")
                 self.relays.action_off(relay_num)
                 self.relay_on[relay_num] = False
-                duration = (time_off - time_on).total_seconds() if time_on else 0
-                # Correction : éviter .isoformat() sur None
-                safe_time_on = time_on.isoformat() if time_on else None
-                safe_time_off = time_off.isoformat() if time_off else None
-                insert_relay_event(f"relay_{relay_num}", duration, safe_time_on, safe_time_off)
+                if time_on is None:
+                    self.logger.error(f"[ERREUR] Impossible de calculer la durée réelle d'allumage du relais {relay_num} : time_on est None ! Aucun événement inséré en base.")
+                    duration = 0
+                else:
+                    duration = (time_off - time_on).total_seconds()
+                    safe_time_on = time_on.isoformat()
+                    safe_time_off = time_off.isoformat()
+                    insert_relay_event(f"relay_{relay_num}", duration, safe_time_on, safe_time_off)
                 self.relay_on_time[relay_num] = None
                 last_det_ts = max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)
                 if last_det_ts:
