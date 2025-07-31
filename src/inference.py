@@ -196,7 +196,7 @@ class MotionDetector:
         white_pixels = cv2.countNonZero(motion_mask)
         motion = True if white_pixels > white_pixels_threshold else False
         self.logger.debug(f'{motion} with  {white_pixels}')
-        return self.motion, white_pixels
+        return motion, white_pixels
 
     def get_motion_roi_info(self, frame, padding=40):
         """
