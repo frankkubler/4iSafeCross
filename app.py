@@ -157,7 +157,7 @@ def detection_callback_factory(cid, main_loop=None):
                 )
 
             # Filtrer pour l'alerte uniquement class_id == 1
-            detections_person = [det for det in detections if det.get("class_id") == 1]
+            detections_person = [det for det in detections if len(det) > 5 and det[5] == 1]
             if len(detections_person) > 0:
                 current_day = now.strftime('%Y-%m-%d %H:%M:%S')
                 frame = manager.get_frame_array(CAM_IDS[cid])
