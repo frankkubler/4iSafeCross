@@ -82,12 +82,13 @@ class AlerteManager:
                 # Ajouter la zone comme active pour ce relais
                 self.relay_active_zones.setdefault(relay_num, set()).add(zone_name)
                 self.logger.debug(f"self.relay_on : {self.relay_on.get(relay_num)}")
+                now = datetime.now()
                 if not self.relay_on.get(relay_num, False):
-                    now = datetime.now()
                     self.relays.action_on(relay_num)
                     self.logger.info(f"Activation du relais pour la zone {zone_name} (relais numéro {relay_num})")
                     self.relay_on[relay_num] = True
-                    self.relay_on_time[relay_num] = now  # Enregistre le temps d'allumage
+                # Réinitialise le temps d'allumage à chaque détection
+                self.relay_on_time[relay_num] = now  # Enregistre le temps d'allumage
             # Mise à jour du timestamp de détection par zone
             self.last_detection_time_by_zone[zone_name] = timestamp
             # Annuler le timer d'extinction pour cette zone
