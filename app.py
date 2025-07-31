@@ -110,10 +110,16 @@ def detection_callback_factory(cid, main_loop=None):
     def detection_callback(detection_result):
         nonlocal previous_detection
         # Extraire les valeurs du dictionnaire
-        detections = detection_result.get("detections", [])
-        roi = detection_result.get("roi", None)
-        x_pad = detection_result.get("x_pad", None)
-        y_pad = detection_result.get("y_pad", None)
+        if isinstance(detection_result, dict):
+            detections = detection_result.get("detections", [])
+            roi = detection_result.get("roi", None)
+            x_pad = detection_result.get("x_pad", None)
+            y_pad = detection_result.get("y_pad", None)
+        else:
+            detections = detection_result
+            roi = None
+            x_pad = None
+            y_pad = None
         # Stocker les détections dans la structure partagée
         with shared_detections_lock:
             # Ajoute la zone à la fin de chaque détection
