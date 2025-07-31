@@ -114,29 +114,6 @@ class AlerteManager:
             except Exception as e:
                 self.logger.error(f"Erreur lors de l'enregistrement ou l'envoi Telegram : {e}")
 
-    def _draw_detections(self, frame, detections, h, w):
-        """Dessine les rectangles et labels sur la frame."""
-        if not detections:
-            return
-        for det in detections:
-            x1 = max(0, min(w-1, int(det[0])))
-            y1 = max(0, min(h-1, int(det[1])))
-            x2 = max(0, min(w-1, int(det[2])))
-            y2 = max(0, min(h-1, int(det[3])))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            if len(det) > 5:
-                label = f"{det[4]:.2f} {COCO_CLASSES.get(det[5], 'unknown')}"
-                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            if len(det) > 5 and isinstance(det[-1], list):
-                zone_names = det[-1]
-                for i, zone_name in enumerate(zone_names):
-                    color = (255, 0, 0)
-                    for z in self.zones:
-                        if z["name"] == zone_name:
-                            color = z.get("color", (255, 0, 0))
-                            break
-                    cv2.putText(frame, zone_name, (x1, y2 + 20 + i * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-
     async def on_no_more_detection(self, timestamp: float, zone_names=None):
         """
         Optimisé : extinction indépendante par relais, factorisation, typage.
@@ -251,3 +228,27 @@ class AlerteManager:
             name = zone["name"]
             self.timer_task[name] = None
             self.last_detection_time_by_zone[name] = 0
+
+
+    def _draw_detections(self, frame, detections, h, w):
+        """Dessine les rectangles et labels sur la frame."""
+        if not detections:
+            return
+        for det in detections:
+            x1 = max(0, min(w-1, int(det[0])))
+            y1 = max(0, min(h-1, int(det[1])))
+            x2 = max(0, min(w-1, int(det[2])))
+            y2 = max(0, min(h-1, int(det[3])))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            if len(det) > 5:
+                label = f"{det[4]:.2f} {COCO_CLASSES.get(det[5], 'unknown')}"
+                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            if len(det) > 5 and isinstance(det[-1], list):
+                zone_names = det[-1]
+                for i, zone_name in enumerate(zone_names):
+                    color = (255, 0, 0)
+                    for z in self.zones:
+                        if z["name"] == zone_name:
+                            color = z.get("color", (255, 0, 0))
+                            break
+                    cv2.putText(frame, zone_name, (x1, y2 + 20 + i * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
