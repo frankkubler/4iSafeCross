@@ -156,16 +156,21 @@ def detection_callback_factory(cid, main_loop=None):
                     loop
                 )
 
-        if len(detections) > 0:
-            current_day = now.strftime('%Y-%m-%d %H:%M:%S')
-            frame = manager.get_frame_array(CAM_IDS[cid])
-            detections_to_send = copy.deepcopy(shared_detections[cid])
-            logger.debug(f"Détections caméra {cid} : {detections_to_send}, {current_day}")
-            asyncio.run_coroutine_threadsafe(
-                alert_manager.on_detection(current_timestamp, frame, detections_to_send, cid),
-                loop
-            )
-
+            # Filtrer pour l'alerte uniquement class_id == 1
+            detections_person = [det for det in detections if det.get("class_id") == 1]
+            if len(detections_person) > 0:
+                current_day = now.strftime('%Y-%m-%d %H:%M:%S')
+                frame = manager.get_frame_array(CAM_IDS[cid])
+                # Ajoute les zones aux détections personnes
+                detections_person_with_zone = []
+                for det in detections_person:
+                    zone_names = get_zone_for_detection(det, zones)
+                    detections_person_with_zone.append(list(det) + [zone_names])
+                logger.debug(f"Détections caméra {cid} (personnes) : {detections_person_with_zone}, {current_day}")
+                asyncio.run_coroutine_threadsafe(
+                    alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
+                    loop
+                )
     return detection_callback
 
 
