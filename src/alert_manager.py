@@ -182,33 +182,55 @@ class AlerteManager:
             else:
                 await asyncio.sleep(11)
             if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
-                time_off = datetime.now()
-                self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (toutes zones)")
-                self.relays.action_off(relay_num)
-                self.relay_on[relay_num] = False
                 if time_on is None:
-                    self.logger.error(f"[ERREUR] Impossible de calculer la durée réelle d'allumage du relais {relay_num} : time_on est None ! Aucun événement inséré en base.")
-                    duration = 0
+                    self.logger.warning(f"[ATTENTION] Extinction demandée pour relais {relay_num} sans activation préalable. Temporisation 11s avant extinction réelle.")
+                    await asyncio.sleep(11)
+                    # Vérifier à nouveau l'état des zones avant extinction
+                    if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
+                        time_off = datetime.now()
+                        self.logger.info(f"Extinction du relais {relay_num} après temporisation 11s (aucune activation préalable)")
+                        self.relays.action_off(relay_num)
+                        self.relay_on[relay_num] = False
+                        duration = 0
+                        self.relay_on_time[relay_num] = None
+                        last_det_ts = max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)
+                        if last_det_ts:
+                            try:
+                                last_det_str = datetime.fromtimestamp(last_det_ts).strftime('%Y-%m-%d %H:%M:%S.%f')
+                            except Exception:
+                                last_det_str = str(last_det_ts)
+                        else:
+                            last_det_str = 'None'
+                        self.logger.info(
+                            f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
+                            f"Dernière détection (toutes zones) : {last_det_str} | "
+                            f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')} | "
+                            f"Durée d'allumage : {duration:.2f} secondes"
+                        )
                 else:
+                    time_off = datetime.now()
+                    self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (toutes zones)")
+                    self.relays.action_off(relay_num)
+                    self.relay_on[relay_num] = False
                     duration = (time_off - time_on).total_seconds()
                     safe_time_on = time_on.isoformat()
                     safe_time_off = time_off.isoformat()
                     insert_relay_event(f"relay_{relay_num}", duration, safe_time_on, safe_time_off)
-                self.relay_on_time[relay_num] = None
-                last_det_ts = max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)
-                if last_det_ts:
-                    try:
-                        last_det_str = datetime.fromtimestamp(last_det_ts).strftime('%Y-%m-%d %H:%M:%S.%f')
-                    except Exception:
-                        last_det_str = str(last_det_ts)
-                else:
-                    last_det_str = 'None'
-                self.logger.info(
-                    f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
-                    f"Dernière détection (toutes zones) : {last_det_str} | "
-                    f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')} | "
-                    f"Durée d'allumage : {duration:.2f} secondes"
-                )
+                    self.relay_on_time[relay_num] = None
+                    last_det_ts = max([self.last_detection_time_by_zone.get(z, 0) for z in self.last_detection_time_by_zone], default=0)
+                    if last_det_ts:
+                        try:
+                            last_det_str = datetime.fromtimestamp(last_det_ts).strftime('%Y-%m-%d %H:%M:%S.%f')
+                        except Exception:
+                            last_det_str = str(last_det_ts)
+                    else:
+                        last_det_str = 'None'
+                    self.logger.info(
+                        f"[DIAG] Après extinction, zones actives pour relais {relay_num} : {self.relay_active_zones[relay_num]} | "
+                        f"Dernière détection (toutes zones) : {last_det_str} | "
+                        f"Fin extinction (time_off) : {time_off.strftime('%Y-%m-%d %H:%M:%S.%f')} | "
+                        f"Durée d'allumage : {duration:.2f} secondes"
+                    )
         except asyncio.CancelledError:
             self.logger.info(f"Extinction annulée (détection relancée) pour relais {relay_num}")
             pass
