@@ -291,7 +291,7 @@ def gen_frames(cid):
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 # Optionnel : afficher la confiance
                 if len(det) > 5:
-                    label = f"{det[4]:.2f}"
+                    label = f"{det[4]:.2f} {det[5]}"  # Confiance et classe
                     cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 # Afficher la zone sur la détection
                 if zone_names:
