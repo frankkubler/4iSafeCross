@@ -10,7 +10,7 @@ from src.detection_db import init_db, insert_relay_event  # , insert_detection
 from utils.coco_classes import COCO_CLASSES
 
 class AlerteManager:
-    def __init__(self, relays, telegram_bot=None, zones=None):
+    def __init__(self, relays, telegram_bot=None, zones=None, telegram_alert_enabled=False):
         # ...existing code...
         self.relays = relays
         self.last_detection_time = 0
@@ -29,7 +29,7 @@ class AlerteManager:
         self.recording_executor = ThreadPoolExecutor(max_workers=4)
         self.telegram_bot = telegram_bot  # Injecté depuis app.py
         self.last_telegram_sent = {}  # par caméra
-        self.telegram_alert_enabled = True
+        self.telegram_alert_enabled = telegram_alert_enabled
         # Définition des zones (exemple : deux zones rectangulaires)
         # Format : (x1, y1, x2, y2) en pixels sur l'image
         self.zones = zones if zones is not None else []

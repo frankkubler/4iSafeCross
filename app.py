@@ -80,7 +80,7 @@ threading.Thread(target=telegram_bot.run, daemon=True).start()
 zones_by_camera = ZONES_BY_CAMERA
 
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
-alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []))
+alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
 
 
 def get_zone_for_detection(det, zones):
