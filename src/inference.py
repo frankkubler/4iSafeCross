@@ -202,7 +202,7 @@ class MotionDetector:
         """
         Détecte le mouvement et retourne roi, motion, white_pixels, x_pad, y_pad, x, y, w, h (zone exacte sans pad).
         """
-        motion, white_pixels = self.detect(frame)
+        motion, white_pixels = self.detect(frame, white_pixels_threshold)
         motion_mask = self.fgbg.apply(frame, -1)
         contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         roi = None
