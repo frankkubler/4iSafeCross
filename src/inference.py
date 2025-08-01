@@ -6,7 +6,7 @@ import requests
 import io
 import cv2
 from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD, DETECTION
-
+from src.motion import MotionDetector
 
 class InferenceServerThread(threading.Thread):
     def __init__(self, home_dir, get_frame_func, white_pixels_threshold=MOTIONTRESHOLD, detection_callback=None, stop_event=None):
@@ -142,79 +142,3 @@ class InferenceServerThread(threading.Thread):
     @property
     def inference_mode(self):
         return "RFDETR" if self.fonction == "/predict_frame_rf_detr/" else "YOLO"
-
-
-class MotionDetector:
-    def __init__(self):
-        """
-        Initializes a new instance of the MotionDetector class.
-
-        This constructor initializes the MotionDetector object by calling the constructor of the base class using the `super()` function.
-        It then creates a background subtractor object using the `cv2.createBackgroundSubtractorMOG2()` function and assigns it to the `fgbg` attribute.
-        The `fgbg` attribute is used for background subtraction.
-
-        Additionally, the constructor initializes the `motion` attribute to `False` and the `logger` attribute to a logger object obtained from the `logging.getLogger(__name__)` function.
-        The `motion` attribute is used to track motion in a video frame, and the `logger` attribute is used for logging messages.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
-        super().__init__()
-        self.fgbg = cv2.createBackgroundSubtractorMOG2()
-        # self.fgbg = cv2.bgsegm.createBackgroundSubtractorGMG()
-        # self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        # self.motion = False
-        self.logger = logging.getLogger(__name__)
-
-    def detect(self, frame, white_pixels_threshold) -> bool:
-        """
-        A function that detects motion in a given frame.
-
-        Parameters:
-            self: The object instance.
-            frame: The frame to analyze for motion.
-
-        Returns:
-            A tuple containing a boolean representing motion detection and the number of white pixels in the motion mask.
-        """
-        motion = False
-        # Vérification de la validité de la frame
-        if frame is None or not isinstance(frame, np.ndarray):
-            self.logger.warning("Frame invalide pour la détection de mouvement (None ou non-numpy array)")
-            return False, 0
-        # motion_mask = self.fgbg.apply(frame, 0.5)
-        # self.logger.info(f"Détection de mouvement en cours... threshold: {white_pixels_threshold}")
-        motion_mask = self.fgbg.apply(frame, -1)
-        # motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, self.kernel)
-        # background = self.fgbg.getBackgroundImage()
-        # # Display the motion mask and background
-        # cv2.imshow('background', background)
-        # cv2.imshow('Motion Mask', motion_mask)
-        white_pixels = cv2.countNonZero(motion_mask)
-        motion = True if white_pixels > white_pixels_threshold else False
-        self.logger.debug(f'{motion} with  {white_pixels}')
-        return motion, white_pixels
-
-    def get_motion_roi_info(self, frame, padding=40, white_pixels_threshold=MOTIONTRESHOLD):
-        """
-        Détecte le mouvement et retourne roi, motion, white_pixels, x_pad, y_pad, x, y, w, h (zone exacte sans pad).
-        """
-        motion, white_pixels = self.detect(frame, white_pixels_threshold)
-        motion_mask = self.fgbg.apply(frame, -1)
-        contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        roi = None
-        x_pad, y_pad = 0, 0
-        x, y, w, h = 0, 0, 0, 0
-        if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            if cv2.contourArea(largest_contour) > 100:
-                x, y, w, h = cv2.boundingRect(largest_contour)
-                x_pad = max(x - padding, 0)
-                y_pad = max(y - padding, 0)
-                w_pad = min(w + 2 * padding, frame.shape[1] - x_pad)
-                h_pad = min(h + 2 * padding, frame.shape[0] - y_pad)
-                roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
-        return roi, motion, white_pixels, x_pad, y_pad, x, y, w, h
