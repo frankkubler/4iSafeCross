@@ -51,7 +51,7 @@ class InferenceServerThread(threading.Thread):
                 time.sleep(0.1)
                 continue
             # Détection de mouvement
-            roi, motion_bool, white_pixels, x_pad, y_pad, x, y, w, h = self.motion_detector.get_motion_roi_info(frame, padding=40)
+            roi, motion_bool, white_pixels, x_pad, y_pad, x, y, w, h = self.motion_detector.get_motion_roi_info(frame, padding=40, white_pixels_threshold=self.white_pixels_threshold)
             # motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
             self._motion = motion_bool  # Met à jour l'attribut privé
             # self.logger.info(f"Détection de mouvement : {motion_bool} avec {whites_pixels} pixels blancs")
@@ -169,7 +169,7 @@ class MotionDetector:
         # self.motion = False
         self.logger = logging.getLogger(__name__)
 
-    def detect(self, frame, white_pixels_threshold=MOTIONTRESHOLD) -> bool:
+    def detect(self, frame, white_pixels_threshold) -> bool:
         """
         A function that detects motion in a given frame.
 
@@ -198,7 +198,7 @@ class MotionDetector:
         self.logger.debug(f'{motion} with  {white_pixels}')
         return motion, white_pixels
 
-    def get_motion_roi_info(self, frame, padding=40):
+    def get_motion_roi_info(self, frame, padding=40, white_pixels_threshold=MOTIONTRESHOLD):
         """
         Détecte le mouvement et retourne roi, motion, white_pixels, x_pad, y_pad, x, y, w, h (zone exacte sans pad).
         """
