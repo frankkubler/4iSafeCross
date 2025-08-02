@@ -10,8 +10,8 @@ class MotionDetector:
         self.logger = logging.getLogger(__name__)
         # Pour la méthode frame differencing (type Frigate)
         self.background = None
-        self.frame_diff_threshold = 30  # seuil de différence pixel (ajustable)
-        self.min_area = 100  # surface minimale pour considérer un mouvement
+        self.frame_diff_threshold = 50  # seuil de différence pixel (ajustable)
+        self.min_area = 30  # surface minimale pour considérer un mouvement
 
     def detect_frame_diff(self, frame, white_pixels_threshold=MOTIONTRESHOLD):
         """
