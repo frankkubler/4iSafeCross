@@ -49,6 +49,7 @@ class MotionDetector:
         roi = None
         x_pad, y_pad = 0, 0
         x, y, w, h = 0, 0, 0, 0
+        w_pad, h_pad = 0, 0
         if contours:
             largest_contour = max(contours, key=cv2.contourArea)
             if cv2.contourArea(largest_contour) > self.min_area:
@@ -58,7 +59,8 @@ class MotionDetector:
                 w_pad = min(w + 2 * padding, frame.shape[1] - x_pad)
                 h_pad = min(h + 2 * padding, frame.shape[0] - y_pad)
                 roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
-        return roi, motion, white_pixels, x_pad, y_pad, x, y, w, h
+        # Retourne aussi les coordonnées brutes (x, y, w, h) dans le tuple padding
+        return roi, motion, white_pixels, (x_pad, y_pad, w_pad, h_pad, x, y, w, h)
 
     def get_mog2_motion_roi_info(self, frame, padding=None, white_pixels_threshold=MOTIONTRESHOLD, min_contour_area=None):
         if padding is None:
@@ -74,6 +76,7 @@ class MotionDetector:
         roi = None
         x_pad, y_pad = 0, 0
         x, y, w, h = 0, 0, 0, 0
+        w_pad, h_pad = 0, 0
         if contours:
             largest_contour = max(contours, key=cv2.contourArea)
             if cv2.contourArea(largest_contour) > min_contour_area:
@@ -83,7 +86,8 @@ class MotionDetector:
                 w_pad = min(w + 2 * padding, frame.shape[1] - x_pad)
                 h_pad = min(h + 2 * padding, frame.shape[0] - y_pad)
                 roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
-        return roi, motion, white_pixels, x_pad, y_pad, x, y, w, h
+        # Retourne aussi les coordonnées brutes (x, y, w, h) dans le tuple padding
+        return roi, motion, white_pixels, (x_pad, y_pad, w_pad, h_pad, x, y, w, h)
 
     def get_motion_roi_info_improved(
         self,
@@ -106,6 +110,7 @@ class MotionDetector:
         roi = None
         x_pad, y_pad = 0, 0
         x, y, w, h = 0, 0, 0, 0
+        w_pad, h_pad = 0, 0
         area_threshold = min_contour_area if min_contour_area is not None else self.min_area
         if contours:
             largest_contour = max(contours, key=cv2.contourArea)
@@ -116,7 +121,8 @@ class MotionDetector:
                 w_pad = min(w + 2 * padding, frame.shape[1] - x_pad)
                 h_pad = min(h + 2 * padding, frame.shape[0] - y_pad)
                 roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
-        return roi, motion, white_pixels, x_pad, y_pad, x, y, w, h
+        # Retourne aussi les coordonnées brutes (x, y, w, h) dans le tuple padding
+        return roi, motion, white_pixels, (x_pad, y_pad, w_pad, h_pad, x, y, w, h)
 
     def improved_motion_detect(self, frame, white_pixels_threshold=MOTIONTRESHOLD, frame_diff_threshold=None):
         """
