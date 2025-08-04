@@ -380,7 +380,7 @@
                 <div class="cam-controls">
                     <button id="btn_stream_{{ cam.idx }}" data-enabled="false" onclick="toggleStream({{ cam.idx }}, this)">Afficher la vidéo</button>
                     <button id="btn_detect_{{ cam.idx }}" data-enabled="true" onclick="toggleDetection({{ cam.idx }}, this)">Désactiver la détection</button>
-                    <label for="threshold-{{ cam.idx }}" style="font-size:0.9em;">Motion Threshold :
+                    <label for="threshold-{{ cam.idx }}" style="font-size:0.9em;">White Pixels Threshold :
                         <input type="number" id="threshold-{{ cam.idx }}" name="threshold" min="0" step="100" placeholder="{{ cam.white_pixels_threshold }}" value="{{ cam.white_pixels_threshold }}" />
                     </label>
                     <label style="font-size:0.9em;">Padding:
