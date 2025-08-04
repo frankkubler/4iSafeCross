@@ -51,7 +51,16 @@ class InferenceServerThread(threading.Thread):
                 time.sleep(0.1)
                 continue
             # Détection de mouvement
-            roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_roi_info(frame, padding=40, white_pixels_threshold=self.white_pixels_threshold)
+            roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_roi_info(
+                frame,
+                padding=getattr(self.motion_detector, 'padding', 40),
+                white_pixels_threshold=self.white_pixels_threshold,
+                min_contour_area=getattr(self.motion_detector, 'min_area', 30),
+                varThreshold=getattr(self.motion_detector, 'varThreshold', 16),
+                history=getattr(self.motion_detector, 'history', 500),
+                detectShadows=getattr(self.motion_detector, 'detectShadows', True)
+            )
+            # Si tu veux aussi passer varThreshold, history, detectShadows dynamiquement, il faut les ajouter dans la signature de get_mog2_motion_roi_info et dans motion.py
             x_pad, y_pad, w_pad, h_pad, x, y, w, h = coords
             # motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
             self._motion = motion_bool  # Met à jour l'attribut privé

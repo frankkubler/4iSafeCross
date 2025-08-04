@@ -62,11 +62,28 @@ class MotionDetector:
         # Retourne aussi les coordonnées brutes (x, y, w, h) dans le tuple padding
         return roi, motion, white_pixels, (x_pad, y_pad, w_pad, h_pad, x, y, w, h)
 
-    def get_mog2_motion_roi_info(self, frame, padding=None, white_pixels_threshold=MOTIONTRESHOLD, min_contour_area=None):
+    def get_mog2_motion_roi_info(self, frame, padding=None, white_pixels_threshold=MOTIONTRESHOLD, min_contour_area=None, varThreshold=None, history=None, detectShadows=None):
         if padding is None:
             padding = self.padding
         if min_contour_area is None:
             min_contour_area = self.min_area
+        # Si un des paramètres MOG2 change, on réinstancie le background subtractor
+        reinit_fgbg = False
+        if varThreshold is not None and varThreshold != getattr(self, 'varThreshold', 16):
+            self.varThreshold = varThreshold
+            reinit_fgbg = True
+        if history is not None and history != getattr(self, 'history', 500):
+            self.history = history
+            reinit_fgbg = True
+        if detectShadows is not None and detectShadows != getattr(self, 'detectShadows', True):
+            self.detectShadows = detectShadows
+            reinit_fgbg = True
+        if reinit_fgbg:
+            self.fgbg = cv2.createBackgroundSubtractorMOG2(
+                history=getattr(self, 'history', 500),
+                varThreshold=getattr(self, 'varThreshold', 16),
+                detectShadows=getattr(self, 'detectShadows', True)
+            )
         motion_mask = self.fgbg.apply(frame, -1)
         _, motion_mask = cv2.threshold(motion_mask, 200, 255, cv2.THRESH_BINARY) # Seuillage pour obtenir un masque binaire sans ombres
         white_pixels = cv2.countNonZero(motion_mask)
