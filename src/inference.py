@@ -51,7 +51,8 @@ class InferenceServerThread(threading.Thread):
                 time.sleep(0.1)
                 continue
             # Détection de mouvement
-            roi, motion_bool, white_pixels, x_pad, y_pad, x, y, w, h = self.motion_detector.get_mog2_motion_roi_info(frame, padding=40, white_pixels_threshold=self.white_pixels_threshold)
+            roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_roi_info(frame, padding=40, white_pixels_threshold=self.white_pixels_threshold)
+            x_pad, y_pad, w_pad, h_pad, x, y, w, h = coords
             # motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
             self._motion = motion_bool  # Met à jour l'attribut privé
             # self.logger.info(f"Détection de mouvement : {motion_bool} avec {whites_pixels} pixels blancs")
@@ -120,8 +121,8 @@ class InferenceServerThread(threading.Thread):
             self._call_detection_callback({
                 "detections": self.detections,
                 "roi": roi,
-                "x_pad": x_pad,
-                "y_pad": y_pad
+                "x_pad": (x_pad, y_pad, w_pad, h_pad, x, y, w, h),
+                "y_pad": None  # y_pad n'est plus utilisé directement, inclus dans le tuple
             })
             self.past_detections = self.detections
             self.detections = []
