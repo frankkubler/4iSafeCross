@@ -5,14 +5,15 @@ from utils.constants import MOTIONTRESHOLD
 
 class MotionDetector:
 
-    def __init__(self):
+    def __init__(self, history=500, varThreshold=16, detectShadows=True, padding=40, min_contour_area=30):
         super().__init__()
-        self.fgbg = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=16, detectShadows=True)
+        self.fgbg = cv2.createBackgroundSubtractorMOG2(history=history, varThreshold=varThreshold, detectShadows=detectShadows)
         self.logger = logging.getLogger(__name__)
         # Pour la méthode frame differencing (type Frigate)
         self.background = None
         self.frame_diff_threshold = 50  # seuil de différence pixel (ajustable)
-        self.min_area = 30  # surface minimale pour considérer un mouvement
+        self.min_area = min_contour_area  # surface minimale pour considérer un mouvement
+        self.padding = padding
 
     def detect_frame_diff(self, frame, white_pixels_threshold=MOTIONTRESHOLD):
         """
@@ -40,7 +41,9 @@ class MotionDetector:
         self.logger.debug(f'[FrameDiff] {motion} with {white_pixels}')
         return motion, white_pixels, thresh
 
-    def get_motion_roi_info_framediff(self, frame, padding=40, white_pixels_threshold=MOTIONTRESHOLD):
+    def get_motion_roi_info_framediff(self, frame, padding=None, white_pixels_threshold=MOTIONTRESHOLD):
+        if padding is None:
+            padding = self.padding
         motion, white_pixels, mask = self.detect_frame_diff(frame, white_pixels_threshold)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         roi = None
@@ -57,7 +60,11 @@ class MotionDetector:
                 roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
         return roi, motion, white_pixels, x_pad, y_pad, x, y, w, h
 
-    def get_mog2_motion_roi_info(self, frame, padding=40, white_pixels_threshold=MOTIONTRESHOLD, min_contour_area=30):
+    def get_mog2_motion_roi_info(self, frame, padding=None, white_pixels_threshold=MOTIONTRESHOLD, min_contour_area=None):
+        if padding is None:
+            padding = self.padding
+        if min_contour_area is None:
+            min_contour_area = self.min_area
         motion_mask = self.fgbg.apply(frame, -1)
         _, motion_mask = cv2.threshold(motion_mask, 200, 255, cv2.THRESH_BINARY) # Seuillage pour obtenir un masque binaire sans ombres
         white_pixels = cv2.countNonZero(motion_mask)
