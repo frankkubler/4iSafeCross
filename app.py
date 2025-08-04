@@ -283,14 +283,25 @@ def gen_frames(cid):
             if roi_info and roi_info["w"] > 0 and roi_info["h"] > 0:
                 x_pad = roi_info["x_pad"]
                 y_pad = roi_info["y_pad"]
-                w_roi = roi_info["w"]
-                h_roi = roi_info["h"]
-                # Clamp les coordonnées pour rester dans l'image
+                w_roi = roi_info["w_pad"]
+                h_roi = roi_info["h_pad"]
+                # Rectangle rouge (ROI avec padding)
                 x1 = max(0, min(w - 1, x_pad))
                 y1 = max(0, min(h - 1, y_pad))
                 x2 = max(0, min(w - 1, x_pad + w_roi))
                 y2 = max(0, min(h - 1, y_pad + h_roi))
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                # Rectangle jaune (mouvement brut sans padding)
+                x_raw = roi_info["x"] if "x" in roi_info else 0
+                y_raw = roi_info["y"] if "y" in roi_info else 0
+                w_raw = roi_info["w"] if "w" in roi_info else 0
+                h_raw = roi_info["h"] if "h" in roi_info else 0
+                if w_raw > 0 and h_raw > 0:
+                    x1r = max(0, min(w - 1, x_raw))
+                    y1r = max(0, min(h - 1, y_raw))
+                    x2r = max(0, min(w - 1, x_raw + w_raw))
+                    y2r = max(0, min(h - 1, y_raw + h_raw))
+                    cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), (0, 255, 255), 2)
             # Tracer les zones spécifiques à la caméra
             zones = zones_by_camera.get(cid, [])
             for i, zone in enumerate(zones):
