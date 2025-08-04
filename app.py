@@ -141,14 +141,29 @@ def detection_callback_factory(cid, main_loop=None):
             shared_detections[cid] = detections_with_zone
 
         with shared_motion_roi_lock:
-            w = roi.shape[1] if roi is not None else 0
-            h = roi.shape[0] if roi is not None else 0
-            shared_motion_roi[cid] = {
-                "x_pad": x_pad if x_pad is not None else 0,
-                "y_pad": y_pad if y_pad is not None else 0,
-                "w": w,
-                "h": h
-            }
+            # Si la méthode motion.py retourne le tuple étendu (x_pad, y_pad, w_pad, h_pad, x, y, w, h)
+            # on le stocke dans le dico partagé pour l'affichage vidéo
+            if isinstance(x_pad, (tuple, list)) and len(x_pad) == 8:
+                x_pad_val, y_pad_val, w_pad, h_pad, x_raw, y_raw, w_raw, h_raw = x_pad
+                shared_motion_roi[cid] = {
+                    "x_pad": x_pad_val,
+                    "y_pad": y_pad_val,
+                    "w_pad": w_pad,
+                    "h_pad": h_pad,
+                    "x": x_raw,
+                    "y": y_raw,
+                    "w": w_raw,
+                    "h": h_raw
+                }
+            else:
+                w = roi.shape[1] if roi is not None else 0
+                h = roi.shape[0] if roi is not None else 0
+                shared_motion_roi[cid] = {
+                    "x_pad": x_pad if x_pad is not None else 0,
+                    "y_pad": y_pad if y_pad is not None else 0,
+                    "w": w,
+                    "h": h
+                }
         now = datetime.now()
         current_timestamp = now.timestamp()
 
@@ -280,11 +295,11 @@ def gen_frames(cid):
                 detections = shared_detections.get(cid, [])
             with shared_motion_roi_lock:
                 roi_info = shared_motion_roi.get(cid, None)
-            if roi_info and roi_info["w"] > 0 and roi_info["h"] > 0:
+            if roi_info and roi_info.get("w_pad", 0) > 0 and roi_info.get("h_pad", 0) > 0:
                 x_pad = roi_info["x_pad"]
                 y_pad = roi_info["y_pad"]
-                w_roi = roi_info["w"]
-                h_roi = roi_info["h"]
+                w_roi = roi_info["w_pad"]
+                h_roi = roi_info["h_pad"]
                 # Rectangle rouge (ROI avec padding)
                 x1 = max(0, min(w - 1, x_pad))
                 y1 = max(0, min(h - 1, y_pad))
@@ -292,10 +307,10 @@ def gen_frames(cid):
                 y2 = max(0, min(h - 1, y_pad + h_roi))
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
                 # Rectangle jaune (mouvement brut sans padding)
-                x_raw = roi_info["x"] if "x" in roi_info else 0
-                y_raw = roi_info["y"] if "y" in roi_info else 0
-                w_raw = roi_info["w"] if "w" in roi_info else 0
-                h_raw = roi_info["h"] if "h" in roi_info else 0
+                x_raw = roi_info.get("x", 0)
+                y_raw = roi_info.get("y", 0)
+                w_raw = roi_info.get("w", 0)
+                h_raw = roi_info.get("h", 0)
                 if w_raw > 0 and h_raw > 0:
                     x1r = max(0, min(w - 1, x_raw))
                     y1r = max(0, min(h - 1, y_raw))
