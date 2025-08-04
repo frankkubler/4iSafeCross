@@ -380,26 +380,25 @@
                 <div class="cam-controls">
                     <button id="btn_stream_{{ cam.idx }}" data-enabled="false" onclick="toggleStream({{ cam.idx }}, this)">Afficher la vidéo</button>
                     <button id="btn_detect_{{ cam.idx }}" data-enabled="true" onclick="toggleDetection({{ cam.idx }}, this)">Désactiver la détection</button>
-                    <form onsubmit="event.preventDefault(); setWhitePixelsThreshold({{ cam.idx }});" style="display:flex;align-items:center;gap:4px;margin:0;">
-                      <label for="threshold-{{ cam.idx }}" style="font-size:0.9em;">Motion Threshold :</label>
-                      <input type="number" id="threshold-{{ cam.idx }}" name="threshold" min="0" step="100" placeholder="{{ cam.white_pixels_threshold }}" value="{{ cam.white_pixels_threshold }}" />
-                      <button type="submit" style="font-size:0.9em;height:28px;padding:0 10px;">OK</button>
-                    </form>
+                    <label for="threshold-{{ cam.idx }}" style="font-size:0.9em;">Motion Threshold :
+                        <input type="number" id="threshold-{{ cam.idx }}" name="threshold" min="0" step="100" placeholder="{{ cam.white_pixels_threshold }}" value="{{ cam.white_pixels_threshold }}" />
+                    </label>
                     <label style="font-size:0.9em;">Padding:
-                        <input type="number" id="padding-{{ cam.idx }}" value="{{ cam.padding if cam.padding is defined else 40 }}" min="0" max="500" step="1" onchange="setMotionParam({{ cam.idx }}, 'padding', this.value)" style="width:60px;" />
+                        <input type="number" id="padding-{{ cam.idx }}" value="{{ cam.padding if cam.padding is defined else 40 }}" min="0" max="500" step="1" />
                     </label>
                     <label style="font-size:0.9em;">min_area:
-                        <input type="number" id="min_area-{{ cam.idx }}" value="{{ cam.min_area if cam.min_area is defined else 30 }}" min="0" max="10000" step="1" onchange="setMotionParam({{ cam.idx }}, 'min_area', this.value)" style="width:70px;" />
+                        <input type="number" id="min_area-{{ cam.idx }}" value="{{ cam.min_area if cam.min_area is defined else 30 }}" min="0" max="10000" step="1" />
                     </label>
                     <label style="font-size:0.9em;">varThreshold:
-                        <input type="number" id="varThreshold-{{ cam.idx }}" value="{{ cam.varThreshold if cam.varThreshold is defined else 16 }}" min="1" max="255" step="1" onchange="setMotionParam({{ cam.idx }}, 'varThreshold', this.value)" style="width:60px;" />
+                        <input type="number" id="varThreshold-{{ cam.idx }}" value="{{ cam.varThreshold if cam.varThreshold is defined else 16 }}" min="1" max="255" step="1" />
                     </label>
                     <label style="font-size:0.9em;">history:
-                        <input type="number" id="history-{{ cam.idx }}" value="{{ cam.history if cam.history is defined else 500 }}" min="1" max="5000" step="1" onchange="setMotionParam({{ cam.idx }}, 'history', this.value)" style="width:70px;" />
+                        <input type="number" id="history-{{ cam.idx }}" value="{{ cam.history if cam.history is defined else 500 }}" min="1" max="5000" step="1" />
                     </label>
                     <label style="font-size:0.9em;">detectShadows:
-                        <input type="checkbox" id="detectShadows-{{ cam.idx }}" {% if cam.detectShadows is defined and cam.detectShadows %}checked{% elif cam.detectShadows is not defined %}checked{% endif %} onchange="setMotionParam({{ cam.idx }}, 'detectShadows', this.checked)" />
+                        <input type="checkbox" id="detectShadows-{{ cam.idx }}" {% if cam.detectShadows is defined and cam.detectShadows %}checked{% elif cam.detectShadows is not defined %}checked{% endif %} />
                     </label>
+                    <button style="font-size:0.9em;height:28px;padding:0 10px;margin-left:16px;" onclick="saveMotionParams({{ cam.idx }})">OK</button>
                     <button id="btn_switch_inference_{{ cam.idx }}" onclick="switchInferenceMode({{ cam.idx }})" style="background:#4caf50;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">
                         To RFDETR
                     </button>
@@ -407,18 +406,31 @@
                         720p
                     </button>
     <script>
-    function setMotionParam(idx, param, value) {
-        fetch('/set_motion_param/' + idx, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({param: param, value: value})
-        })
-        .then(r => r.json())
-        .then(data => {
-            if(data.status !== 'ok') {
-                alert('Erreur lors de la mise à jour du paramètre : ' + data.message);
-            }
-        });
+    function saveMotionParams(idx) {
+        const params = {
+            white_pixels_threshold: document.getElementById('threshold-' + idx).value,
+            padding: document.getElementById('padding-' + idx).value,
+            min_area: document.getElementById('min_area-' + idx).value,
+            varThreshold: document.getElementById('varThreshold-' + idx).value,
+            history: document.getElementById('history-' + idx).value,
+            detectShadows: document.getElementById('detectShadows-' + idx).checked
+        };
+        let ok = true;
+        for (const [param, value] of Object.entries(params)) {
+            fetch('/set_motion_param/' + idx, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({param: param === 'white_pixels_threshold' ? 'white_pixels_threshold' : param, value: value})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.status !== 'ok') {
+                    ok = false;
+                    alert('Erreur lors de la mise à jour du paramètre ' + param + ' : ' + data.message);
+                }
+            });
+        }
+        if(ok) alert('Paramètres sauvegardés !');
     }
     </script>
                 </div>

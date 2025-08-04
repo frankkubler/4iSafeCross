@@ -383,18 +383,20 @@ def set_motion_param(cid):
                 value = int(value)
             if param == 'detectShadows':
                 value = value in (True, 'true', 'True', 1, '1', 'on')
-            if hasattr(detector, param):
+                setattr(detector, 'detectShadows', value)
+                # On ne return pas ici, on continue pour la réinstanciation
+            elif hasattr(detector, param):
                 setattr(detector, param, value)
-                # Si on modifie varThreshold, history ou detectShadows, il faut ré-instancier le MOG2
-                if param in ('varThreshold', 'history', 'detectShadows'):
-                    detector.fgbg = cv2.createBackgroundSubtractorMOG2(
-                        history=getattr(detector, 'history', 500),
-                        varThreshold=getattr(detector, 'varThreshold', 16),
-                        detectShadows=getattr(detector, 'detectShadows', True)
-                    )
-                return jsonify({'status': 'ok'})
             else:
                 return jsonify({'status': 'error', 'message': f'Paramètre {param} inconnu'}), 400
+            # Si on modifie varThreshold, history ou detectShadows, il faut ré-instancier le MOG2
+            if param in ('varThreshold', 'history', 'detectShadows'):
+                detector.fgbg = cv2.createBackgroundSubtractorMOG2(
+                    history=getattr(detector, 'history', 500),
+                    varThreshold=getattr(detector, 'varThreshold', 16),
+                    detectShadows=getattr(detector, 'detectShadows', True)
+                )
+            return jsonify({'status': 'ok'})
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
     return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
