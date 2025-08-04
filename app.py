@@ -372,8 +372,15 @@ def set_motion_param(cid):
     data = request.get_json()
     param = data.get('param')
     value = data.get('value')
-    # On suppose que chaque thread d'inférence a un attribut motion_detector
     if cid in inference_threads:
+        # Gestion spéciale pour le seuil white_pixels_threshold (attribut du thread, pas du motion_detector)
+        if param == 'white_pixels_threshold':
+            try:
+                value = int(value)
+                inference_threads[cid].white_pixels_threshold = value
+                return jsonify({'status': 'ok'})
+            except Exception as e:
+                return jsonify({'status': 'error', 'message': str(e)}), 400
         detector = getattr(inference_threads[cid], 'motion_detector', None)
         if detector is None:
             return jsonify({'status': 'error', 'message': 'MotionDetector non trouvé'}), 400
