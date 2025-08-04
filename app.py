@@ -366,6 +366,38 @@ def index():
         cam_infos.append({'id': cam_id, 'idx': idx, 'white_pixels_threshold': threshold})
     return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled)
 
+# --- Ajout route pour modifier dynamiquement les paramètres motion ---
+@app.route('/set_motion_param/<int:cid>', methods=['POST'])
+def set_motion_param(cid):
+    data = request.get_json()
+    param = data.get('param')
+    value = data.get('value')
+    # On suppose que chaque thread d'inférence a un attribut motion_detector
+    if cid in inference_threads:
+        detector = getattr(inference_threads[cid], 'motion_detector', None)
+        if detector is None:
+            return jsonify({'status': 'error', 'message': 'MotionDetector non trouvé'}), 400
+        try:
+            # Conversion des types selon le paramètre
+            if param in ('padding', 'min_area', 'varThreshold', 'history'):
+                value = int(value)
+            if param == 'detectShadows':
+                value = value in (True, 'true', 'True', 1, '1', 'on')
+            if hasattr(detector, param):
+                setattr(detector, param, value)
+                # Si on modifie varThreshold, history ou detectShadows, il faut ré-instancier le MOG2
+                if param in ('varThreshold', 'history', 'detectShadows'):
+                    detector.fgbg = cv2.createBackgroundSubtractorMOG2(
+                        history=getattr(detector, 'history', 500),
+                        varThreshold=getattr(detector, 'varThreshold', 16),
+                        detectShadows=getattr(detector, 'detectShadows', True)
+                    )
+                return jsonify({'status': 'ok'})
+            else:
+                return jsonify({'status': 'error', 'message': f'Paramètre {param} inconnu'}), 400
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+    return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
 
 @app.route('/video_feed/<int:cid>')
 def video_feed(cid):
