@@ -391,7 +391,9 @@ def set_motion_param(cid):
             if param == 'detectShadows':
                 value = value in (True, 'true', 'True', 1, '1', 'on')
                 setattr(detector, 'detectShadows', value)
-                # On ne return pas ici, on continue pour la réinstanciation
+            elif param in ('varThreshold', 'history'):
+                # Toujours stocker ces valeurs dans l'objet pour la réinstanciation
+                setattr(detector, param, value)
             elif hasattr(detector, param):
                 setattr(detector, param, value)
             else:
