@@ -283,8 +283,8 @@ def gen_frames(cid):
             if roi_info and roi_info["w"] > 0 and roi_info["h"] > 0:
                 x_pad = roi_info["x_pad"]
                 y_pad = roi_info["y_pad"]
-                w_roi = roi_info["w_pad"]
-                h_roi = roi_info["h_pad"]
+                w_roi = roi_info["w"]
+                h_roi = roi_info["h"]
                 # Rectangle rouge (ROI avec padding)
                 x1 = max(0, min(w - 1, x_pad))
                 y1 = max(0, min(h - 1, y_pad))
