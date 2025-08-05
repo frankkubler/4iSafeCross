@@ -65,10 +65,10 @@ class InferenceServerThread(threading.Thread):
             # motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
             self._motion = motion_bool  # Met à jour l'attribut privé
             # self.logger.info(f"Détection de mouvement : {motion_bool} avec {whites_pixels} pixels blancs")
-            if not motion_bool:
+            if (not motion_bool) or (w_pad <= 0 or h_pad <= 0):
                 # Appeler le callback avec une détection vide pour effacer l'affichage côté client
                 self._call_detection_callback([])
-                self.logger.debug("Aucune détection de mouvement et pas de détection en cours.")
+                self.logger.debug("Aucune détection de mouvement ou zone de mouvement invalide (w_pad <= 0 ou h_pad <= 0).")
                 time.sleep(0.1)
                 continue
             
