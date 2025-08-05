@@ -72,8 +72,10 @@ class InferenceServerThread(threading.Thread):
                 time.sleep(0.1)
                 continue
             
+            # Découper la frame sur la zone de mouvement
+            frame_roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
             buffer = io.BytesIO()
-            np.save(buffer, frame, allow_pickle=True)
+            np.save(buffer, frame_roi, allow_pickle=True)
             buffer.seek(0)
             current_detections = []
             try:
@@ -85,9 +87,16 @@ class InferenceServerThread(threading.Thread):
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])
                     if detections:
-                        # Filtrer pour ne garder que les détections avec class_id == 0 (personnes)
+                        # Remettre les coordonnées dans le repère image d'origine
                         current_detections = np.array([
-                            [d["x_min"], d["y_min"], d["x_max"], d["y_max"], d["confidence"], d["class_id"]]
+                            [
+                                d["x_min"] + x_pad,
+                                d["y_min"] + y_pad,
+                                d["x_max"] + x_pad,
+                                d["y_max"] + y_pad,
+                                d["confidence"],
+                                d["class_id"]
+                            ]
                             for d in detections if d["class_id"] in self.class_id
                         ])
                         if len(current_detections) > 0:
