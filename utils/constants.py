@@ -70,8 +70,13 @@ RTSP_PASSWORD = config.get('RTSP', 'PASSWORD')
 RTSP_HOST = ast.literal_eval(config.get('RTSP', 'HOST'))
 RTSP_PORT = config.getint('RTSP', 'PORT')
 RTSP_STREAM = config.get('RTSP', 'STREAM')
+
 DB_PATH = config.get('APP', 'DB_PATH')
 DETECTION = config.get('APP', 'DETECTION', fallback='simple')
+
+# Ajout des constantes pour la fonction et l'URL d'inférence
+FONCTION = config.get('APP', 'FONCTION', fallback='/predict_frame_rf_detr/')
+URL = config.get('APP', 'URL', fallback='http://127.0.0.1:8002')
 
 # # Définition des zones de détection par caméra (exemple pour 2 caméras)
 # ZONES_BY_CAMERA = {

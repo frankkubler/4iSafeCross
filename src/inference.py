@@ -5,7 +5,7 @@ import logging
 import requests
 import io
 import cv2
-from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD, DETECTION
+from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD, DETECTION, URL, FONCTION
 from src.motion import MotionDetector
 
 class InferenceServerThread(threading.Thread):
@@ -16,9 +16,8 @@ class InferenceServerThread(threading.Thread):
         self.detection_callback = detection_callback  # Callback pour envoyer les résultats
         self.stop_event = stop_event or threading.Event()
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
-        #self.fonction = "/predict_frame/"
-        self.fonction = "/predict_frame_rf_detr/"
-        self.url = rf"http://127.0.0.1:8002/{self.fonction}"
+        self.fonction = FONCTION
+        self.url = rf"{URL}/{self.fonction}"
         self.is_detection = False
         self.motion_detector = MotionDetector()
         self.white_pixels_threshold = white_pixels_threshold
@@ -155,7 +154,7 @@ class InferenceServerThread(threading.Thread):
         else:
             self.fonction = "/predict_frame/"
             self.class_id = 0
-        self.url = rf"http://127.0.0.1:8002/{self.fonction}"
+        self.url = rf"{URL}/{self.fonction}"
         self.logger.info(f"Mode d'inférence changé : {self.fonction}")
 
     @property
