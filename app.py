@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
-                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA)
+                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -237,8 +237,8 @@ results = CameraManager.test_rtsp_streams_parallel(CAM_IDS)
 filtered_cam_ids = [cid for cid, ok in results.items() if ok]
 for cid, ok in results.items():
     if ok:
-        logger.info(f"Ping OK pour {cid}, attente 20s avant test RTSP...")
-        time.sleep(20)
+        logger.info(f"Ping OK pour {cid}, attente {WAIT_BEFORE_TEST_RTSP}s avant test RTSP...")
+        time.sleep(WAIT_BEFORE_TEST_RTSP)
         break  # On passe à la suite dès qu'une caméra est OK
     else:
         logger.warning(f"Flux RTSP {cid} ignoré (non disponible)")
