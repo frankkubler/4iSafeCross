@@ -74,6 +74,9 @@ RTSP_STREAM = config.get('RTSP', 'STREAM')
 DB_PATH = config.get('APP', 'DB_PATH')
 DETECTION = config.get('APP', 'DETECTION', fallback='simple')
 
+# Nouvelle constante pour le temps d'attente avant test RTSP
+WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=20)
+
 # Ajout des constantes pour la fonction et l'URL d'inférence
 FONCTION = config.get('APP', 'FONCTION', fallback='/predict_frame_rf_detr/')
 URL = config.get('APP', 'URL', fallback='http://127.0.0.1:8002')
