@@ -72,9 +72,10 @@ class InferenceServerThread(threading.Thread):
                 continue
             
             # Découper la frame sur la zone de mouvement
-            frame_roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
+            # frame_roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
+            
             buffer = io.BytesIO()
-            np.save(buffer, frame_roi, allow_pickle=True)
+            np.save(buffer, frame, allow_pickle=True)
             buffer.seek(0)
             current_detections = []
             try:
