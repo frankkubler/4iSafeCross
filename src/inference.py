@@ -90,10 +90,10 @@ class InferenceServerThread(threading.Thread):
                         # Remettre les coordonnées dans le repère image d'origine
                         current_detections = np.array([
                             [
-                                d["x_min"] + x_pad,
-                                d["y_min"] + y_pad,
-                                d["x_max"] + x_pad,
-                                d["y_max"] + y_pad,
+                                d["x_min"], # + x_pad,
+                                d["y_min"], # + y_pad,
+                                d["x_max"], #+ x_pad,
+                                d["y_max"], #+ y_pad,
                                 d["confidence"],
                                 d["class_id"]
                             ]
