@@ -260,11 +260,13 @@ shared_motion_roi_lock = threading.Lock()
 # Dictionnaire pour activer/désactiver le stream de chaque caméra
 stream_enabled = {}
 # Dictionnaire pour activer/désactiver la détection de chaque caméra
-
 detection_enabled = {}
+# Dictionnaire pour activer/désactiver l'affichage des ROI de chaque caméra
+roi_display_enabled = {}
 for i in range(len(CAM_IDS)):
     stream_enabled[i] = False  # vidéo masquée par défaut
     detection_enabled[i] = True  # détection active par défaut
+    roi_display_enabled[i] = False  # affichage ROI désactivé par défaut
     # Démarrage automatique de la détection
     stop_event = threading.Event()
     inference_stop_events[i] = stop_event
@@ -295,7 +297,8 @@ def gen_frames(cid):
                 detections = shared_detections.get(cid, [])
             with shared_motion_roi_lock:
                 roi_info = shared_motion_roi.get(cid, None)
-            if roi_info and roi_info.get("w_pad", 0) > 0 and roi_info.get("h_pad", 0) > 0:
+            # Afficher les ROI seulement si activé
+            if roi_display_enabled.get(cid, False) and roi_info and roi_info.get("w_pad", 0) > 0 and roi_info.get("h_pad", 0) > 0:
                 x_pad = roi_info["x_pad"]
                 y_pad = roi_info["y_pad"]
                 w_roi = roi_info["w_pad"]
@@ -389,7 +392,12 @@ def index():
         threshold = MOTIONTRESHOLD  # valeur par défaut
         if idx in inference_threads:
             threshold = getattr(inference_threads[idx], 'white_pixels_threshold', MOTIONTRESHOLD)
-        cam_infos.append({'id': cam_id, 'idx': idx, 'white_pixels_threshold': threshold})
+        cam_infos.append({
+            'id': cam_id, 
+            'idx': idx, 
+            'white_pixels_threshold': threshold,
+            'roi_display_enabled': roi_display_enabled.get(idx, False)
+        })
     return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled)
 
 # --- Ajout route pour modifier dynamiquement les paramètres motion ---
@@ -490,6 +498,14 @@ def toggle_stream(cid):
     data = request.get_json()
     enabled = data.get('enabled', True)
     stream_enabled[cid] = enabled
+    return jsonify({'status': 'ok', 'enabled': enabled})
+
+
+@app.route('/toggle_roi_display/<int:cid>', methods=['POST'])
+def toggle_roi_display(cid):
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+    roi_display_enabled[cid] = enabled
     return jsonify({'status': 'ok', 'enabled': enabled})
 
 
