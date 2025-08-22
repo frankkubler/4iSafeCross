@@ -90,17 +90,17 @@ class InferenceServerThread(threading.Thread):
                         # Remettre les coordonnées dans le repère image d'origine
                         current_detections = np.array([
                             [
-                                d["x_min"], # + x_pad,
-                                d["y_min"], # + y_pad,
-                                d["x_max"], #+ x_pad,
-                                d["y_max"], #+ y_pad,
-                                d["confidence"],
-                                d["class_id"],
-                                d["tracker_id"],
-                                d["personne_type"]
+                                float(d["x_min"]), # + x_pad,
+                                float(d["y_min"]), # + y_pad,
+                                float(d["x_max"]), #+ x_pad,
+                                float(d["y_max"]), #+ y_pad,
+                                float(d["confidence"]),
+                                int(d["class_id"]),
+                                int(d["tracker_id"]),
+                                d["personne_type"] if d["personne_type"] is not None else "inconnu"
                             ]
                             for d in detections if d["class_id"] in self.class_id
-                        ])
+                        ], dtype=object)
                         if len(current_detections) > 0:
                             self.is_detection = True
                             self.logger.debug(f"Détections actuelles : {current_detections}")
