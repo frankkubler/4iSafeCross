@@ -192,8 +192,8 @@ def detection_callback_factory(cid, main_loop=None):
                     loop
                 )
 
-            # Filtrer pour l'alerte uniquement class_id == 1
-            detections_person = [det for det in detections if len(det) > 5 and det[5] == 1]
+            # Filtrer pour l'alerte uniquement class_id == 1 ET personne_type == "pieton"
+            detections_person = [det for det in detections if len(det) > 7 and det[5] == 1 and det[7] == "pieton"]
             if len(detections_person) > 0:
                 current_day = now.strftime('%Y-%m-%d %H:%M:%S')
                 frame = manager.get_frame_array(CAM_IDS[cid])
@@ -202,7 +202,7 @@ def detection_callback_factory(cid, main_loop=None):
                 for det in detections_person:
                     zone_names = get_zone_for_detection(det, zones)
                     detections_person_with_zone.append(list(det) + [zone_names])
-                logger.debug(f"Détections caméra {cid} (personnes) : {detections_person_with_zone}, {current_day}")
+                logger.debug(f"Détections caméra {cid} (piétons uniquement) : {detections_person_with_zone}, {current_day}")
                 asyncio.run_coroutine_threadsafe(
                     alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
                     loop

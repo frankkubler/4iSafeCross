@@ -96,7 +96,8 @@ class InferenceServerThread(threading.Thread):
                                 d["y_max"], #+ y_pad,
                                 d["confidence"],
                                 d["class_id"],
-                                d["tracker_id"]
+                                d["tracker_id"],
+                                d["personne_type"]
                             ]
                             for d in detections if d["class_id"] in self.class_id
                         ])
