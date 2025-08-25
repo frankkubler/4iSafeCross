@@ -6,11 +6,14 @@ import requests
 import io
 import cv2
 from src.context_vehicle import infer_in_vehicle_context
-from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD, DETECTION, URL, FONCTION
+from utils.constants import (MOTIONTRESHOLD, INF_THRESHOLD,
+                             DETECTION, URL, FONCTION)
 from src.motion import MotionDetector
 
 class InferenceServerThread(threading.Thread):
-    def __init__(self, home_dir, get_frame_func, white_pixels_threshold=MOTIONTRESHOLD, detection_callback=None, stop_event=None):
+    def __init__(self, home_dir, get_frame_func,
+                 white_pixels_threshold=MOTIONTRESHOLD,
+                 detection_callback=None, stop_event=None):
         super().__init__()
         self.home_dir = home_dir
         self.get_frame_func = get_frame_func  # Fonction pour obtenir la frame courante
