@@ -5,6 +5,7 @@ import logging
 import requests
 import io
 import cv2
+from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import MOTIONTRESHOLD, INF_THRESHOLD, DETECTION, URL, FONCTION
 from src.motion import MotionDetector
 
@@ -90,17 +91,41 @@ class InferenceServerThread(threading.Thread):
                         # Remettre les coordonnées dans le repère image d'origine
                         current_detections = np.array([
                             [
-                                float(d["x_min"]), # + x_pad,
-                                float(d["y_min"]), # + y_pad,
-                                float(d["x_max"]), #+ x_pad,
-                                float(d["y_max"]), #+ y_pad,
+                                float(d["x_min"]),
+                                float(d["y_min"]),
+                                float(d["x_max"]),
+                                float(d["y_max"]),
                                 float(d["confidence"]),
                                 int(d["class_id"]),
-                                int(d["tracker_id"]),
-                                d["personne_type"] if d["personne_type"] is not None else "inconnu"
+                                int(d.get("tracker_id", -1)),
+                                d.get("personne_type") if d.get("personne_type") is not None else "inconnu"
                             ]
-                            for d in detections if d["class_id"] in self.class_id
+                            for d in detections if d["class_id"] in self.class_id or DETECTION == 'extended'
                         ], dtype=object)
+                        # Si on a des personnes et des véhicules dans les détections actuelles, enrichir avec le contexte véhicule
+                        try:
+                            if current_detections.size > 0:
+                                # frame shape (h,w,3)
+                                h, w = frame.shape[:2]
+                                # Utiliser toutes les détections reçues (pas seulement self.class_id)
+                                all_dets = [
+                                    [
+                                        float(d.get("x_min", 0)), float(d.get("y_min", 0)),
+                                        float(d.get("x_max", 0)), float(d.get("y_max", 0)),
+                                        float(d.get("confidence", 0)), int(d.get("class_id", -1)), int(d.get("tracker_id", -1)),
+                                        d.get("personne_type") if d.get("personne_type") is not None else "inconnu"
+                                    ] for d in detections
+                                ]
+                                ctx = infer_in_vehicle_context(all_dets, (w, h))
+                                # Mettre à jour personne_type pour les personnes concernées dans current_detections
+                                for row in current_detections:
+                                    cls_id = int(row[5])
+                                    trk_id = int(row[6]) if row[6] is not None else -1
+                                    if cls_id == 1 and trk_id in ctx:
+                                        if ctx[trk_id]['is_in_vehicle']:
+                                            row[7] = 'sitting_in_vehicle'
+                        except Exception:
+                            pass
                         if len(current_detections) > 0:
                             self.is_detection = True
                             self.logger.debug(f"Détections actuelles : {current_detections}")
