@@ -98,7 +98,8 @@ class InferenceServerThread(threading.Thread):
                                 float(d["confidence"]),
                                 int(d["class_id"]),
                                 int(d.get("tracker_id", -1)),
-                                d.get("personne_type") if d.get("personne_type") is not None else "inconnu"
+                                # personne_type: par défaut 'pieton' pour les personnes, sinon vide; conserve valeur valide si déjà fournie
+                                (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if int(d["class_id"]) == 1 else ""))
                             ]
                             for d in detections if d["class_id"] in self.class_id or DETECTION == 'extended'
                         ], dtype=object)
@@ -121,14 +122,20 @@ class InferenceServerThread(threading.Thread):
                                 for row in current_detections:
                                     cls_id = int(row[5])
                                     trk_id = int(row[6]) if row[6] is not None else -1
-                                    if cls_id == 1 and trk_id in ctx:
-                                        if ctx[trk_id]['is_in_vehicle']:
-                                            row[7] = 'sitting_in_vehicle'
+                                    if cls_id == 1:
+                                        in_vehicle = False
+                                        if trk_id in ctx:
+                                            in_vehicle = bool(ctx[trk_id].get('is_in_vehicle', False))
+                                        row[7] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
                         except Exception:
                             pass
+                        # Fallback de sécurité: si une personne a encore un label vide/inconnu, mettre 'pieton'
+                        for row in current_detections:
+                            if int(row[5]) == 1 and (row[7] in (None, "", "inconnu")):
+                                row[7] = 'pieton'
                         if len(current_detections) > 0:
                             self.is_detection = True
-                            self.logger.debug(f"Détections actuelles : {current_detections}")
+                            self.logger.info(f"Détections actuelles : {current_detections}")
                         else:
                             self.is_detection = False
                             self.logger.debug("Aucune détection de classe 0 trouvée.")
