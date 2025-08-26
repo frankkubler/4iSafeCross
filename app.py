@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
-                       RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP)
+                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
