@@ -74,10 +74,10 @@ class InferenceServerThread(threading.Thread):
                 self.logger.debug("Aucune détection de mouvement ou zone de mouvement invalide (w_pad <= 0 ou h_pad <= 0).")
                 time.sleep(0.1)
                 continue
-            
+
             # Découper la frame sur la zone de mouvement
             # frame_roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
-            
+
             buffer = io.BytesIO()
             np.save(buffer, frame, allow_pickle=True)
             buffer.seek(0)
@@ -92,23 +92,23 @@ class InferenceServerThread(threading.Thread):
                     detections = response.json().get("detections", [])
                     if detections:
                         # Remettre les coordonnées dans le repère image d'origine
-                        current_detections = np.array([
-                            [
-                                float(d["x_min"]),
-                                float(d["y_min"]),
-                                float(d["x_max"]),
-                                float(d["y_max"]),
-                                float(d["confidence"]),
-                                int(d["class_id"]),
-                                int(d.get("tracker_id", -1)),
-                                # personne_type: par défaut 'pieton' pour les personnes, sinon vide; conserve valeur valide si déjà fournie
-                                (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if int(d["class_id"]) == 1 else ""))
-                            ]
+                        current_detections = [
+                            {
+                                "x_min": float(d["x_min"]),
+                                "y_min": float(d["y_min"]),
+                                "x_max": float(d["x_max"]),
+                                "y_max": float(d["y_max"]),
+                                "confidence": float(d["confidence"]),
+                                "class_id": int(d["class_id"]),
+                                "label": d.get("label", ""),
+                                "tracker_id": int(d.get("tracker_id", -1)),
+                                "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if int(d["class_id"]) == 1 else ""))
+                            }
                             for d in detections if d["class_id"] in self.class_id or DETECTION == 'extended'
-                        ], dtype=object)
+                        ]
                         # Si on a des personnes et des véhicules dans les détections actuelles, enrichir avec le contexte véhicule
                         try:
-                            if current_detections.size > 0:
+                            if len(current_detections) > 0:
                                 # frame shape (h,w,3)
                                 h, w = frame.shape[:2]
                                 # Utiliser toutes les détections reçues (pas seulement self.class_id)
@@ -122,20 +122,25 @@ class InferenceServerThread(threading.Thread):
                                 ]
                                 ctx = infer_in_vehicle_context(all_dets, (w, h))
                                 # Mettre à jour personne_type pour les personnes concernées dans current_detections
-                                for row in current_detections:
-                                    cls_id = int(row[5])
-                                    trk_id = int(row[6]) if row[6] is not None else -1
+                                for detection in current_detections:
+                                    cls_id = detection["class_id"]
+                                    trk_id = detection["tracker_id"] if detection["tracker_id"] is not None else -1
                                     if cls_id == 1:
                                         in_vehicle = False
                                         if trk_id in ctx:
                                             in_vehicle = bool(ctx[trk_id].get('is_in_vehicle', False))
-                                        row[7] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
+                                        detection["personne_type"] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
+                                
+                                # Fallback de sécurité
+                                for detection in current_detections:
+                                    if detection["class_id"] == 1 and detection["personne_type"] in (None, "", "inconnu"):
+                                        detection["personne_type"] = 'pieton'
                         except Exception:
                             pass
                         # Fallback de sécurité: si une personne a encore un label vide/inconnu, mettre 'pieton'
-                        for row in current_detections:
-                            if int(row[5]) == 1 and (row[7] in (None, "", "inconnu")):
-                                row[7] = 'pieton'
+                        for detection in current_detections:
+                            if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
+                                detection["personne_type"] = 'pieton'
                         if len(current_detections) > 0:
                             self.is_detection = True
                             self.logger.info(f"Détections actuelles : {current_detections}")
@@ -157,7 +162,8 @@ class InferenceServerThread(threading.Thread):
                     if len(self.detections) == 0:
                         self.detections = current_detections
                     else:
-                        self.detections = np.vstack((self.detections, current_detections))
+                        self.detections += current_detections  # Utiliser extend() au lieu de np.vstack()
+
                 else:
                     self.detections = []
                 self.logger.debug(f"Nombre de détections : {len(self.detections)}")
