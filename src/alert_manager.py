@@ -74,8 +74,8 @@ class AlerteManager:
         # Récupérer les zones détectées dans cette frame
         if detections:
             for det in detections:
-                if len(det) > 5 and isinstance(det[-1], list):
-                    zone_names_detected.update(det[-1])
+                if isinstance(det, dict) and "zones" in det:
+                    zone_names_detected.update(det["zones"])
         # Activation des relais pour chaque zone détectée
         for zone_name in zone_names_detected:
             relay_nums = self._get_relay_nums_from_zone(zone_name)
@@ -235,16 +235,18 @@ class AlerteManager:
         if not detections:
             return
         for det in detections:
-            x1 = max(0, min(w-1, int(det[0])))
-            y1 = max(0, min(h-1, int(det[1])))
-            x2 = max(0, min(w-1, int(det[2])))
-            y2 = max(0, min(h-1, int(det[3])))
+            # det est maintenant un dictionnaire
+            x1 = max(0, min(w-1, int(det["x_min"])))
+            y1 = max(0, min(h-1, int(det["y_min"])))
+            x2 = max(0, min(w-1, int(det["x_max"])))
+            y2 = max(0, min(h-1, int(det["y_max"])))
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            if len(det) > 5:
-                label = f"{det[4]:.2f} {COCO_CLASSES.get(det[5], 'unknown')}"
-                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            if len(det) > 5 and isinstance(det[-1], list):
-                zone_names = det[-1]
+            confidence = det.get("confidence", 0)
+            class_id = det.get("class_id", -1)
+            label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')}"
+            cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            zone_names = det.get("zones", [])
+            if zone_names:
                 for i, zone_name in enumerate(zone_names):
                     color = (255, 0, 0)
                     for z in self.zones:
