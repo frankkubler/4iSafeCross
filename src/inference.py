@@ -106,37 +106,37 @@ class InferenceServerThread(threading.Thread):
                             }
                             for d in detections if d["class_id"] in self.class_id or DETECTION == 'extended'
                         ]
-                        # Si on a des personnes et des véhicules dans les détections actuelles, enrichir avec le contexte véhicule
-                        try:
-                            if len(current_detections) > 0:
-                                # frame shape (h,w,3)
-                                h, w = frame.shape[:2]
-                                # Utiliser toutes les détections reçues (pas seulement self.class_id)
-                                all_dets = [
-                                    [
-                                        float(d.get("x_min", 0)), float(d.get("y_min", 0)),
-                                        float(d.get("x_max", 0)), float(d.get("y_max", 0)),
-                                        float(d.get("confidence", 0)), int(d.get("class_id", -1)), int(d.get("tracker_id", -1)),
-                                        d.get("personne_type") if d.get("personne_type") is not None else "inconnu"
-                                    ] for d in detections
-                                ]
-                                ctx = infer_in_vehicle_context(all_dets, (w, h))
-                                # Mettre à jour personne_type pour les personnes concernées dans current_detections
-                                for detection in current_detections:
-                                    cls_id = detection["class_id"]
-                                    trk_id = detection["tracker_id"] if detection["tracker_id"] is not None else -1
-                                    if cls_id == 1:
-                                        in_vehicle = False
-                                        if trk_id in ctx:
-                                            in_vehicle = bool(ctx[trk_id].get('is_in_vehicle', False))
-                                        detection["personne_type"] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
+                        # # Si on a des personnes et des véhicules dans les détections actuelles, enrichir avec le contexte véhicule
+                        # try:
+                        #     if len(current_detections) > 0:
+                        #         # frame shape (h,w,3)
+                        #         h, w = frame.shape[:2]
+                        #         # Utiliser toutes les détections reçues (pas seulement self.class_id)
+                        #         all_dets = [
+                        #             [
+                        #                 float(d.get("x_min", 0)), float(d.get("y_min", 0)),
+                        #                 float(d.get("x_max", 0)), float(d.get("y_max", 0)),
+                        #                 float(d.get("confidence", 0)), int(d.get("class_id", -1)), int(d.get("tracker_id", -1)),
+                        #                 d.get("personne_type") if d.get("personne_type") is not None else "inconnu"
+                        #             ] for d in detections
+                        #         ]
+                        #         ctx = infer_in_vehicle_context(all_dets, (w, h))
+                        #         # Mettre à jour personne_type pour les personnes concernées dans current_detections
+                        #         for detection in current_detections:
+                        #             cls_id = detection["class_id"]
+                        #             trk_id = detection["tracker_id"] if detection["tracker_id"] is not None else -1
+                        #             if cls_id == 1:
+                        #                 in_vehicle = False
+                        #                 if trk_id in ctx:
+                        #                     in_vehicle = bool(ctx[trk_id].get('is_in_vehicle', False))
+                        #                 detection["personne_type"] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
                                 
-                                # Fallback de sécurité
-                                for detection in current_detections:
-                                    if detection["class_id"] == 1 and detection["personne_type"] in (None, "", "inconnu"):
-                                        detection["personne_type"] = 'pieton'
-                        except Exception:
-                            pass
+                        #         # Fallback de sécurité
+                        #         for detection in current_detections:
+                        #             if detection["class_id"] == 1 and detection["personne_type"] in (None, "", "inconnu"):
+                        #                 detection["personne_type"] = 'pieton'
+                        # except Exception:
+                        #     pass
                         # Fallback de sécurité: si une personne a encore un label vide/inconnu, mettre 'pieton'
                         for detection in current_detections:
                             if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
