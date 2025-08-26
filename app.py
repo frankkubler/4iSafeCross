@@ -84,10 +84,10 @@ alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_
 
 
 def get_zone_for_detection(det, zones):
-    # det : [x1, y1, x2, y2, ...]
+    # det est maintenant un dictionnaire : {"x_min": ..., "y_min": ..., etc.}
     # On prend le centre du rectangle de détection
-    x_centre = int((det[0] + det[2]) / 2)
-    y_centre = int((det[1] + det[3]) / 2)
+    x_centre = int((det["x_min"] + det["x_max"]) / 2)
+    y_centre = int((det["y_min"] + det["y_max"]) / 2)
     matched_zones = []
     for zone in zones:
         if "polygon" in zone:
@@ -136,7 +136,8 @@ def detection_callback_factory(cid, main_loop=None):
                 zone_names = get_zone_for_detection(det, zones)
                 for zn in zone_names:
                     zones_detected.add(zn)
-                det_with_zone = list(det) + [zone_names]
+                det_with_zone = det.copy()  # Copie le dictionnaire
+                det_with_zone["zones"] = zone_names  # Ajoute les zones
                 detections_with_zone.append(det_with_zone)
             shared_detections[cid] = detections_with_zone
 
@@ -193,7 +194,7 @@ def detection_callback_factory(cid, main_loop=None):
                 )
 
             # Filtrer pour l'alerte uniquement class_id == 1 ET personne_type == "pieton"
-            detections_person = [det for det in detections if len(det) > 7 and det[5] == 1 and det[7] == "pieton"]
+            detections_person = [det for det in detections if det.get("class_id") == 1 and det.get("personne_type") == "pieton"]
             if len(detections_person) > 0:
                 current_day = now.strftime('%Y-%m-%d %H:%M:%S')
                 frame = manager.get_frame_array(CAM_IDS[cid])
@@ -201,7 +202,9 @@ def detection_callback_factory(cid, main_loop=None):
                 detections_person_with_zone = []
                 for det in detections_person:
                     zone_names = get_zone_for_detection(det, zones)
-                    detections_person_with_zone.append(list(det) + [zone_names])
+                    det_with_zone = det.copy()  # Copie le dictionnaire
+                    det_with_zone["zones"] = zone_names  # Ajoute les zones
+                    detections_person_with_zone.append(det_with_zone)
                 logger.info(f"Détections caméra {cid} (piétons uniquement) : {detections_person_with_zone}, {current_day}")
                 asyncio.run_coroutine_threadsafe(
                     alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
@@ -348,17 +351,19 @@ def gen_frames(cid):
             if cid in inference_threads:
                 motion = inference_threads[cid].motion
             for det in detections:
-                # On suppose que la zone est à la fin de la détection
-                zone_names = det[-1] if isinstance(det[-1], list) else []
-                x1 = max(0, min(w-1, int(det[0])))
-                y1 = max(0, min(h-1, int(det[1])))
-                x2 = max(0, min(w-1, int(det[2])))
-                y2 = max(0, min(h-1, int(det[3])))
+                # Maintenant det est un dictionnaire
+                zone_names = det.get("zones", [])  # Si les zones ont été ajoutées
+                x1 = max(0, min(w-1, int(det["x_min"])))
+                y1 = max(0, min(h-1, int(det["y_min"])))
+                x2 = max(0, min(w-1, int(det["x_max"])))
+                y2 = max(0, min(h-1, int(det["y_max"])))
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 # Optionnel : afficher la confiance
-                if len(det) > 5:
-                    label = f"{det[4]:.2f} {COCO_CLASSES.get(det[5], 'unknown')} {det[6]}"  # Confiance et classe et ID de suivi
-                    cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                confidence = det.get("confidence", 0)
+                class_id = det.get("class_id", -1)
+                tracker_id = det.get("tracker_id", -1)
+                label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {tracker_id}"
+                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 # Afficher la zone sur la détection
                 if zone_names:
                     for i, zone_name in enumerate(zone_names):
