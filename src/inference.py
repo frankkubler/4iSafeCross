@@ -188,7 +188,7 @@ class InferenceServerThread(threading.Thread):
             self.past_detections = self.detections
             self.detections = []
             # self.old_motion_bool = motion_bool
-            time.sleep(0.05)
+            # time.sleep(0.05)  # Supprimé car les détections prennent déjà 150ms
 
     def switch_inference_mode(self):
         """Bascule entre YOLO (predict_frame) et RFDETR (predict_frame_rf_detr)."""
