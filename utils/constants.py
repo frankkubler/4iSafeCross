@@ -81,6 +81,12 @@ WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=2
 FONCTION = config.get('APP', 'FONCTION', fallback='/predict_frame_rf_detr/')
 URL = config.get('APP', 'URL', fallback='http://127.0.0.1:8002')
 
+# Chargement des couleurs de stature depuis config.ini
+STATURE_COLORS = {}
+if 'STATURE_COLORS' in config:
+    for key, value in config['STATURE_COLORS'].items():
+        STATURE_COLORS[key] = ast.literal_eval(value)
+
 # # Définition des zones de détection par caméra (exemple pour 2 caméras)
 # ZONES_BY_CAMERA = {
 #     0: [

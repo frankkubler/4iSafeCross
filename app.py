@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
-                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP)
+                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -350,16 +350,6 @@ def gen_frames(cid):
             motion = False
             if cid in inference_threads:
                 motion = inference_threads[cid].motion
-            # Dictionnaire des couleurs par stature
-            stature_colors = {
-                'debout': (0, 255, 0),      # Vert
-                'assis': (255, 0, 0),       # Bleu
-                'marchant': (0, 255, 255),  # Jaune
-                'jambes_masquees': (255, 255, 0),  # Cyan
-                'inconnu': (0, 0, 255),     # Rouge
-                'conducteur': (255, 165, 0),  # Orange
-                'pieton': (128, 0, 128)     # Violet
-            }
             for det in detections:
                 # Maintenant det est un dictionnaire
                 zone_names = det.get("zones", [])  # Si les zones ont été ajoutées
@@ -371,7 +361,7 @@ def gen_frames(cid):
                 stature = det.get("stature", det.get("personne_type", "inconnu"))
                 if not isinstance(stature, str):
                     stature = "inconnu"
-                color = stature_colors.get(stature, (0, 255, 0))  # Vert par défaut
+                color = STATURE_COLORS.get(stature, (0, 255, 0))  # Vert par défaut
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
