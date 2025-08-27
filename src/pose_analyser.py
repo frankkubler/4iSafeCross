@@ -15,7 +15,7 @@ class PoseAnalyzer:
     LEFT_ANKLE = 15
     RIGHT_ANKLE = 16
 
-    def __init__(self, confidence_threshold=0.5, knee_hip_threshold=35, ankle_spread_threshold=25, sitting_ratio_threshold=0.6):
+    def __init__(self, confidence_threshold=0.5, knee_hip_threshold=35, ankle_spread_threshold=25, sitting_ratio_threshold=0.9):
         """
         - confidence_threshold : Seuil pour filtrer les keypoints (ignoré si pas de confiance).
         - knee_hip_threshold : Distance min entre genou et hanche pour 'debout'.
