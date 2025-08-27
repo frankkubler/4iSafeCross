@@ -114,7 +114,7 @@ class InferenceServerThread(threading.Thread):
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
-        self.pose_analyzer = PoseAnalyzer(confidence_threshold=0.5)
+        self.pose_analyzer = PoseAnalyzer(confidence_threshold=0.2)
 
     @property
     def motion(self):
