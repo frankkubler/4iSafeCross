@@ -9,84 +9,8 @@ from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTRESHOLD, INF_THRESHOLD,
                              DETECTION, URL, FONCTION)
 from src.motion import MotionDetector
+from src.pose_analyser import PoseAnalyzer
 
-class PoseAnalyzer:
-    """
-    Classe pour analyser les keypoints de pose et déterminer la stature de la personne.
-    Utilise les indices COCO pour les keypoints.
-    """
-    # Indices COCO pour les keypoints pertinents
-    LEFT_HIP = 11
-    RIGHT_HIP = 12
-    LEFT_KNEE = 13
-    RIGHT_KNEE = 14
-    LEFT_ANKLE = 15
-    RIGHT_ANKLE = 16
-
-    def __init__(self, confidence_threshold=0.5):
-        self.confidence_threshold = confidence_threshold
-
-    def filter_keypoints_by_confidence(self, pose_keypoints):
-        """
-        Filtre les keypoints dont la confidence est supérieure au seuil.
-        Pose keypoints est une liste de dicts {"x": float, "y": float, "confidence": float} pour chaque point.
-        """
-        filtered = []
-        for i, kp in enumerate(pose_keypoints):
-            if isinstance(kp, dict) and kp.get("confidence", 0) > self.confidence_threshold:
-                x = kp.get("x", 0)
-                y = kp.get("y", 0)
-                conf = kp.get("confidence", 0)
-                filtered.append((i, x, y, conf))  # (index, x, y, conf)
-        return filtered
-
-    def analyze_stature(self, pose_keypoints):
-        """
-        Analyse la stature basée sur les keypoints filtrés.
-        Retourne : 'debout', 'assis', 'jambes_masquees', ou 'inconnu'
-        """
-        filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
-        kp_dict = {idx: (x, y) for idx, x, y, conf in filtered_kps}
-
-        # Vérifier si les keypoints des jambes sont présents
-        hips_present = self.LEFT_HIP in kp_dict or self.RIGHT_HIP in kp_dict
-        knees_present = self.LEFT_KNEE in kp_dict or self.RIGHT_KNEE in kp_dict
-        ankles_present = self.LEFT_ANKLE in kp_dict or self.RIGHT_ANKLE in kp_dict
-
-        if not hips_present or not knees_present:
-            return 'jambes_masquees' if not ankles_present else 'inconnu'
-
-        # Calculer les hauteurs moyennes
-        hip_y = []
-        if self.LEFT_HIP in kp_dict:
-            hip_y.append(kp_dict[self.LEFT_HIP][1])
-        if self.RIGHT_HIP in kp_dict:
-            hip_y.append(kp_dict[self.RIGHT_HIP][1])
-        avg_hip_y = sum(hip_y) / len(hip_y) if hip_y else 0
-
-        knee_y = []
-        if self.LEFT_KNEE in kp_dict:
-            knee_y.append(kp_dict[self.LEFT_KNEE][1])
-        if self.RIGHT_KNEE in kp_dict:
-            knee_y.append(kp_dict[self.RIGHT_KNEE][1])
-        avg_knee_y = sum(knee_y) / len(knee_y) if knee_y else 0
-
-        ankle_y = []
-        if self.LEFT_ANKLE in kp_dict:
-            ankle_y.append(kp_dict[self.LEFT_ANKLE][1])
-        if self.RIGHT_ANKLE in kp_dict:
-            ankle_y.append(kp_dict[self.RIGHT_ANKLE][1])
-        avg_ankle_y = sum(ankle_y) / len(ankle_y) if ankle_y else 0
-
-        # Logique simple pour stature
-        if avg_ankle_y > avg_knee_y > avg_hip_y and (avg_knee_y - avg_hip_y) > 50:  # Debout : cheville > genou > hanche
-            return 'debout'
-        elif abs(avg_knee_y - avg_hip_y) < 30 and avg_ankle_y > avg_knee_y:  # Assis : genou proche de hanche, cheville plus basse
-            return 'assis'
-        elif not ankles_present or not knees_present:
-            return 'jambes_masquees'
-        else:
-            return 'inconnu'
 
 
 class InferenceServerThread(threading.Thread):
