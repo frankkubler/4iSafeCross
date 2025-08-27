@@ -369,7 +369,7 @@ def gen_frames(cid):
                     stature = stature[0]  # Extraire la stature du tuple (stature, debug_info)
                 if not isinstance(stature, str):
                     stature = "inconnu"
-                color = STATURE_COLORS.get(stature, (0, 255, 0))  # Vert par défaut
+                color = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
