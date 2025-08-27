@@ -7,6 +7,7 @@ class PoseAnalyzer:
     Supporte keypoints avec ou sans confiance.
     """
     # Indices COCO pour les keypoints pertinents
+    NOSE = 0
     LEFT_HIP = 11
     RIGHT_HIP = 12
     LEFT_KNEE = 13
@@ -14,15 +15,17 @@ class PoseAnalyzer:
     LEFT_ANKLE = 15
     RIGHT_ANKLE = 16
 
-    def __init__(self, confidence_threshold=0.5, knee_hip_threshold=50, ankle_spread_threshold=30):
+    def __init__(self, confidence_threshold=0.5, knee_hip_threshold=35, ankle_spread_threshold=25, sitting_ratio_threshold=0.6):
         """
         - confidence_threshold : Seuil pour filtrer les keypoints (ignoré si pas de confiance).
         - knee_hip_threshold : Distance min entre genou et hanche pour 'debout'.
         - ankle_spread_threshold : Écart max entre chevilles pour 'assis' (chevilles proches = assis).
+        - sitting_ratio_threshold : Seuil pour le ratio H2H/H2F pour confirmer 'assis' (ratio élevé = tête proche hanche).
         """
         self.confidence_threshold = confidence_threshold
         self.knee_hip_threshold = knee_hip_threshold
         self.ankle_spread_threshold = ankle_spread_threshold
+        self.sitting_ratio_threshold = sitting_ratio_threshold
 
     def filter_keypoints_by_confidence(self, pose_keypoints):
         """
@@ -34,7 +37,7 @@ class PoseAnalyzer:
         filtered = []
         if not pose_keypoints:
             return filtered
-        
+
         # Détecter le format
         if isinstance(pose_keypoints[0], dict):
             # Format dict avec confiance
@@ -62,6 +65,48 @@ class PoseAnalyzer:
         x_coords = [p[0] for p in points]
         return max(x_coords) - min(x_coords)
 
+    def calculate_ratios(self, pose_keypoints):
+        """
+        Calcule les distances head2hip, hip2feet et leur ratio.
+        Retourne un dict avec les valeurs, ou None si keypoints manquants.
+        """
+        filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
+        if not filtered_kps:
+            return None
+
+        kp_dict = {idx: (x, y) for idx, x, y, conf in filtered_kps}
+
+        if self.NOSE not in kp_dict:
+            return None  # Nez absent
+
+        nose_x, nose_y = kp_dict[self.NOSE]
+
+        # Moyenne hanches
+        hip_positions = [kp_dict[idx] for idx in [self.LEFT_HIP, self.RIGHT_HIP] if idx in kp_dict]
+        if not hip_positions:
+            return None
+        avg_hip_x = self._safe_average([x for x, y in hip_positions])
+        avg_hip_y = self._safe_average([y for x, y in hip_positions])
+
+        # Moyenne chevilles
+        ankle_positions = [kp_dict[idx] for idx in [self.LEFT_ANKLE, self.RIGHT_ANKLE] if idx in kp_dict]
+        if not ankle_positions:
+            return None
+        avg_ankle_x = self._safe_average([x for x, y in ankle_positions])
+        avg_ankle_y = self._safe_average([y for x, y in ankle_positions])
+
+        # Distances euclidiennes
+        head_to_hip = ((nose_x - avg_hip_x)**2 + (nose_y - avg_hip_y)**2)**0.5
+        hip_to_feet = ((avg_hip_x - avg_ankle_x)**2 + (avg_hip_y - avg_ankle_y)**2)**0.5
+
+        ratio = head_to_hip / hip_to_feet if hip_to_feet > 0 else 0
+
+        return {
+            'head_to_hip_distance': head_to_hip,
+            'hip_to_foot_distance': hip_to_feet,
+            'h2h_h2f_ratio': ratio
+        }
+
     def analyze_stature(self, pose_keypoints, debug=False):
         """
         Analyse la stature basée sur les keypoints filtrés.
@@ -71,7 +116,7 @@ class PoseAnalyzer:
         filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
         if not filtered_kps:
             return ('inconnu', {}) if debug else 'inconnu'
-        
+
         kp_dict = {idx: (x, y) for idx, x, y, conf in filtered_kps}
 
         # Vérifier présence
@@ -98,6 +143,10 @@ class PoseAnalyzer:
         # Écart chevilles (pour détecter marche : écart > seuil = jambes écartées)
         ankle_spread = self._calculate_spread(ankle_positions)
 
+        # Calculer les ratios si possible
+        ratios = self.calculate_ratios(pose_keypoints)
+        ratio_value = ratios['h2h_h2f_ratio'] if ratios else 0
+
         # Logique corrigée
         knee_hip_diff = avg_knee_y - avg_hip_y  # Positif si genou plus bas que hanche (debout)
         
@@ -107,8 +156,8 @@ class PoseAnalyzer:
                 stature = 'marchant'  # Jambes écartées = mouvement
             else:
                 stature = 'debout'
-        elif knees_present and abs(knee_hip_diff) < 30 and avg_ankle_y > avg_knee_y:
-            # Assis : genou proche hanche, cheville plus basse
+        elif knees_present and abs(knee_hip_diff) < 30 and avg_ankle_y > avg_knee_y and (not ratios or ratio_value > self.sitting_ratio_threshold):
+            # Assis : genou proche hanche, cheville plus basse, et ratio élevé (tête proche hanche)
             stature = 'assis'
         elif not ankles_present:
             stature = 'jambes_masquees'
@@ -124,7 +173,8 @@ class PoseAnalyzer:
                 'ankle_spread': ankle_spread,
                 'hips_present': hips_present,
                 'knees_present': knees_present,
-                'ankles_present': ankles_present
+                'ankles_present': ankles_present,
+                'ratios': ratios
             }
             return stature, debug_info
         return stature
