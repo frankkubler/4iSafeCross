@@ -350,6 +350,16 @@ def gen_frames(cid):
             motion = False
             if cid in inference_threads:
                 motion = inference_threads[cid].motion
+            # Dictionnaire des couleurs par stature
+            stature_colors = {
+                'debout': (0, 255, 0),      # Vert
+                'assis': (255, 0, 0),       # Bleu
+                'marchant': (0, 255, 255),  # Jaune
+                'jambes_masquees': (255, 255, 0),  # Cyan
+                'inconnu': (0, 0, 255),     # Rouge
+                'conducteur': (255, 165, 0),  # Orange
+                'pieton': (128, 0, 128)     # Violet
+            }
             for det in detections:
                 # Maintenant det est un dictionnaire
                 zone_names = det.get("zones", [])  # Si les zones ont été ajoutées
@@ -357,13 +367,16 @@ def gen_frames(cid):
                 y1 = max(0, min(h-1, int(det["y_min"])))
                 x2 = max(0, min(w-1, int(det["x_max"])))
                 y2 = max(0, min(h-1, int(det["y_max"])))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                # Déterminer la couleur basée sur la stature
+                stature = det.get("stature", det.get("personne_type", "inconnu"))
+                color = stature_colors.get(stature, (0, 255, 0))  # Vert par défaut
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
                 tracker_id = det.get("tracker_id", -1)
-                label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {tracker_id}"
-                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {tracker_id} {stature}"
+                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 # Afficher la zone sur la détection
                 if zone_names:
                     for i, zone_name in enumerate(zone_names):
@@ -398,14 +411,16 @@ def index():
         if idx in inference_threads:
             threshold = getattr(inference_threads[idx], 'white_pixels_threshold', MOTIONTRESHOLD)
         cam_infos.append({
-            'id': cam_id, 
-            'idx': idx, 
+            'id': cam_id,
+            'idx': idx,
             'white_pixels_threshold': threshold,
             'roi_display_enabled': roi_display_enabled.get(idx, False)
         })
     return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled)
 
 # --- Ajout route pour modifier dynamiquement les paramètres motion ---
+
+
 @app.route('/set_motion_param/<int:cid>', methods=['POST'])
 def set_motion_param(cid):
     data = request.get_json()
@@ -448,6 +463,7 @@ def set_motion_param(cid):
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
     return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
+
 
 @app.route('/video_feed/<int:cid>')
 def video_feed(cid):
@@ -516,6 +532,7 @@ def toggle_roi_display(cid):
 
 telegram_alert_enabled = False
 
+
 @app.route('/toggle_telegram_alert', methods=['POST'])
 def toggle_telegram_alert():
     global telegram_alert_enabled
@@ -531,6 +548,7 @@ def shutdown():
     manager.release()
     return "Cameras released"
 
+
 @app.route('/quit', methods=['POST'])
 def quit_server():
     manager.release()
@@ -541,6 +559,7 @@ def quit_server():
         import os
         os._exit(0)
     return 'Serveur arrêté.'
+
 
 @app.route('/set_white_pixels_threshold/<int:cid>', methods=['POST'])
 def set_white_pixels_threshold(cid):
