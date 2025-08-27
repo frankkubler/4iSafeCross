@@ -68,6 +68,7 @@ class PoseAnalyzer:
     def calculate_ratios(self, pose_keypoints):
         """
         Calcule les distances head2hip, hip2feet et leur ratio.
+        Utilise le nez si disponible, sinon le point le plus haut comme tête.
         Retourne un dict avec les valeurs, ou None si keypoints manquants.
         """
         filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
@@ -76,10 +77,15 @@ class PoseAnalyzer:
 
         kp_dict = {idx: (x, y) for idx, x, y, conf in filtered_kps}
 
-        if self.NOSE not in kp_dict:
-            return None  # Nez absent
-
-        nose_x, nose_y = kp_dict[self.NOSE]
+        # Utiliser le nez si disponible, sinon le point le plus haut
+        if self.NOSE in kp_dict:
+            head_x, head_y = kp_dict[self.NOSE]
+        else:
+            # Trouver le point avec le y le plus petit (plus haut)
+            if not kp_dict:
+                return None
+            head_idx = min(kp_dict, key=lambda idx: kp_dict[idx][1])
+            head_x, head_y = kp_dict[head_idx]
 
         # Moyenne hanches
         hip_positions = [kp_dict[idx] for idx in [self.LEFT_HIP, self.RIGHT_HIP] if idx in kp_dict]
@@ -96,7 +102,7 @@ class PoseAnalyzer:
         avg_ankle_y = self._safe_average([y for x, y in ankle_positions])
 
         # Distances euclidiennes
-        head_to_hip = ((nose_x - avg_hip_x)**2 + (nose_y - avg_hip_y)**2)**0.5
+        head_to_hip = ((head_x - avg_hip_x)**2 + (head_y - avg_hip_y)**2)**0.5
         hip_to_feet = ((avg_hip_x - avg_ankle_x)**2 + (avg_hip_y - avg_ankle_y)**2)**0.5
 
         ratio = head_to_hip / hip_to_feet if hip_to_feet > 0 else 0
