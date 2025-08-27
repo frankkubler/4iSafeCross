@@ -98,8 +98,28 @@
             cursor: pointer;
             opacity: 0.7;
         }
-        #debug-panel .close-btn:hover {
-            opacity: 1;
+        .legend {
+            position: fixed;
+            top: 250px;
+            right: 20px;
+            background: rgba(40,40,40,0.9);
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 999;
+            max-width: 250px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #fff;
         }
         .cam-status {
             display: inline-block;
@@ -365,6 +385,15 @@
     <div id="debug-panel">
         <button class="close-btn" onclick="hideDebugPanel()">×</button>
         <div id="debug-panel-content">Chargement...</div>
+    </div>
+    <div class="legend">
+        <h3 style="margin: 0 0 10px 0; font-size: 16px;">Légende des postures</h3>
+        {% for posture, color in stature_colors.items() %}
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: rgb{{ color }};"></div>
+            <span>{{ posture }}</span>
+        </div>
+        {% endfor %}
     </div>
     <img src="{{ url_for('static', filename='res/4itec-logo.png') }}" class="header-logo" alt="Logo 4itec">
     <h1>4iSafeCross CONTROL CENTER</h1>

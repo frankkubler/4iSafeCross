@@ -412,7 +412,7 @@ def index():
             'white_pixels_threshold': threshold,
             'roi_display_enabled': roi_display_enabled.get(idx, False)
         })
-    return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled)
+    return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled, stature_colors=STATURE_COLORS)
 
 # --- Ajout route pour modifier dynamiquement les paramètres motion ---
 
