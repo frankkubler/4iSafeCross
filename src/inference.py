@@ -144,8 +144,8 @@ class InferenceServerThread(threading.Thread):
                         #     pass
                         # Fallback de sécurité: si une personne a encore un label vide/inconnu, mettre 'pieton'
                         for detection in current_detections:
-                            if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
-                                detection["personne_type"] = 'pieton'
+                            # if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
+                            #     detection["personne_type"] = 'pieton'
                             # Analyser la stature si pose est présente et class_id == 1
                             if detection["class_id"] == 1 and detection["pose"]:
                                 detection["stature"] = self.pose_analyzer.analyze_stature(detection["pose"], debug=True)
