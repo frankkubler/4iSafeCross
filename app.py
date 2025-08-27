@@ -369,6 +369,8 @@ def gen_frames(cid):
                 y2 = max(0, min(h-1, int(det["y_max"])))
                 # Déterminer la couleur basée sur la stature
                 stature = det.get("stature", det.get("personne_type", "inconnu"))
+                if not isinstance(stature, str):
+                    stature = "inconnu"
                 color = stature_colors.get(stature, (0, 255, 0))  # Vert par défaut
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 # Optionnel : afficher la confiance
