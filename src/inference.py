@@ -102,6 +102,7 @@ class InferenceServerThread(threading.Thread):
                                 "class_id": int(d["class_id"]),
                                 "label": d.get("label", ""),
                                 "tracker_id": int(d.get("tracker_id") or -1),  # Utilise 'or -1' au lieu de la valeur par défaut
+                                "pose": d.get("pose", []),
                                 "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if int(d["class_id"]) == 1 else ""))
                             }
                             for d in detections if d["class_id"] in self.class_id
