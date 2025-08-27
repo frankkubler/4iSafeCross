@@ -10,6 +10,82 @@ from utils.constants import (MOTIONTRESHOLD, INF_THRESHOLD,
                              DETECTION, URL, FONCTION)
 from src.motion import MotionDetector
 
+class PoseAnalyzer:
+    """
+    Classe pour analyser les keypoints de pose et déterminer la stature de la personne.
+    Utilise les indices COCO pour les keypoints.
+    """
+    # Indices COCO pour les keypoints pertinents
+    LEFT_HIP = 11
+    RIGHT_HIP = 12
+    LEFT_KNEE = 13
+    RIGHT_KNEE = 14
+    LEFT_ANKLE = 15
+    RIGHT_ANKLE = 16
+
+    def __init__(self, confidence_threshold=0.5):
+        self.confidence_threshold = confidence_threshold
+
+    def filter_keypoints_by_confidence(self, pose_keypoints):
+        """
+        Filtre les keypoints dont la confidence est supérieure au seuil.
+        Pose keypoints est une liste de [x, y, confidence] pour chaque point.
+        """
+        filtered = []
+        for i, kp in enumerate(pose_keypoints):
+            if len(kp) >= 3 and kp[2] > self.confidence_threshold:
+                filtered.append((i, kp[0], kp[1], kp[2]))  # (index, x, y, conf)
+        return filtered
+
+    def analyze_stature(self, pose_keypoints):
+        """
+        Analyse la stature basée sur les keypoints filtrés.
+        Retourne : 'debout', 'assis', 'jambes_masquees', ou 'inconnu'
+        """
+        filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
+        kp_dict = {idx: (x, y) for idx, x, y, conf in filtered_kps}
+
+        # Vérifier si les keypoints des jambes sont présents
+        hips_present = self.LEFT_HIP in kp_dict or self.RIGHT_HIP in kp_dict
+        knees_present = self.LEFT_KNEE in kp_dict or self.RIGHT_KNEE in kp_dict
+        ankles_present = self.LEFT_ANKLE in kp_dict or self.RIGHT_ANKLE in kp_dict
+
+        if not hips_present or not knees_present:
+            return 'jambes_masquees' if not ankles_present else 'inconnu'
+
+        # Calculer les hauteurs moyennes
+        hip_y = []
+        if self.LEFT_HIP in kp_dict:
+            hip_y.append(kp_dict[self.LEFT_HIP][1])
+        if self.RIGHT_HIP in kp_dict:
+            hip_y.append(kp_dict[self.RIGHT_HIP][1])
+        avg_hip_y = sum(hip_y) / len(hip_y) if hip_y else 0
+
+        knee_y = []
+        if self.LEFT_KNEE in kp_dict:
+            knee_y.append(kp_dict[self.LEFT_KNEE][1])
+        if self.RIGHT_KNEE in kp_dict:
+            knee_y.append(kp_dict[self.RIGHT_KNEE][1])
+        avg_knee_y = sum(knee_y) / len(knee_y) if knee_y else 0
+
+        ankle_y = []
+        if self.LEFT_ANKLE in kp_dict:
+            ankle_y.append(kp_dict[self.LEFT_ANKLE][1])
+        if self.RIGHT_ANKLE in kp_dict:
+            ankle_y.append(kp_dict[self.RIGHT_ANKLE][1])
+        avg_ankle_y = sum(ankle_y) / len(ankle_y) if ankle_y else 0
+
+        # Logique simple pour stature
+        if avg_ankle_y > avg_knee_y > avg_hip_y and (avg_knee_y - avg_hip_y) > 50:  # Debout : cheville > genou > hanche
+            return 'debout'
+        elif abs(avg_knee_y - avg_hip_y) < 30 and avg_ankle_y > avg_knee_y:  # Assis : genou proche de hanche, cheville plus basse
+            return 'assis'
+        elif not ankles_present or not knees_present:
+            return 'jambes_masquees'
+        else:
+            return 'inconnu'
+
+
 class InferenceServerThread(threading.Thread):
     def __init__(self, home_dir, get_frame_func,
                  white_pixels_threshold=MOTIONTRESHOLD,
@@ -35,6 +111,7 @@ class InferenceServerThread(threading.Thread):
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
+        self.pose_analyzer = PoseAnalyzer(confidence_threshold=0.5)
 
     @property
     def motion(self):
@@ -142,6 +219,11 @@ class InferenceServerThread(threading.Thread):
                         for detection in current_detections:
                             if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
                                 detection["personne_type"] = 'pieton'
+                            # Analyser la stature si pose est présente et class_id == 1
+                            if detection["class_id"] == 1 and detection["pose"]:
+                                detection["stature"] = self.pose_analyzer.analyze_stature(detection["pose"])
+                            else:
+                                detection["stature"] = "inconnu"
                         if len(current_detections) > 0:
                             self.is_detection = True
                             self.logger.info(f"Détections actuelles : {current_detections}")
@@ -189,7 +271,7 @@ class InferenceServerThread(threading.Thread):
             self.past_detections = self.detections
             self.detections = []
             # self.old_motion_bool = motion_bool
-            # time.sleep(0.05)  # Supprimé car les détections prennent déjà 150ms
+            time.sleep(0.01)  # 10ms    
 
     def switch_inference_mode(self):
         """Bascule entre YOLO (predict_frame) et RFDETR (predict_frame_rf_detr)."""
