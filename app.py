@@ -79,6 +79,9 @@ threading.Thread(target=telegram_bot.run, daemon=True).start()
 # Définir les zones pour chaque caméra
 zones_by_camera = ZONES_BY_CAMERA
 
+# Cache pour les couleurs des zones par caméra pour optimisation
+zone_color_cache = {}
+
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
 
@@ -325,6 +328,9 @@ def gen_frames(cid):
                     cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), (0, 255, 255), 2)
             # Tracer les zones spécifiques à la caméra
             zones = zones_by_camera.get(cid, [])
+            # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
+            if cid not in zone_color_cache:
+                zone_color_cache[cid] = {zone["name"]: zone.get("color", (255, 0, 0)) for zone in zones}
             for i, zone in enumerate(zones):
                 color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
                 if "polygon" in zone:
@@ -372,12 +378,8 @@ def gen_frames(cid):
                 # Afficher la zone sur la détection
                 if zone_names:
                     for i, zone_name in enumerate(zone_names):
-                        # Chercher la couleur de la zone si disponible
-                        color = (255, 0, 0)
-                        for z in zones:
-                            if z["name"] == zone_name:
-                                color = z.get("color", (255, 0, 0))
-                                break
+                        # Utiliser le cache pour la couleur de la zone
+                        color = zone_color_cache[cid].get(zone_name, (255, 0, 0))
                         cv2.putText(frame, zone_name, (x1, y2 + 20 + i * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
             # Ajout du point vert si mouvement détecté
             if motion:
