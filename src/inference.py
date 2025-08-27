@@ -29,12 +29,15 @@ class PoseAnalyzer:
     def filter_keypoints_by_confidence(self, pose_keypoints):
         """
         Filtre les keypoints dont la confidence est supérieure au seuil.
-        Pose keypoints est une liste de [x, y, confidence] pour chaque point.
+        Pose keypoints est une liste de dicts {"x": float, "y": float, "confidence": float} pour chaque point.
         """
         filtered = []
         for i, kp in enumerate(pose_keypoints):
-            if len(kp) >= 3 and kp[2] > self.confidence_threshold:
-                filtered.append((i, kp[0], kp[1], kp[2]))  # (index, x, y, conf)
+            if isinstance(kp, dict) and kp.get("confidence", 0) > self.confidence_threshold:
+                x = kp.get("x", 0)
+                y = kp.get("y", 0)
+                conf = kp.get("confidence", 0)
+                filtered.append((i, x, y, conf))  # (index, x, y, conf)
         return filtered
 
     def analyze_stature(self, pose_keypoints):
@@ -271,7 +274,7 @@ class InferenceServerThread(threading.Thread):
             self.past_detections = self.detections
             self.detections = []
             # self.old_motion_bool = motion_bool
-            time.sleep(0.01)  # 10ms    
+            time.sleep(0.01)  # 10ms
 
     def switch_inference_mode(self):
         """Bascule entre YOLO (predict_frame) et RFDETR (predict_frame_rf_detr)."""
