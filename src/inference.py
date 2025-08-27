@@ -148,7 +148,7 @@ class InferenceServerThread(threading.Thread):
                                 detection["personne_type"] = 'pieton'
                             # Analyser la stature si pose est présente et class_id == 1
                             if detection["class_id"] == 1 and detection["pose"]:
-                                detection["stature"] = self.pose_analyzer.analyze_stature(detection["pose"])
+                                detection["stature"] = self.pose_analyzer.analyze_stature(detection["pose"], debug=True)
                             else:
                                 detection["stature"] = "inconnu"
                         if len(current_detections) > 0:
