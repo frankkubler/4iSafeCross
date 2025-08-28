@@ -242,15 +242,38 @@ class PoseAnalyzer:
         # Logique corrigée avec seuils adaptatifs
         knee_hip_diff = avg_knee_y - avg_hip_y  # Positif si genou plus bas que hanche (debout)
         
-        if ankles_present and avg_hip_y < avg_knee_y < avg_ankle_y and knee_hip_diff > knee_hip_threshold:
-            # Debout : hanche < genou < cheville (hanche haute, cheville basse)
+        # Seuil adaptatif pour la proximité genou-hanche (pour détecter "assis")
+        # Dans la zone basse, les personnes assises peuvent avoir des genoux plus éloignés des hanches
+        knee_hip_proximity_threshold = 30
+        if zone == 'low':
+            knee_hip_proximity_threshold = 50  # Plus tolérant en bas
+        elif zone == 'high':
+            knee_hip_proximity_threshold = 20  # Plus strict en haut
+        
+        # Détecter d'abord les positions assises (priorité pour éviter les faux "debout")
+        is_sitting_posture = (
+            knees_present and
+            abs(knee_hip_diff) < knee_hip_proximity_threshold and
+            (not ankles_present or avg_ankle_y >= avg_knee_y) and  # Chevilles au niveau ou en dessous des genoux
+            (not ratios or ratio_value > sitting_ratio_threshold)
+        )
+        
+        # Détecter les positions debout avec des critères plus stricts
+        is_standing_posture = (
+            ankles_present and
+            avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
+            knee_hip_diff > knee_hip_threshold and    # Distance suffisante entre genou et hanche
+            not is_sitting_posture  # Pas déjà identifié comme assis
+        )
+        
+        if is_sitting_posture:
+            stature = 'assis'
+        elif is_standing_posture:
+            # Debout : vérifier si c'est en mouvement (jambes écartées)
             if ankle_spread > ankle_spread_threshold:
                 stature = 'marchant'  # Jambes écartées = mouvement
             else:
                 stature = 'debout'
-        elif knees_present and abs(knee_hip_diff) < 30 and avg_ankle_y > avg_knee_y and (not ratios or ratio_value > sitting_ratio_threshold):
-            # Assis : genou proche hanche, cheville plus basse, et ratio élevé (tête proche hanche)
-            stature = 'assis'
         elif not ankles_present:
             stature = 'jambes_masquees'
         else:
@@ -262,7 +285,8 @@ class PoseAnalyzer:
                 'adapted_thresholds': {
                     'knee_hip_threshold': knee_hip_threshold,
                     'ankle_spread_threshold': ankle_spread_threshold,
-                    'sitting_ratio_threshold': sitting_ratio_threshold
+                    'sitting_ratio_threshold': sitting_ratio_threshold,
+                    'knee_hip_proximity_threshold': knee_hip_proximity_threshold
                 },
                 'original_thresholds': {
                     'knee_hip_threshold': self.knee_hip_threshold,
@@ -277,7 +301,9 @@ class PoseAnalyzer:
                 'hips_present': hips_present,
                 'knees_present': knees_present,
                 'ankles_present': ankles_present,
-                'ratios': ratios
+                'ratios': ratios,
+                'is_sitting_posture': is_sitting_posture,
+                'is_standing_posture': is_standing_posture
             }
             return stature, debug_info
         return stature
