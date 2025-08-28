@@ -82,6 +82,38 @@ zones_by_camera = ZONES_BY_CAMERA
 # Cache pour les couleurs des zones par caméra pour optimisation
 zone_color_cache = {}
 
+# Cache pour les frames générées (optimisation 10 FPS)
+frame_cache = {}
+frame_cache_lock = threading.Lock()
+frame_cache_timestamp = {}
+FRAME_CACHE_DURATION = 0.05  # Cache de 50ms pour les frames générées
+FRAME_QUALITY_OPTIMIZED = 70  # Qualité JPEG optimisée
+
+def cleanup_frame_cache():
+    """Nettoie le cache des frames expirées"""
+    current_time = time.time()
+    with frame_cache_lock:
+        expired_cameras = []
+        for cam_id, timestamp in frame_cache_timestamp.items():
+            if current_time - timestamp > FRAME_CACHE_DURATION * 2:  # Double du délai pour la sécurité
+                expired_cameras.append(cam_id)
+        
+        for cam_id in expired_cameras:
+            frame_cache.pop(cam_id, None)
+            frame_cache_timestamp.pop(cam_id, None)
+
+# Lancer le nettoyage du cache périodiquement
+def start_cache_cleanup():
+    def cleanup_loop():
+        while True:
+            cleanup_frame_cache()
+            time.sleep(1)  # Nettoyer toutes les secondes
+    
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+    cleanup_thread.start()
+
+start_cache_cleanup()
+
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
 
@@ -289,12 +321,35 @@ for i in range(len(CAM_IDS)):
 
 def gen_frames(cid):
     cam_id = CAM_IDS[cid]
+    last_frame_time = 0
+    frame_interval = 0.1  # 10 FPS = 100ms entre frames
+    
     while True:
+        current_time = time.time()
+        
         # On ne génère les frames que pour l'affichage vidéo
         if not stream_enabled.get(cid, True):
             # On attend que le stream soit réactivé, sans bloquer la détection
             time.sleep(0.2)
             continue
+            
+        # Limiter la fréquence de génération des frames pour l'affichage
+        if current_time - last_frame_time < frame_interval:
+            time.sleep(0.01)
+            continue
+            
+        # Vérifier le cache de frame
+        with frame_cache_lock:
+            cached_frame = frame_cache.get(cid)
+            cache_time = frame_cache_timestamp.get(cid, 0)
+            
+        # Utiliser le cache si la frame est récente
+        if cached_frame is not None and current_time - cache_time < FRAME_CACHE_DURATION:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + cached_frame + b'\r\n')
+            last_frame_time = current_time
+            continue
+            
         frame = manager.get_frame_array(cam_id)
         if frame is not None:
             frame = frame.copy()  # Correction : rendre la frame modifiable
@@ -390,14 +445,22 @@ def gen_frames(cid):
                 # En haut à droite
                 cv2.circle(frame, (w - 20, 20), 15, (0, 0, 255), -1)
             # Encodage JPEG optimisé pour réduire la latence
-            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, FRAME_QUALITY_OPTIMIZED])
             if ret:
+                frame_bytes = buffer.tobytes()
+                
+                # Mettre en cache la frame encodée
+                with frame_cache_lock:
+                    frame_cache[cid] = frame_bytes
+                    frame_cache_timestamp[cid] = current_time
+                    
                 yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                last_frame_time = current_time
             else:
                 break
         else:
-            break
+            time.sleep(0.1)  # Attendre si pas de frame disponible
 
 
 @app.route('/')
