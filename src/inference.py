@@ -153,7 +153,7 @@ class InferenceServerThread(threading.Thread):
                                 detection["stature"] = "inconnu"
                         if len(current_detections) > 0:
                             self.is_detection = True
-                            self.logger.info(f"Détections actuelles : {current_detections}")
+                            self.logger.debug(f"Détections actuelles : {current_detections}")
                         else:
                             self.is_detection = False
                             self.logger.debug("Aucune détection de classe 0 trouvée.")

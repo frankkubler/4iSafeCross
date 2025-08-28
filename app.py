@@ -208,7 +208,7 @@ def detection_callback_factory(cid, main_loop=None):
                     det_with_zone = det.copy()  # Copie le dictionnaire
                     det_with_zone["zones"] = zone_names  # Ajoute les zones
                     detections_person_with_zone.append(det_with_zone)
-                logger.info(f"Détections caméra {cid} (piétons uniquement) : {detections_person_with_zone}, {current_day}")
+                logger.debug(f"Détections caméra {cid} (piétons uniquement) : {detections_person_with_zone}, {current_day}")
                 asyncio.run_coroutine_threadsafe(
                     alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
                     loop
