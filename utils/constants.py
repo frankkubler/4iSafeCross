@@ -85,7 +85,10 @@ URL = config.get('APP', 'URL', fallback='http://127.0.0.1:8002')
 STATURE_COLORS = {}
 if 'STATURE_COLORS' in config:
     for key, value in config['STATURE_COLORS'].items():
-        STATURE_COLORS[key] = ast.literal_eval(value)
+        rgb_color = ast.literal_eval(value)
+        # Conversion RGB vers BGR pour OpenCV
+        bgr_color = (rgb_color[2], rgb_color[1], rgb_color[0])
+        STATURE_COLORS[key] = bgr_color
 
 # # Définition des zones de détection par caméra (exemple pour 2 caméras)
 # ZONES_BY_CAMERA = {
