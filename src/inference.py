@@ -46,6 +46,10 @@ class InferenceServerThread(threading.Thread):
         self.last_sent_frame_hash = None
         self.inference_skip_count = 0
         self.total_frames_processed = 0
+        
+        # 🚀 Optimisation sleep adaptatif
+        self.consecutive_skips = 0
+        self.last_motion_time = 0
 
     @property
     def motion(self):
@@ -107,7 +111,8 @@ class InferenceServerThread(threading.Thread):
                 # Appeler le callback avec une détection vide pour effacer l'affichage côté client
                 self._call_detection_callback([])
                 self.logger.debug("Aucune détection de mouvement ou zone de mouvement invalide (w_pad <= 0 ou h_pad <= 0).")
-                time.sleep(0.1)
+                # 🚀 Pas de mouvement = sleep plus long (économie CPU)
+                time.sleep(0.05)  # 50ms au lieu de 10ms quand pas de mouvement
                 continue
 
             # 🚀 Vérification si inférence nécessaire (économie de 100ms par frame sautée)
@@ -119,7 +124,10 @@ class InferenceServerThread(threading.Thread):
                     "x_pad": (x_pad, y_pad, w_pad, h_pad, x, y, w, h),
                     "y_pad": None
                 })
-                time.sleep(0.01)
+                self.consecutive_skips += 1
+                # 🚀 Sleep progressif : plus on skip, plus on dort longtemps (jusqu'à 50ms max)
+                adaptive_sleep = min(0.001 + (self.consecutive_skips * 0.002), 0.05)
+                time.sleep(adaptive_sleep)
                 continue
 
             # Inférence IA (100ms) - maintenant limitée à 5 FPS max
@@ -244,7 +252,17 @@ class InferenceServerThread(threading.Thread):
             self.past_detections = self.detections
             self.detections = []
             # self.old_motion_bool = motion_bool
-            time.sleep(0.01)  # 50ms
+            
+            # 🚀 Réinitialiser les skips consécutifs après une inférence réussie
+            self.consecutive_skips = 0
+            self.last_motion_time = time.time()
+            
+            # 🚀 Sleep adaptatif selon l'activité
+            # Après inférence = sleep court pour traiter les prochaines frames rapidement
+            if motion_bool and len(self.detections) > 0:
+                time.sleep(0.005)  # 5ms si détection active
+            else:
+                time.sleep(0.01)   # 10ms sinon
 
     def switch_inference_mode(self):
         """Bascule entre YOLO (predict_frame) et RFDETR (predict_frame_rf_detr)."""
@@ -267,10 +285,17 @@ class InferenceServerThread(threading.Thread):
             return {"skip_rate": 0, "total_frames": 0, "skipped_frames": 0}
         
         skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100
+        avg_sleep = 0.01  # Valeur par défaut
+        if hasattr(self, 'consecutive_skips'):
+            # Estimation du sleep moyen basé sur les skips consécutifs
+            avg_sleep = min(0.001 + (self.consecutive_skips * 0.002), 0.05)
+        
         return {
             "skip_rate": round(skip_rate, 1),
             "total_frames": self.total_frames_processed,
             "skipped_frames": self.inference_skip_count,
             "inference_fps": round(1.0 / self.min_inference_interval, 1),
-            "time_saved_ms": self.inference_skip_count * 100  # 100ms économisées par frame sautée
+            "time_saved_ms": self.inference_skip_count * 100,  # 100ms économisées par frame sautée
+            "consecutive_skips": getattr(self, 'consecutive_skips', 0),
+            "avg_sleep_ms": round(avg_sleep * 1000, 1)
         }

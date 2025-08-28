@@ -88,7 +88,7 @@
             white-space: pre-line;
         }
         #stats-panel {
-            left: 350px; /* Décalage pour éviter le chevauchement avec debug-panel */
+            left: 250px; /* Décalage pour éviter le chevauchement avec debug-panel */
         }
         #debug-panel .close-btn, #stats-panel .close-btn {
             position: absolute;
@@ -351,8 +351,11 @@
                 for (const [camKey, camStats] of Object.entries(inferenceData.cameras || {})) {
                     const skipRate = camStats.skip_rate || 0;
                     const timeSaved = (camStats.time_saved_ms || 0) / 1000;
+                    const consecutiveSkips = camStats.consecutive_skips || 0;
+                    const avgSleepMs = camStats.avg_sleep_ms || 10.0;
                     html += `\nCam ${camStats.camera_id}: ${camStats.inference_mode}\n`;
                     html += `  Skip: ${skipRate}% | Économie: ${timeSaved.toFixed(1)}s\n`;
+                    html += `  Sleep adaptatif: ${avgSleepMs}ms | Skips consécutifs: ${consecutiveSkips}\n`;
                 }
                 html += '</div>';
                 
