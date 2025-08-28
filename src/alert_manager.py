@@ -91,15 +91,15 @@ class AlerteManager:
             
         # Appliquer les règles par zone
         for zone_name in zone_names:
-            if "zone1" in zone_name :
-                # Zones 1 et 3 : seulement debout ou marchant
+            if "zone1" in zone_name or "zone2" in zone_name:
+                # Zones 1 et 2 : seulement debout ou marchant
                 if stature in ["debout", "marchant"]:
                     self.logger.info(f"Alerte déclenchée pour zone {zone_name} avec stature '{stature}'")
                     return True
                 else:
                     self.logger.debug(f"Alerte ignorée pour zone {zone_name} avec stature '{stature}' (non autorisée)")
-            elif "zone2" in zone_name or "zone4" in zone_name or "zone5" in zone_name or "zone3" in zone_name:
-                # Zones 2, 3, 4 et 5 : toutes les personnes
+            elif  "zone3" in zone_name or "zone4" in zone_name or "zone5" in zone_name:
+                # Zones 3, 4 et 5 : toutes les personnes
                 self.logger.info(f"Alerte déclenchée pour zone {zone_name} (toute personne autorisée)")
                 return True
                 
