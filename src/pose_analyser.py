@@ -5,6 +5,7 @@ class PoseAnalyzer:
     Classe pour analyser les keypoints de pose et déterminer la stature de la personne.
     Utilise les indices COCO pour les keypoints.
     Supporte keypoints avec ou sans confiance.
+    Version améliorée avec adaptation selon la position dans l'image.
     """
     # Indices COCO pour les keypoints pertinents
     NOSE = 0
@@ -15,17 +16,27 @@ class PoseAnalyzer:
     LEFT_ANKLE = 15
     RIGHT_ANKLE = 16
 
-    def __init__(self, confidence_threshold=0.5, knee_hip_threshold=35, ankle_spread_threshold=25, sitting_ratio_threshold=0.9):
+    def __init__(self, confidence_threshold=0.5, knee_hip_threshold=35, ankle_spread_threshold=25,
+                 sitting_ratio_threshold=0.9, enable_zone_adaptation=True, image_height=1080):
         """
         - confidence_threshold : Seuil pour filtrer les keypoints (ignoré si pas de confiance).
         - knee_hip_threshold : Distance min entre genou et hanche pour 'debout'.
         - ankle_spread_threshold : Écart max entre chevilles pour 'assis' (chevilles proches = assis).
         - sitting_ratio_threshold : Seuil pour le ratio H2H/H2F pour confirmer 'assis' (ratio élevé = tête proche hanche).
+        - enable_zone_adaptation : Active l'adaptation des seuils selon la zone dans l'image.
+        - image_height : Hauteur de l'image pour les calculs d'adaptation.
         """
         self.confidence_threshold = confidence_threshold
         self.knee_hip_threshold = knee_hip_threshold
         self.ankle_spread_threshold = ankle_spread_threshold
         self.sitting_ratio_threshold = sitting_ratio_threshold
+        self.enable_zone_adaptation = enable_zone_adaptation
+        self.image_height = image_height
+        
+        # Zones d'adaptation (en pourcentage de la hauteur d'image)
+        self.zone_high = 0.28  # 28% supérieur (zone problématique mentionnée: ~300px/1080px)
+        self.zone_middle = 0.6  # Zone médiane
+        # Zone basse: reste de l'image
 
     def filter_keypoints_by_confidence(self, pose_keypoints):
         """
@@ -64,6 +75,74 @@ class PoseAnalyzer:
             return 0
         x_coords = [p[0] for p in points]
         return max(x_coords) - min(x_coords)
+
+    def _get_person_zone(self, pose_keypoints):
+        """
+        Détermine dans quelle zone verticale de l'image se trouve la personne.
+        Retourne: 'high', 'middle', ou 'low'
+        """
+        if not pose_keypoints:
+            return 'middle'
+            
+        filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
+        if not filtered_kps:
+            return 'middle'
+            
+        # Utiliser le centre de masse vertical des keypoints visibles
+        y_coords = [y for idx, x, y, conf in filtered_kps]
+        avg_y = self._safe_average(y_coords)
+        
+        # Convertir en pourcentage de la hauteur d'image
+        y_ratio = avg_y / self.image_height if self.image_height > 0 else 0.5
+        
+        if y_ratio <= self.zone_high:
+            return 'high'
+        elif y_ratio <= self.zone_middle:
+            return 'middle'
+        else:
+            return 'low'
+
+    def _get_adaptive_thresholds(self, zone, pose_keypoints):
+        """
+        Calcule des seuils adaptatifs selon la zone et la taille apparente de la personne.
+        """
+        base_knee_hip = self.knee_hip_threshold
+        base_ankle_spread = self.ankle_spread_threshold
+        base_sitting_ratio = self.sitting_ratio_threshold
+        
+        if not self.enable_zone_adaptation:
+            return base_knee_hip, base_ankle_spread, base_sitting_ratio
+            
+        # Estimer la taille apparente de la personne (distance verticale max entre keypoints)
+        filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
+        if len(filtered_kps) < 2:
+            person_height = 100  # Valeur par défaut
+        else:
+            y_coords = [y for idx, x, y, conf in filtered_kps]
+            person_height = max(y_coords) - min(y_coords)
+        
+        # Facteur d'échelle basé sur la taille apparente
+        # Plus la personne semble petite (loin), plus on réduit les seuils
+        scale_factor = max(0.3, min(2.0, person_height / 200))  # Normalisé autour de 200px de hauteur
+        
+        # Adaptations spécifiques par zone
+        if zone == 'high':
+            # Zone haute: personnes plus loin, seuils plus petits
+            knee_hip_adapted = base_knee_hip * scale_factor * 0.6  # 40% de réduction
+            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.7  # 30% de réduction
+            sitting_ratio_adapted = base_sitting_ratio * 0.85  # Plus tolérant
+        elif zone == 'middle':
+            # Zone médiane: seuils normaux avec légère adaptation d'échelle
+            knee_hip_adapted = base_knee_hip * scale_factor * 0.8
+            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.9
+            sitting_ratio_adapted = base_sitting_ratio
+        else:  # zone == 'low'
+            # Zone basse: personnes plus proches, seuils normaux ou légèrement augmentés
+            knee_hip_adapted = base_knee_hip * scale_factor
+            ankle_spread_adapted = base_ankle_spread * scale_factor
+            sitting_ratio_adapted = base_sitting_ratio * 1.1
+            
+        return knee_hip_adapted, ankle_spread_adapted, sitting_ratio_adapted
 
     def calculate_ratios(self, pose_keypoints):
         """
@@ -118,11 +197,16 @@ class PoseAnalyzer:
         Analyse la stature basée sur les keypoints filtrés.
         Retourne : 'debout', 'assis', 'jambes_masquees', 'marchant', ou 'inconnu'
         - debug : Si True, retourne aussi les valeurs calculées pour inspection.
+        Version améliorée avec adaptation selon la zone dans l'image.
         """
         filtered_kps = self.filter_keypoints_by_confidence(pose_keypoints)
         if not filtered_kps:
             return ('inconnu', {}) if debug else 'inconnu'
 
+        # Déterminer la zone de l'image et adapter les seuils
+        zone = self._get_person_zone(pose_keypoints)
+        knee_hip_threshold, ankle_spread_threshold, sitting_ratio_threshold = self._get_adaptive_thresholds(zone, pose_keypoints)
+        
         kp_dict = {idx: (x, y) for idx, x, y, conf in filtered_kps}
 
         # Vérifier présence
@@ -131,7 +215,8 @@ class PoseAnalyzer:
         ankles_present = self.LEFT_ANKLE in kp_dict or self.RIGHT_ANKLE in kp_dict
 
         if not hips_present:
-            return ('jambes_masquees', {}) if debug else 'jambes_masquees'
+            debug_info = {'zone': zone, 'adapted_thresholds': (knee_hip_threshold, ankle_spread_threshold, sitting_ratio_threshold)} if debug else {}
+            return ('jambes_masquees', debug_info) if debug else 'jambes_masquees'
 
         # Collecter positions
         hip_positions = [kp_dict[idx] for idx in [self.LEFT_HIP, self.RIGHT_HIP] if idx in kp_dict]
@@ -139,7 +224,8 @@ class PoseAnalyzer:
         ankle_positions = [kp_dict[idx] for idx in [self.LEFT_ANKLE, self.RIGHT_ANKLE] if idx in kp_dict]
 
         if not knee_positions:
-            return ('jambes_masquees', {}) if debug else 'jambes_masquees'
+            debug_info = {'zone': zone, 'adapted_thresholds': (knee_hip_threshold, ankle_spread_threshold, sitting_ratio_threshold)} if debug else {}
+            return ('jambes_masquees', debug_info) if debug else 'jambes_masquees'
 
         # Moyennes y (rappel : y=0 haut, y croissant vers bas)
         avg_hip_y = self._safe_average([y for x, y in hip_positions])
@@ -153,16 +239,16 @@ class PoseAnalyzer:
         ratios = self.calculate_ratios(pose_keypoints)
         ratio_value = ratios['h2h_h2f_ratio'] if ratios else 0
 
-        # Logique corrigée
+        # Logique corrigée avec seuils adaptatifs
         knee_hip_diff = avg_knee_y - avg_hip_y  # Positif si genou plus bas que hanche (debout)
         
-        if ankles_present and avg_hip_y < avg_knee_y < avg_ankle_y and knee_hip_diff > self.knee_hip_threshold:
+        if ankles_present and avg_hip_y < avg_knee_y < avg_ankle_y and knee_hip_diff > knee_hip_threshold:
             # Debout : hanche < genou < cheville (hanche haute, cheville basse)
-            if ankle_spread > self.ankle_spread_threshold:
+            if ankle_spread > ankle_spread_threshold:
                 stature = 'marchant'  # Jambes écartées = mouvement
             else:
                 stature = 'debout'
-        elif knees_present and abs(knee_hip_diff) < 30 and avg_ankle_y > avg_knee_y and (not ratios or ratio_value > self.sitting_ratio_threshold):
+        elif knees_present and abs(knee_hip_diff) < 30 and avg_ankle_y > avg_knee_y and (not ratios or ratio_value > sitting_ratio_threshold):
             # Assis : genou proche hanche, cheville plus basse, et ratio élevé (tête proche hanche)
             stature = 'assis'
         elif not ankles_present:
@@ -172,6 +258,17 @@ class PoseAnalyzer:
 
         if debug:
             debug_info = {
+                'zone': zone,
+                'adapted_thresholds': {
+                    'knee_hip_threshold': knee_hip_threshold,
+                    'ankle_spread_threshold': ankle_spread_threshold,
+                    'sitting_ratio_threshold': sitting_ratio_threshold
+                },
+                'original_thresholds': {
+                    'knee_hip_threshold': self.knee_hip_threshold,
+                    'ankle_spread_threshold': self.ankle_spread_threshold,
+                    'sitting_ratio_threshold': self.sitting_ratio_threshold
+                },
                 'avg_hip_y': avg_hip_y,
                 'avg_knee_y': avg_knee_y,
                 'avg_ankle_y': avg_ankle_y,
