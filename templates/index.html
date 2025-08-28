@@ -71,12 +71,12 @@
         .main-content {
             padding-bottom: 120px; /* espace pour le bandeau bas */
         }
-        #debug-panel {
+        #debug-panel, #stats-panel {
             position: fixed;
             top: 10px;
             left: 10px;
             min-width: 320px;
-            max-width: 420px;
+            max-width: 500px;
             background: rgba(40,40,40,0.85);
             color: #fff;
             font-size: 14px;
@@ -87,7 +87,10 @@
             display: none;
             white-space: pre-line;
         }
-        #debug-panel .close-btn {
+        #stats-panel {
+            left: 350px; /* Décalage pour éviter le chevauchement avec debug-panel */
+        }
+        #debug-panel .close-btn, #stats-panel .close-btn {
             position: absolute;
             top: 6px;
             right: 10px;
@@ -97,6 +100,20 @@
             font-size: 18px;
             cursor: pointer;
             opacity: 0.7;
+        }
+        .stats-section {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        .stats-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .stats-title {
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 5px;
         }
         .legend {
             position: fixed;
@@ -250,6 +267,8 @@
             });
         }
         let debugInterval = null;
+        let statsInterval = null;
+        
         function showDebugPanel() {
             const panel = document.getElementById('debug-panel');
             panel.style.display = 'block';
@@ -264,6 +283,22 @@
             if (debugInterval) {
                 clearInterval(debugInterval);
                 debugInterval = null;
+            }
+        }
+        function showStatsPanel() {
+            const panel = document.getElementById('stats-panel');
+            panel.style.display = 'block';
+            updateStatsPanel();
+            if (!statsInterval) {
+                statsInterval = setInterval(updateStatsPanel, 2000);
+            }
+        }
+        function hideStatsPanel() {
+            const panel = document.getElementById('stats-panel');
+            panel.style.display = 'none';
+            if (statsInterval) {
+                clearInterval(statsInterval);
+                statsInterval = null;
             }
         }
         function updateDebugPanel() {
@@ -283,6 +318,49 @@
                 .catch(() => {
                     document.getElementById('debug-panel-content').textContent = 'Erreur lors de la récupération des infos debug.';
                 });
+        }
+        
+        function updateStatsPanel() {
+            Promise.all([
+                fetch('/cache_stats').then(r => r.json()),
+                fetch('/api/inference/stats').then(r => r.json())
+            ])
+            .then(([cacheData, inferenceData]) => {
+                const content = document.getElementById('stats-panel-content');
+                let html = '';
+                
+                // Section Cache
+                html += '<div class="stats-section">';
+                html += '<div class="stats-title">📊 CACHE DE FRAMES</div>';
+                html += `Durée cache: ${cacheData.cache_duration_ms}ms | Qualité: ${cacheData.frame_quality}%\n`;
+                html += `Entrées actives: ${cacheData.total_entries} | Taille totale: ${cacheData.total_size_kb} KB\n`;
+                
+                for (const [camId, camCache] of Object.entries(cacheData.cameras || {})) {
+                    const status = camCache.is_fresh ? '✅' : '⏰';
+                    html += `Cam ${camId}: ${status} ${camCache.age_ms}ms, ${camCache.size_kb} KB\n`;
+                }
+                html += '</div>';
+                
+                // Section Inférence
+                html += '<div class="stats-section">';
+                html += '<div class="stats-title">🎯 OPTIMISATION INFÉRENCE</div>';
+                html += `Frames totales: ${inferenceData.total_frames_processed}\n`;
+                html += `Frames sautées: ${inferenceData.total_frames_skipped} (${inferenceData.overall_skip_rate}%)\n`;
+                html += `Temps économisé: ${inferenceData.total_time_saved_seconds}s\n`;
+                
+                for (const [camKey, camStats] of Object.entries(inferenceData.cameras || {})) {
+                    const skipRate = camStats.skip_rate || 0;
+                    const timeSaved = (camStats.time_saved_ms || 0) / 1000;
+                    html += `\nCam ${camStats.camera_id}: ${camStats.inference_mode}\n`;
+                    html += `  Skip: ${skipRate}% | Économie: ${timeSaved.toFixed(1)}s\n`;
+                }
+                html += '</div>';
+                
+                content.innerHTML = html;
+            })
+            .catch(() => {
+                document.getElementById('stats-panel-content').innerHTML = 'Erreur lors de la récupération des statistiques.';
+            });
         }
         let telegramAlertEnabled = {{ 'true' if telegram_alert_enabled else 'false' }};
         function toggleTelegramAlert() {
@@ -386,6 +464,10 @@
         <button class="close-btn" onclick="hideDebugPanel()">×</button>
         <div id="debug-panel-content">Chargement...</div>
     </div>
+    <div id="stats-panel">
+        <button class="close-btn" onclick="hideStatsPanel()">×</button>
+        <div id="stats-panel-content">Chargement...</div>
+    </div>
     <div class="legend">
         <h3 style="margin: 0 0 10px 0; font-size: 16px;">Légende des postures</h3>
         {% for posture, color in stature_colors.items() %}
@@ -400,6 +482,7 @@
     <div class="main-content">
         <button onclick="quitServer()" style="position:fixed;top:20px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#c00;color:#fff;border:none;border-radius:6px;cursor:pointer;">Quitter</button>
         <button onclick="showDebugPanel()" style="position:fixed;top:90px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#0074d9;color:#fff;border:none;border-radius:6px;cursor:pointer;">Debug</button>
+        <button onclick="showStatsPanel()" style="position:fixed;top:90px;right:90px;padding:10px 20px;font-size:16px;z-index:200;background:#4caf50;color:#fff;border:none;border-radius:6px;cursor:pointer;">Stats</button>
         <button id="btn_telegram_alert" onclick="toggleTelegramAlert()" style="position:fixed;top:160px;right:20px;padding:10px 20px;font-size:16px;z-index:200;{{ 'background:#ff9800;' if telegram_alert_enabled else 'background:#888;' }}color:#fff;border:none;border-radius:6px;cursor:pointer;">{{ 'Désactiver alertes Telegram' if telegram_alert_enabled else 'Activer alertes Telegram' }}</button>
         <script>
         document.addEventListener('DOMContentLoaded', function() {

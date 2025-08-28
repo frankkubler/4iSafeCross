@@ -780,7 +780,7 @@ def cache_stats():
                 'size_kb': round(size_bytes / 1024, 1),
                 'is_fresh': age_ms < FRAME_CACHE_DURATION * 1000
             }
-        
+
         stats = {
             'cache_duration_ms': FRAME_CACHE_DURATION * 1000,
             'frame_quality': FRAME_QUALITY_OPTIMIZED,
@@ -789,56 +789,14 @@ def cache_stats():
             'total_size_kb': round(total_size / 1024, 1),
             'cameras': cache_info
         }
-    
+
     return jsonify(stats)
-
-
-@app.route('/test_cache/<int:cid>')
-def test_cache(cid):
-    """Endpoint de test pour forcer une génération et tester le cache"""
-    current_time = time.time()
-    
-    # Vérifier le cache
-    with frame_cache_lock:
-        cached_frame = frame_cache.get(cid)
-        cache_time = frame_cache_timestamp.get(cid, 0)
-    
-    cache_hit = False
-    if cached_frame is not None and current_time - cache_time < FRAME_CACHE_DURATION:
-        cache_age_ms = (current_time - cache_time) * 1000
-        logger.info(f"📋 TEST Cache HIT pour caméra {cid} - Frame âgée de {cache_age_ms:.1f}ms")
-        cache_hit = True
-    else:
-        # Simuler génération de frame (sans vraiment traiter l'image)
-        logger.info(f"🔄 TEST Cache MISS pour caméra {cid} - Simulation génération...")
-        
-        # Simuler un délai de génération
-        time.sleep(0.02)
-        
-        # Créer une frame de test
-        test_frame = b"test_frame_data_" + str(cid).encode() + b"_" + str(int(current_time * 1000)).encode()
-        
-        # Mettre en cache
-        with frame_cache_lock:
-            frame_cache[cid] = test_frame
-            frame_cache_timestamp[cid] = current_time
-            cache_size = len(frame_cache)
-        
-        logger.info(f"💾 TEST Frame générée pour caméra {cid} - Mise en cache (taille: {len(test_frame)} bytes, cache total: {cache_size} entrées)")
-    
-    return jsonify({
-        'camera_id': cid,
-        'cache_hit': cache_hit,
-        'cache_duration_ms': FRAME_CACHE_DURATION * 1000,
-        'timestamp': current_time
-    })
-
 
 @app.route('/api/inference/stats')
 def inference_stats():
     """Endpoint pour obtenir les statistiques d'optimisation de l'inférence."""
     stats = {}
-    
+
     # Récupérer les stats de tous les threads d'inférence actifs
     for cid, inference_thread in inference_threads.items():
         if inference_thread and hasattr(inference_thread, 'get_optimization_stats'):
