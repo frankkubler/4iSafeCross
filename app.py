@@ -257,17 +257,23 @@ def detection_callback_factory(cid, main_loop=None):
 
             # Filtrer pour l'alerte uniquement class_id == 1 ET personne_type == "pieton"
             detections_person = [det for det in detections if det.get("class_id") == 1 and det.get("personne_type") == "pieton"]
-            if len(detections_person) > 0:
+            
+            # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
+            detections_person_with_zone = []
+            for det in detections_person:
+                zone_names = get_zone_for_detection(det, zones)
+                det_with_zone = det.copy()  # Copie le dictionnaire
+                det_with_zone["zones"] = zone_names  # Ajoute les zones
+                
+                # Vérifier si cette détection doit déclencher une alerte selon les règles de stature/zone
+                if alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                    detections_person_with_zone.append(det_with_zone)
+            
+            # Déclencher l'alerte seulement si il y a des détections valides après filtrage
+            if len(detections_person_with_zone) > 0:
                 current_day = now.strftime('%Y-%m-%d %H:%M:%S')
                 frame = manager.get_frame_array(CAM_IDS[cid])
-                # Ajoute les zones aux détections personnes
-                detections_person_with_zone = []
-                for det in detections_person:
-                    zone_names = get_zone_for_detection(det, zones)
-                    det_with_zone = det.copy()  # Copie le dictionnaire
-                    det_with_zone["zones"] = zone_names  # Ajoute les zones
-                    detections_person_with_zone.append(det_with_zone)
-                logger.debug(f"Détections caméra {cid} (piétons uniquement) : {detections_person_with_zone}, {current_day}")
+                logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
                 asyncio.run_coroutine_threadsafe(
                     alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
                     loop
