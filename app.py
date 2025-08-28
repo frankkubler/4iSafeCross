@@ -290,16 +290,13 @@ for i in range(len(CAM_IDS)):
 def gen_frames(cid):
     cam_id = CAM_IDS[cid]
     while True:
-        start_time = time.time()
         # On ne génère les frames que pour l'affichage vidéo
         if not stream_enabled.get(cid, True):
             # On attend que le stream soit réactivé, sans bloquer la détection
             time.sleep(0.2)
             continue
-        frame_time = time.time()
         frame = manager.get_frame_array(cam_id)
         if frame is not None:
-            copy_time = time.time()
             frame = frame.copy()  # Correction : rendre la frame modifiable
             h, w = frame.shape[:2]
             with shared_detections_lock:
@@ -329,7 +326,6 @@ def gen_frames(cid):
                     x2r = max(0, min(w - 1, x_raw + w_raw))
                     y2r = max(0, min(h - 1, y_raw + h_raw))
                     cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), (0, 255, 255), 2)
-            draw_zones_time = time.time()
             # Tracer les zones spécifiques à la caméra
             zones = zones_by_camera.get(cid, [])
             # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
@@ -356,7 +352,6 @@ def gen_frames(cid):
                     y2 = max(0, min(h - 1, y2))
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 4)
                     cv2.putText(frame, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
-            draw_dets_time = time.time()
             # Récupérer l'état du mouvement depuis le thread d'inférence
             motion = False
             if cid in inference_threads:
@@ -369,15 +364,16 @@ def gen_frames(cid):
                 x2 = max(0, min(w-1, int(det["x_max"])))
                 y2 = max(0, min(h-1, int(det["y_max"])))
                 # Déterminer la couleur basée sur la stature
-                stature = det.get("stature")
-                if isinstance(stature, tuple) and len(stature) > 0:
-                    stature = stature[0]  # Extraire la stature du tuple (stature, debug_info)
-                if not isinstance(stature, str):
-                    stature = "inconnu"
-                color_rgb = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
-                color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
-
+                # stature = det.get("stature")
+                # if isinstance(stature, tuple) and len(stature) > 0:
+                #     stature = stature[0]  # Extraire la stature du tuple (stature, debug_info)
+                # if not isinstance(stature, str):
+                #     stature = "inconnu"
+                # color_rgb = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
+                # color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
+                color_bgr = (0, 255, 0)  # Vert par défaut
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
+                stature = "inconnu"
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
@@ -394,18 +390,9 @@ def gen_frames(cid):
             if motion:
                 # En haut à droite
                 cv2.circle(frame, (w - 20, 20), 15, (0, 0, 255), -1)
-            encode_time = time.time()
             # Encodage JPEG optimisé pour réduire la latence
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
             if ret:
-                end_time = time.time()
-                # Log des temps si la frame prend plus de 50ms
-                total_time = end_time - start_time
-                if total_time > 0.05:
-                    logger.warning(f"Frame {cid} lente: total={total_time:.3f}s, "
-                                   f"get={frame_time-start_time:.3f}s, copy={copy_time-frame_time:.3f}s, "
-                                   f"zones={draw_zones_time-copy_time:.3f}s, dets={draw_dets_time-draw_zones_time:.3f}s, "
-                                   f"encode={end_time-encode_time:.3f}s")
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             else:
