@@ -834,6 +834,37 @@ def test_cache(cid):
     })
 
 
+@app.route('/api/inference/stats')
+def inference_stats():
+    """Endpoint pour obtenir les statistiques d'optimisation de l'inférence."""
+    stats = {}
+    
+    # Récupérer les stats de tous les threads d'inférence actifs
+    for cid, inference_thread in inference_threads.items():
+        if inference_thread and hasattr(inference_thread, 'get_optimization_stats'):
+            camera_stats = inference_thread.get_optimization_stats()
+            camera_stats['camera_id'] = cid
+            camera_stats['inference_mode'] = inference_thread.inference_mode
+            camera_stats['url'] = inference_thread.url
+            stats[f'camera_{cid}'] = camera_stats
+    
+    # Calculer les totaux
+    total_frames = sum(s.get('total_frames', 0) for s in stats.values())
+    total_skipped = sum(s.get('skipped_frames', 0) for s in stats.values())
+    total_time_saved = sum(s.get('time_saved_ms', 0) for s in stats.values())
+    
+    summary = {
+        'total_frames_processed': total_frames,
+        'total_frames_skipped': total_skipped,
+        'overall_skip_rate': round((total_skipped / max(total_frames, 1)) * 100, 1),
+        'total_time_saved_ms': total_time_saved,
+        'total_time_saved_seconds': round(total_time_saved / 1000, 1),
+        'cameras': stats
+    }
+    
+    return jsonify(summary)
+
+
 if __name__ == '__main__':
     from waitress import serve
     serve(app, host='0.0.0.0', port=5050)

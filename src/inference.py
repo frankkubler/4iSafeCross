@@ -39,10 +39,36 @@ class InferenceServerThread(threading.Thread):
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
         self.pose_analyzer = PoseAnalyzer(confidence_threshold=0.2)
+        
+        # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
+        self.last_inference_time = 0
+        self.min_inference_interval = 0.2  # 200ms minimum entre inférences (5 FPS max)
+        self.last_sent_frame_hash = None
+        self.inference_skip_count = 0
+        self.total_frames_processed = 0
 
     @property
     def motion(self):
         return self._motion
+
+    def _should_run_inference(self, frame):
+        """Détermine si une inférence doit être lancée pour économiser les ressources IA."""
+        current_time = time.time()
+        
+        # 🚀 Limite de fréquence : max 5 FPS pour l'IA (200ms minimum)
+        if current_time - self.last_inference_time < self.min_inference_interval:
+            self.inference_skip_count += 1
+            return False
+        
+        # 🚀 Hash de frame pour éviter les inférences redondantes
+        frame_hash = hash(frame.tobytes())
+        if frame_hash == self.last_sent_frame_hash:
+            self.inference_skip_count += 1
+            return False
+        
+        self.last_sent_frame_hash = frame_hash
+        self.last_inference_time = current_time
+        return True
 
     def _call_detection_callback(self, result):
         """Appelle le callback de détection s'il est défini."""
@@ -53,11 +79,13 @@ class InferenceServerThread(threading.Thread):
     def run(self):
         self.logger.info(f"Thread d'inférence démarré pour {self.url}")
         while not self.stop_event.is_set():
+            self.total_frames_processed += 1
             frame = self.get_frame_func()
             if frame is None:
                 time.sleep(0.1)
                 continue
-            # Détection de mouvement
+                
+            # Détection de mouvement (toujours nécessaire)
             roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_roi_info(
                 frame,
                 padding=getattr(self.motion_detector, 'padding', 40),
@@ -67,11 +95,14 @@ class InferenceServerThread(threading.Thread):
                 history=getattr(self.motion_detector, 'history', 500),
                 detectShadows=getattr(self.motion_detector, 'detectShadows', True)
             )
-            # Si tu veux aussi passer varThreshold, history, detectShadows dynamiquement, il faut les ajouter dans la signature de get_mog2_motion_roi_info et dans motion.py
             x_pad, y_pad, w_pad, h_pad, x, y, w, h = coords
-            # motion_bool, whites_pixels = self.motion_detector.detect(frame, self.white_pixels_threshold)
-            self._motion = motion_bool  # Met à jour l'attribut privé
-            # self.logger.info(f"Détection de mouvement : {motion_bool} avec {whites_pixels} pixels blancs")
+            self._motion = motion_bool
+            
+            # 🚀 Log des statistiques d'optimisation toutes les 100 frames
+            if self.total_frames_processed % 100 == 0:
+                skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100
+                self.logger.info(f"📊 Inférence optimisée: {skip_rate:.1f}% frames sautées ({self.inference_skip_count}/{self.total_frames_processed})")
+            
             if (not motion_bool) or (w_pad <= 0 or h_pad <= 0):
                 # Appeler le callback avec une détection vide pour effacer l'affichage côté client
                 self._call_detection_callback([])
@@ -79,13 +110,25 @@ class InferenceServerThread(threading.Thread):
                 time.sleep(0.1)
                 continue
 
-            # Découper la frame sur la zone de mouvement
-            # frame_roi = frame[y_pad:y_pad+h_pad, x_pad:x_pad+w_pad]
+            # 🚀 Vérification si inférence nécessaire (économie de 100ms par frame sautée)
+            if not self._should_run_inference(frame):
+                # Renvoyer les dernières détections connues
+                self._call_detection_callback({
+                    "detections": self.past_detections,
+                    "roi": roi,
+                    "x_pad": (x_pad, y_pad, w_pad, h_pad, x, y, w, h),
+                    "y_pad": None
+                })
+                time.sleep(0.01)
+                continue
 
+            # Inférence IA (100ms) - maintenant limitée à 5 FPS max
             buffer = io.BytesIO()
             np.save(buffer, frame, allow_pickle=True)
             buffer.seek(0)
             current_detections = []
+            
+            inference_start_time = time.time()
             try:
                 response = requests.post(
                     self.url,
@@ -94,6 +137,9 @@ class InferenceServerThread(threading.Thread):
                 )
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])
+                    inference_time = (time.time() - inference_start_time) * 1000  # en ms
+                    self.logger.debug(f"⚡ Inférence IA: {inference_time:.1f}ms")
+                    
                     if detections:
                         # Remettre les coordonnées dans le repère image d'origine
                         current_detections = [
@@ -214,3 +260,17 @@ class InferenceServerThread(threading.Thread):
     @property
     def inference_mode(self):
         return "RFDETR" if self.fonction == "/predict_frame_rf_detr/" else "YOLO"
+
+    def get_optimization_stats(self):
+        """Retourne les statistiques d'optimisation de l'inférence."""
+        if self.total_frames_processed == 0:
+            return {"skip_rate": 0, "total_frames": 0, "skipped_frames": 0}
+        
+        skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100
+        return {
+            "skip_rate": round(skip_rate, 1),
+            "total_frames": self.total_frames_processed,
+            "skipped_frames": self.inference_skip_count,
+            "inference_fps": round(1.0 / self.min_inference_interval, 1),
+            "time_saved_ms": self.inference_skip_count * 100  # 100ms économisées par frame sautée
+        }
