@@ -369,14 +369,16 @@ def gen_frames(cid):
                     stature = stature[0]  # Extraire la stature du tuple (stature, debug_info)
                 if not isinstance(stature, str):
                     stature = "inconnu"
-                color = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                color_rgb = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
+                color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
+
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
                 # tracker_id = det.get("tracker_id", -1)
                 label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {stature}"
-                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
                 # Afficher la zone sur la détection
                 if zone_names:
                     for i, zone_name in enumerate(zone_names):
