@@ -38,7 +38,13 @@ class InferenceServerThread(threading.Thread):
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
-        self.pose_analyzer = PoseAnalyzer(confidence_threshold=0.2)
+        # Initialisation avec adaptation pour différentes zones d'image
+        # Utilise une hauteur d'image typique de 1080p, ajustez si nécessaire
+        self.pose_analyzer = PoseAnalyzer(
+            confidence_threshold=0.2,
+            enable_zone_adaptation=True,
+            image_height=1080
+        )
         
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
         self.last_inference_time = 0
