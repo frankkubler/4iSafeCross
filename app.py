@@ -82,6 +82,10 @@ zones_by_camera = ZONES_BY_CAMERA
 # Cache pour les couleurs des zones par caméra pour optimisation
 zone_color_cache = {}
 
+# Cache pour les overlays des zones par caméra
+zone_overlay_cache = {}
+zone_overlay_lock = threading.Lock()
+
 # Cache pour les frames générées (optimisation 10 FPS)
 frame_cache = {}
 frame_cache_lock = threading.Lock()
@@ -140,6 +144,54 @@ def start_cache_cleanup():
 
 start_cache_cleanup()
 logger.info(f"✅ Cache de frames initialisé - Durée: {FRAME_CACHE_DURATION*1000:.0f}ms, Qualité JPEG: {FRAME_QUALITY_OPTIMIZED}%")
+
+
+def create_zone_overlay(frame_shape, zones, cid):
+    """Crée un overlay transparent avec les zones dessinées une seule fois"""
+    h, w = frame_shape[:2]
+    overlay = np.zeros((h, w, 3), dtype=np.uint8)
+    
+    # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
+    if cid not in zone_color_cache:
+        zone_color_cache[cid] = {zone["name"]: zone.get("color", (255, 0, 0)) for zone in zones}
+    
+    for i, zone in enumerate(zones):
+        color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
+        if "polygon" in zone:
+            # On s'assure que les points sont dans l'image
+            pts = [
+                (max(0, min(w - 1, int(xy[0]))), max(0, min(h - 1, int(xy[1]))))
+                for xy in zone["polygon"]
+            ]
+            pts_np = np.array([pts], dtype=np.int32)
+            cv2.polylines(overlay, pts_np, isClosed=True, color=color, thickness=4)
+            # Afficher le nom de la zone au premier point
+            cv2.putText(overlay, zone["name"], (pts[0][0], pts[0][1] + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+        elif "rect" in zone:
+            x1, y1, x2, y2 = zone["rect"]
+            # S'assurer que la zone ne dépasse pas l'image
+            x1 = max(0, min(w - 1, x1))
+            y1 = max(0, min(h - 1, y1))
+            x2 = max(0, min(w - 1, x2))
+            y2 = max(0, min(h - 1, y2))
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 4)
+            cv2.putText(overlay, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+    
+    return overlay
+
+
+def get_zone_overlay(frame_shape, cid):
+    """Récupère l'overlay des zones depuis le cache ou le crée si nécessaire"""
+    with zone_overlay_lock:
+        cache_key = f"{cid}_{frame_shape[0]}_{frame_shape[1]}"
+        
+        if cache_key not in zone_overlay_cache:
+            zones = zones_by_camera.get(cid, [])
+            zone_overlay_cache[cache_key] = create_zone_overlay(frame_shape, zones, cid)
+            logger.info(f"🎨 Overlay des zones créé pour caméra {cid} (résolution: {frame_shape[1]}x{frame_shape[0]})")
+        
+        return zone_overlay_cache[cache_key]
+
 
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
@@ -431,32 +483,11 @@ def gen_frames(cid):
                     x2r = max(0, min(w - 1, x_raw + w_raw))
                     y2r = max(0, min(h - 1, y_raw + h_raw))
                     cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), (0, 255, 255), 2)
-            # Tracer les zones spécifiques à la caméra
-            zones = zones_by_camera.get(cid, [])
-            # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
-            if cid not in zone_color_cache:
-                zone_color_cache[cid] = {zone["name"]: zone.get("color", (255, 0, 0)) for zone in zones}
-            for i, zone in enumerate(zones):
-                color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
-                if "polygon" in zone:
-                    # On s'assure que les points sont dans l'image
-                    pts = [
-                        (max(0, min(w - 1, int(xy[0]))), max(0, min(h - 1, int(xy[1]))))
-                        for xy in zone["polygon"]
-                    ]
-                    pts_np = np.array([pts], dtype=np.int32)
-                    cv2.polylines(frame, pts_np, isClosed=True, color=color, thickness=4)
-                    # Afficher le nom de la zone au premier point
-                    cv2.putText(frame, zone["name"], (pts[0][0], pts[0][1] + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
-                elif "rect" in zone:
-                    x1, y1, x2, y2 = zone["rect"]
-                    # S'assurer que la zone ne dépasse pas l'image
-                    x1 = max(0, min(w - 1, x1))
-                    y1 = max(0, min(h - 1, y1))
-                    x2 = max(0, min(w - 1, x2))
-                    y2 = max(0, min(h - 1, y2))
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 4)
-                    cv2.putText(frame, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+            # Superposer l'overlay des zones (créé une seule fois)
+            zone_overlay = get_zone_overlay(frame.shape, cid)
+            # Créer un masque pour ne dessiner que les pixels non-noirs de l'overlay
+            mask = np.any(zone_overlay > 0, axis=2)
+            frame[mask] = zone_overlay[mask]
             # Récupérer l'état du mouvement depuis le thread d'inférence
             motion = False
             if cid in inference_threads:
@@ -759,7 +790,24 @@ def set_zones():
     data = request.get_json()
     zones = data.get('zones', [])
     alert_manager.set_zones(zones)
+    
+    # Vider le cache des overlays car les zones ont changé
+    with zone_overlay_lock:
+        zone_overlay_cache.clear()
+        logger.info("🗑️ Cache des overlays de zones vidé suite à modification des zones")
+    
     return jsonify({'status': 'ok'})
+
+
+@app.route('/clear_zone_cache', methods=['POST'])
+def clear_zone_cache():
+    """Vide le cache des overlays de zones"""
+    with zone_overlay_lock:
+        cache_size = len(zone_overlay_cache)
+        zone_overlay_cache.clear()
+        logger.info(f"🗑️ Cache des overlays de zones vidé manuellement ({cache_size} entrées supprimées)")
+    
+    return jsonify({'status': 'ok', 'cleared_entries': cache_size})
 
 
 @app.route('/cam_status/<int:cid>')
