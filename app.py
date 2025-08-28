@@ -364,16 +364,15 @@ def gen_frames(cid):
                 x2 = max(0, min(w-1, int(det["x_max"])))
                 y2 = max(0, min(h-1, int(det["y_max"])))
                 # Déterminer la couleur basée sur la stature
-                # stature = det.get("stature")
-                # if isinstance(stature, tuple) and len(stature) > 0:
-                #     stature = stature[0]  # Extraire la stature du tuple (stature, debug_info)
-                # if not isinstance(stature, str):
-                #     stature = "inconnu"
-                # color_rgb = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
-                # color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
-                color_bgr = (0, 255, 0)  # Vert par défaut
+                stature = det.get("stature")
+                if isinstance(stature, tuple) and len(stature) > 0:
+                    stature = stature[0]  # Extraire la stature du tuple (stature, debug_info)
+                if not isinstance(stature, str):
+                    stature = "inconnu"
+                color_rgb = STATURE_COLORS.get(stature, (0, 0, 255))  # Bleu par défaut
+                color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
+
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
-                stature = "inconnu"
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
