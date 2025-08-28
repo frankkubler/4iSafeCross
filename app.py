@@ -374,8 +374,8 @@ def gen_frames(cid):
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
-                tracker_id = det.get("tracker_id", -1)
-                label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {tracker_id} {stature}"
+                # tracker_id = det.get("tracker_id", -1)
+                label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {stature}"
                 cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 # Afficher la zone sur la détection
                 if zone_names:
@@ -387,8 +387,8 @@ def gen_frames(cid):
             if motion:
                 # En haut à droite
                 cv2.circle(frame, (w - 20, 20), 15, (0, 0, 255), -1)
-            # Encodage JPEG
-            ret, buffer = cv2.imencode('.jpg', frame)
+            # Encodage JPEG optimisé pour réduire la latence
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
             if ret:
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
