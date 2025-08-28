@@ -55,14 +55,55 @@ class AlerteManager:
         # Retourne une liste de relais à activer/éteindre selon la zone
         if "zone1" in zone_name or "zone3" in zone_name:
             return [0, 1, 2]
-        elif "zone2" in zone_name:
+        elif "zone2" in zone_name or "zone4" in zone_name or "zone5" in zone_name:
             return [1]
-        elif "zone4" in zone_name:
-            return [3]
-        elif "zone5" in zone_name:
-            return [4]
         self.logger.warning(f"Zone {zone_name} non reconnue pour le relais")
         return []  # Si la zone n'est pas reconnue, on ne fait rien
+
+    def should_trigger_alert_for_detection(self, detection):
+        """
+        Détermine si une détection doit déclencher une alerte selon les règles de stature par zone.
+        
+        Règles :
+        - Zones 1 et 3 : Seulement si stature est "debout" ou "marchant"
+        - Zones 2, 4 et 5 : Toutes les personnes (class_id == 1)
+        
+        Args:
+            detection (dict): Dictionnaire de détection contenant zones, stature, class_id, etc.
+            
+        Returns:
+            bool: True si l'alerte doit être déclenchée, False sinon
+        """
+        # Vérifier que c'est bien une personne
+        if detection.get("class_id") != 1:
+            return False
+            
+        zone_names = detection.get("zones", [])
+        if not zone_names:
+            return False
+            
+        # Extraire la stature (peut être un tuple (stature, debug_info))
+        stature = detection.get("stature")
+        if isinstance(stature, tuple) and len(stature) > 0:
+            stature = stature[0]
+        if not isinstance(stature, str):
+            stature = "inconnu"
+            
+        # Appliquer les règles par zone
+        for zone_name in zone_names:
+            if "zone1" in zone_name or "zone3" in zone_name:
+                # Zones 1 et 3 : seulement debout ou marchant
+                if stature in ["debout", "marchant"]:
+                    self.logger.info(f"Alerte déclenchée pour zone {zone_name} avec stature '{stature}'")
+                    return True
+                else:
+                    self.logger.debug(f"Alerte ignorée pour zone {zone_name} avec stature '{stature}' (non autorisée)")
+            elif "zone2" in zone_name or "zone4" in zone_name or "zone5" in zone_name:
+                # Zones 2, 4 et 5 : toutes les personnes
+                self.logger.info(f"Alerte déclenchée pour zone {zone_name} (toute personne autorisée)")
+                return True
+                
+        return False
 
     async def on_detection(self, timestamp: float, frame=None, detections=None, cid=None):
         """
@@ -228,7 +269,6 @@ class AlerteManager:
             name = zone["name"]
             self.timer_task[name] = None
             self.last_detection_time_by_zone[name] = 0
-
 
     def _draw_detections(self, frame, detections, h, w):
         """Dessine les rectangles et labels sur la frame."""
