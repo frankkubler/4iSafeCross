@@ -98,6 +98,9 @@ def cleanup_frame_cache():
             if current_time - timestamp > FRAME_CACHE_DURATION * 2:  # Double du délai pour la sécurité
                 expired_cameras.append(cam_id)
         
+        if expired_cameras:
+            logger.info(f"🧹 Nettoyage cache: suppression de {len(expired_cameras)} entrées expirées (caméras: {expired_cameras})")
+        
         for cam_id in expired_cameras:
             frame_cache.pop(cam_id, None)
             frame_cache_timestamp.pop(cam_id, None)
@@ -105,6 +108,7 @@ def cleanup_frame_cache():
 # Lancer le nettoyage du cache périodiquement
 def start_cache_cleanup():
     def cleanup_loop():
+        logger.info("🚀 Démarrage du thread de nettoyage du cache de frames")
         while True:
             cleanup_frame_cache()
             time.sleep(1)  # Nettoyer toutes les secondes
@@ -113,6 +117,7 @@ def start_cache_cleanup():
     cleanup_thread.start()
 
 start_cache_cleanup()
+logger.info(f"✅ Cache de frames initialisé - Durée: {FRAME_CACHE_DURATION*1000:.0f}ms, Qualité JPEG: {FRAME_QUALITY_OPTIMIZED}%")
 
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
@@ -330,6 +335,7 @@ def gen_frames(cid):
         # On ne génère les frames que pour l'affichage vidéo
         if not stream_enabled.get(cid, True):
             # On attend que le stream soit réactivé, sans bloquer la détection
+            logger.debug(f"⏸️  Stream désactivé pour caméra {cid}")
             time.sleep(0.2)
             continue
             
@@ -345,6 +351,8 @@ def gen_frames(cid):
             
         # Utiliser le cache si la frame est récente
         if cached_frame is not None and current_time - cache_time < FRAME_CACHE_DURATION:
+            cache_age_ms = (current_time - cache_time) * 1000
+            logger.info(f"📋 Cache HIT pour caméra {cid} - Frame âgée de {cache_age_ms:.1f}ms (taille: {len(cached_frame)} bytes)")
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + cached_frame + b'\r\n')
             last_frame_time = current_time
@@ -352,6 +360,8 @@ def gen_frames(cid):
             
         frame = manager.get_frame_array(cam_id)
         if frame is not None:
+            logger.info(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
+            generation_start_time = time.time()
             frame = frame.copy()  # Correction : rendre la frame modifiable
             h, w = frame.shape[:2]
             with shared_detections_lock:
@@ -448,18 +458,24 @@ def gen_frames(cid):
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, FRAME_QUALITY_OPTIMIZED])
             if ret:
                 frame_bytes = buffer.tobytes()
+                generation_time_ms = (time.time() - generation_start_time) * 1000
                 
                 # Mettre en cache la frame encodée
                 with frame_cache_lock:
                     frame_cache[cid] = frame_bytes
                     frame_cache_timestamp[cid] = current_time
+                    cache_size = len(frame_cache)
+                
+                logger.info(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms - Mise en cache (taille: {len(frame_bytes)} bytes, cache total: {cache_size} entrées)")
                     
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 last_frame_time = current_time
             else:
+                logger.error(f"❌ Erreur encodage JPEG pour caméra {cid}")
                 break
         else:
+            logger.debug(f"⏳ Pas de frame disponible pour caméra {cid}")
             time.sleep(0.1)  # Attendre si pas de frame disponible
 
 
@@ -705,6 +721,38 @@ def set_zones():
 @app.route('/cam_status/<int:cid>')
 def cam_status(cid):
     return jsonify({'status': manager.get_status(CAM_IDS[cid])})
+
+
+@app.route('/cache_stats')
+def cache_stats():
+    """Endpoint pour obtenir les statistiques du cache de frames"""
+    current_time = time.time()
+    with frame_cache_lock:
+        cache_info = {}
+        total_size = 0
+        for cam_id, frame_data in frame_cache.items():
+            timestamp = frame_cache_timestamp.get(cam_id, 0)
+            age_ms = (current_time - timestamp) * 1000
+            size_bytes = len(frame_data)
+            total_size += size_bytes
+            
+            cache_info[cam_id] = {
+                'age_ms': round(age_ms, 1),
+                'size_bytes': size_bytes,
+                'size_kb': round(size_bytes / 1024, 1),
+                'is_fresh': age_ms < FRAME_CACHE_DURATION * 1000
+            }
+        
+        stats = {
+            'cache_duration_ms': FRAME_CACHE_DURATION * 1000,
+            'frame_quality': FRAME_QUALITY_OPTIMIZED,
+            'total_entries': len(frame_cache),
+            'total_size_bytes': total_size,
+            'total_size_kb': round(total_size / 1024, 1),
+            'cameras': cache_info
+        }
+    
+    return jsonify(stats)
 
 
 if __name__ == '__main__':
