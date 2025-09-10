@@ -248,8 +248,9 @@ class PoseAnalyzer:
         ankle_knee_threshold = 15  # Seuil pour détecter chevilles cachées (typique position assise)
         
         if zone == 'low':
-            knee_hip_proximity_threshold = 60  # Plus tolérant en bas (conducteurs)
-            ankle_knee_threshold = 25  # Chevilles plus cachées acceptées
+            # Zone basse: équilibrer pour éviter confusion assis/debout
+            knee_hip_proximity_threshold = 45  # Réduit de 60 à 45 (trop tolérant avant)
+            ankle_knee_threshold = 20  # Réduit de 25 à 20
         elif zone == 'middle':
             knee_hip_proximity_threshold = 45  # Tolérance moyenne
             ankle_knee_threshold = 20
@@ -291,29 +292,33 @@ class PoseAnalyzer:
             # Logique standard pour zones middle et low
             # Zone low: critères adaptés aux grandes silhouettes du premier plan
             if zone == 'low':
-                # Au premier plan, les distances sont plus importantes, on ajuste les critères
+                # Au premier plan, les distances sont plus importantes, critères renforcés
                 is_sitting_posture = (
                     knees_present and
                     (
-                        # Critère 1: Genoux proches des hanches (plus tolérant pour grandes silhouettes)
-                        abs(knee_hip_diff) < knee_hip_proximity_threshold or
-                        # Critère 2: Chevilles cachées ou très proches des genoux
-                        (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
-                        # Critère 3: Ratio élevé (priorité aux conducteurs)
-                        (ratios and ratio_value > sitting_ratio_threshold * 1.15)
-                    )
-                    # Pas d'exclusion trop stricte au premier plan (grandes distances normales)
+                        # Critère 1: Genoux vraiment proches des hanches ET pas debout évident
+                        (abs(knee_hip_diff) < knee_hip_proximity_threshold and
+                         (not ankles_present or ankle_knee_diff < ankle_knee_threshold * 1.2)) or
+                        # Critère 2: Chevilles clairement cachées (très caractéristique d'assis)
+                        (ankles_present and ankle_knee_diff < ankle_knee_threshold * 0.8) or
+                        # Critère 3: Ratio très élevé + genoux pas trop bas
+                        (ratios and ratio_value > sitting_ratio_threshold * 1.3 and
+                         knee_hip_diff < knee_hip_proximity_threshold * 0.8)
+                    ) and
+                    # Exclusion forte: si chevilles sont bien visibles ET bien en dessous des genoux
+                    not (ankles_present and ankle_knee_diff > ankle_knee_threshold * 1.5 and
+                         knee_hip_diff > knee_hip_proximity_threshold * 0.7)
                 )
                 
-                # Position debout au premier plan: critères adaptés aux grandes distances
+                # Position debout au premier plan: critères plus stricts pour éviter confusion
                 is_standing_posture = (
                     ankles_present and
-                    avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre vertical respecté
-                    knee_hip_diff > knee_hip_threshold * 0.8 and  # Seuil légèrement réduit
-                    ankle_knee_diff > ankle_knee_threshold * 0.7 and  # Plus tolérant sur cheville-genou
+                    avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre vertical strict
+                    knee_hip_diff > knee_hip_threshold * 0.9 and  # Seuil moins réduit
+                    ankle_knee_diff > ankle_knee_threshold * 0.9 and  # Seuil moins réduit
                     not is_sitting_posture and
-                    # Ratio cohérent avec position debout
-                    (not ratios or ratio_value < sitting_ratio_threshold * 1.1)
+                    # Ratio cohérent avec position debout (plus strict)
+                    (not ratios or ratio_value < sitting_ratio_threshold * 0.9)
                 )
             else:
                 # Zone middle: logique standard
