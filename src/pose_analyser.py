@@ -52,20 +52,25 @@ class PoseAnalyzer:
     # 🟡 ZONE MIDDLE (Médiane 28-60%) - Proportions équilibrées
     # ───────────────────────────────────────────────────────────────────────────────
     ZONE_MIDDLE_CONFIG = {
-        # Seuils de proximité pour détection "assis"
-        'knee_hip_proximity_threshold': 45,    # Distance max genoux-hanches
-        'ankle_knee_threshold': 20,            # Distance max chevilles-genoux
+        # Seuils de proximité pour détection "assis" - OPTIMISÉS POUR CONDUCTEURS
+        'knee_hip_proximity_threshold': 50,    # Augmenté de 45 à 50 (plus tolérant)
+        'ankle_knee_threshold': 25,            # Augmenté de 20 à 25 (chevilles cachées)
         
         # Facteurs d'adaptation des seuils principaux
-        'knee_hip_factor': 0.9,                # Réduction 10% du seuil debout
-        'ankle_spread_factor': 0.95,           # Réduction 5% du seuil marche
+        'knee_hip_factor': 0.85,               # Réduit de 0.9 à 0.85 (plus strict debout)
+        'ankle_spread_factor': 0.9,            # Réduit de 0.95 à 0.9 (moins de marche)
         'sitting_ratio_factor': 1.0,           # Aucune modification du ratio
         
-        # Multiplicateurs pour logique de détection (standards)
-        'sitting_ratio_multiplier': 1.2,       # Ratio élevé requis pour "assis"
-        'exclusion_ankle_knee_factor': 50,     # Seuil exclusion chevilles visibles
-        'exclusion_knee_hip_factor': 0.8,      # Seuil exclusion debout évident
-        'standing_ratio_factor': 1.0,          # Ratio debout standard
+        # Multiplicateurs pour logique de détection - OPTIMISÉS CONDUCTEURS
+        'sitting_ratio_multiplier': 1.1,       # Réduit de 1.2 à 1.1 (plus facile "assis")
+        'exclusion_ankle_knee_factor': 40,     # Réduit de 50 à 40 (moins d'exclusion)
+        'exclusion_knee_hip_factor': 0.7,      # Réduit de 0.8 à 0.7 (moins strict)
+        'standing_ratio_factor': 0.95,         # Réduit de 1.0 à 0.95 (plus strict debout)
+        
+        # NOUVEAUX PARAMÈTRES pour améliorer détection conducteurs
+        'sitting_ankle_knee_factor': 1.3,      # Chevilles cachées plus tolérantes
+        'sitting_knee_hip_strict_factor': 0.8, # Genoux proches hanches
+        'standing_knee_hip_min_factor': 0.9,   # Seuil minimum debout plus strict
     }
     
     # ───────────────────────────────────────────────────────────────────────────────
@@ -398,30 +403,36 @@ class PoseAnalyzer:
                     (not ratios or ratio_value < sitting_ratio_threshold * 0.9)
                 )
             else:
-                # Zone middle: logique standard
+                # Zone middle: logique optimisée pour les conducteurs
+                config = self.zone_configs['middle']
                 is_sitting_posture = (
                     knees_present and
                     (
-                        # Critère 1: Genoux très proches des hanches (position pliée)
+                        # Critère 1: Genoux proches des hanches (plus tolérant avec nouveau seuil)
                         abs(knee_hip_diff) < knee_hip_proximity_threshold or
-                        # Critère 2: Chevilles trop hautes par rapport aux genoux (jambes pliées)
-                        (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
-                        # Critère 3: Ratio tête-hanche/hanche-pieds élevé (tronc long, jambes courtes)
-                        (ratios and ratio_value > sitting_ratio_threshold * 1.2)
+                        # Critère 2: Chevilles cachées ou très proches des genoux (tolérance accrue)
+                        (ankles_present and ankle_knee_diff < ankle_knee_threshold * config.get('sitting_ankle_knee_factor', 1.3)) or
+                        # Critère 3: Ratio élevé (seuil réduit pour faciliter détection "assis")
+                        (ratios and ratio_value > sitting_ratio_threshold * config.get('sitting_ratio_multiplier', 1.1)) or
+                        # Critère 4: Genoux vraiment très proches hanches (conducteur typique)
+                        abs(knee_hip_diff) < knee_hip_proximity_threshold * config.get('sitting_knee_hip_strict_factor', 0.8)
                     ) and
-                    # Exclure les cas où les chevilles sont clairement visibles et bien en dessous
-                    not (ankles_present and ankle_knee_diff > 50 and knee_hip_diff > knee_hip_threshold * 0.8)
+                    # Exclusion moins stricte pour zone middle (conducteurs)
+                    not (ankles_present and 
+                         ankle_knee_diff > config.get('exclusion_ankle_knee_factor', 40) and
+                         knee_hip_diff > knee_hip_threshold * config.get('exclusion_knee_hip_factor', 0.7))
                 )
                 
-                # Détecter position debout avec critères plus robustes
+                # Position debout zone middle: critères plus stricts pour éviter faux positifs
+                config = self.zone_configs['middle']
                 is_standing_posture = (
                     ankles_present and
                     avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
-                    knee_hip_diff > knee_hip_threshold and    # Distance suffisante genou-hanche
+                    knee_hip_diff > knee_hip_threshold * config.get('standing_knee_hip_min_factor', 0.9) and  # Plus strict
                     ankle_knee_diff > ankle_knee_threshold and  # Distance suffisante cheville-genou
                     not is_sitting_posture and  # Pas déjà identifié comme assis
-                    # Critère supplémentaire: ratio cohérent avec position debout
-                    (not ratios or ratio_value < sitting_ratio_threshold)
+                    # Ratio plus strict pour position debout en zone middle
+                    (not ratios or ratio_value < sitting_ratio_threshold * config.get('standing_ratio_factor', 0.95))
                 )
         
         if is_sitting_posture:
