@@ -112,7 +112,7 @@ def cleanup_frame_cache():
                 expired_cameras.append(cam_id)
         
         if expired_cameras:
-            logger.info(f"🧹 Nettoyage cache: suppression de {len(expired_cameras)} entrées expirées (caméras: {expired_cameras})")
+            logger.debug(f"🧹 Nettoyage cache: suppression de {len(expired_cameras)} entrées expirées (caméras: {expired_cameras})")
         
         for cam_id in expired_cameras:
             frame_cache.pop(cam_id, None)
@@ -121,7 +121,7 @@ def cleanup_frame_cache():
 # Lancer le nettoyage du cache périodiquement
 def start_cache_cleanup():
     def cleanup_loop():
-        logger.info("🚀 Démarrage du thread de nettoyage du cache de frames")
+        logger.debug("🚀 Démarrage du thread de nettoyage du cache de frames")
         last_stats_log = time.time()
         while True:
             cleanup_frame_cache()
@@ -134,7 +134,7 @@ def start_cache_cleanup():
                     hit_rate = cache_performance_stats['hits'] / total_requests * 100
                     avg_gen_time = cache_performance_stats['total_generation_time'] / max(cache_performance_stats['misses'], 1)
                     time_saved = cache_performance_stats['hits'] * avg_gen_time
-                    logger.info(f"📊 Stats cache (30s): {total_requests} requêtes, {hit_rate:.1f}% HIT, temps économisé: {time_saved:.0f}ms")
+                    logger.debug(f"📊 Stats cache (30s): {total_requests} requêtes, {hit_rate:.1f}% HIT, temps économisé: {time_saved:.0f}ms")
                 last_stats_log = current_time
             
             time.sleep(1)  # Nettoyer toutes les secondes
@@ -188,7 +188,7 @@ def get_zone_overlay(frame_shape, cid):
         if cache_key not in zone_overlay_cache:
             zones = zones_by_camera.get(cid, [])
             zone_overlay_cache[cache_key] = create_zone_overlay(frame_shape, zones, cid)
-            logger.info(f"🎨 Overlay des zones créé pour caméra {cid} (résolution: {frame_shape[1]}x{frame_shape[0]})")
+            logger.debug(f"🎨 Overlay des zones créé pour caméra {cid} (résolution: {frame_shape[1]}x{frame_shape[0]})")
         
         return zone_overlay_cache[cache_key]
 
@@ -408,7 +408,7 @@ def gen_frames(cid):
     cam_id = CAM_IDS[cid]
     last_frame_time = 0
     frame_interval = 0.1  # 10 FPS = 100ms entre frames
-    logger.info(f"🎬 Nouveau générateur de frames démarré pour caméra {cid}")
+    logger.debug(f"🎬 Nouveau générateur de frames démarré pour caméra {cid}")
     
     while True:
         current_time = time.time()
@@ -443,7 +443,7 @@ def gen_frames(cid):
             cache_age_ms = (current_time - cache_time) * 1000
             cache_performance_stats['hits'] += 1
             hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-            logger.info(f"📋 Cache HIT pour caméra {cid} - Frame âgée de {cache_age_ms:.1f}ms (taille: {len(cached_frame)} bytes) - Taux: {hit_rate:.1f}%")
+            logger.debug(f"📋 Cache HIT pour caméra {cid} - Frame âgée de {cache_age_ms:.1f}ms (taille: {len(cached_frame)} bytes) - Taux: {hit_rate:.1f}%")
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + cached_frame + b'\r\n')
             last_frame_time = current_time
@@ -452,7 +452,7 @@ def gen_frames(cid):
         frame = manager.get_frame_array(cam_id)
         if frame is not None:
             cache_performance_stats['misses'] += 1
-            logger.info(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
+            logger.debug(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
             generation_start_time = time.time()
             frame = frame.copy()  # Correction : rendre la frame modifiable
             h, w = frame.shape[:2]
@@ -540,9 +540,9 @@ def gen_frames(cid):
                 
                 avg_generation_time = cache_performance_stats['total_generation_time'] / cache_performance_stats['misses']
                 hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-                logger.info(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
-                logger.info(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
-                    
+                logger.debug(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
+                logger.debug(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
+
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 last_frame_time = current_time
@@ -794,7 +794,7 @@ def set_zones():
     # Vider le cache des overlays car les zones ont changé
     with zone_overlay_lock:
         zone_overlay_cache.clear()
-        logger.info("🗑️ Cache des overlays de zones vidé suite à modification des zones")
+        logger.debug("🗑️ Cache des overlays de zones vidé suite à modification des zones")
     
     return jsonify({'status': 'ok'})
 
@@ -805,7 +805,7 @@ def clear_zone_cache():
     with zone_overlay_lock:
         cache_size = len(zone_overlay_cache)
         zone_overlay_cache.clear()
-        logger.info(f"🗑️ Cache des overlays de zones vidé manuellement ({cache_size} entrées supprimées)")
+        logger.debug(f"🗑️ Cache des overlays de zones vidé manuellement ({cache_size} entrées supprimées)")
     
     return jsonify({'status': 'ok', 'cleared_entries': cache_size})
 
