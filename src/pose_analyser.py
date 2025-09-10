@@ -264,29 +264,33 @@ class PoseAnalyzer:
         
         # Logique adaptée pour la zone haute (fond de l'image)
         if zone == 'high':
-            # Dans le fond, privilégier l'analyse des proportions relatives
-            # Le ratio tête-hanche/hanche-pieds est plus fiable que les distances absolues
+            # Dans le fond, être plus strict sur les critères "assis" pour éviter faux positifs
             is_sitting_posture = (
                 knees_present and
                 (
-                    # Privilégier le ratio pour les petites silhouettes
-                    (ratios and ratio_value > sitting_ratio_threshold * 1.1) or
-                    # Critère de proximité adapté aux petites distances
-                    abs(knee_hip_diff) < knee_hip_proximity_threshold or
-                    # Chevilles cachées ou très proches des genoux
-                    (ankles_present and ankle_knee_diff < ankle_knee_threshold)
-                )
+                    # Ratio très élevé (plus strict pour éviter confusion)
+                    (ratios and ratio_value > sitting_ratio_threshold * 1.4) or
+                    # Genoux très proches des hanches ET chevilles cachées
+                    (abs(knee_hip_diff) < knee_hip_proximity_threshold * 0.7 and
+                     (not ankles_present or ankle_knee_diff < ankle_knee_threshold * 0.8)) or
+                    # Chevilles vraiment très cachées (cas évident d'assis)
+                    (ankles_present and ankle_knee_diff < ankle_knee_threshold * 0.6)
+                ) and
+                # Exclusion: si ordre vertical respecté avec distances suffisantes → pas assis
+                not (ankles_present and avg_hip_y < avg_knee_y < avg_ankle_y and
+                     knee_hip_diff > knee_hip_threshold * 0.5 and
+                     ankle_knee_diff > ankle_knee_threshold * 0.7)
             )
             
-            # Position debout dans le fond: critères plus souples sur les distances absolues
+            # Position debout dans le fond: critères moins restrictifs mais plus discriminants
             is_standing_posture = (
                 ankles_present and
                 avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre vertical respecté
-                knee_hip_diff > knee_hip_threshold * 0.7 and  # Seuil réduit pour les petites silhouettes
-                ankle_knee_diff > ankle_knee_threshold * 0.8 and  # Seuil réduit
+                knee_hip_diff > knee_hip_threshold * 0.6 and  # Moins restrictif
+                ankle_knee_diff > ankle_knee_threshold * 0.7 and  # Moins restrictif
                 not is_sitting_posture and
-                # Ratio cohérent avec position debout (jambes visibles)
-                (not ratios or ratio_value < sitting_ratio_threshold * 1.3)
+                # Ratio cohérent avec position debout (plus strict)
+                (not ratios or ratio_value < sitting_ratio_threshold * 1.1)
             )
         else:
             # Logique standard pour zones middle et low
