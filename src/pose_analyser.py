@@ -127,14 +127,15 @@ class PoseAnalyzer:
         
         # Adaptations spécifiques par zone
         if zone == 'high':
-            # Zone haute: personnes plus loin, seuils plus petits
-            knee_hip_adapted = base_knee_hip * scale_factor * 0.6  # 40% de réduction
-            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.7  # 30% de réduction
-            sitting_ratio_adapted = base_sitting_ratio * 0.85  # Plus tolérant
+            # Zone haute (fond): réduction modérée pour préserver la discrimination
+            # Les proportions relatives restent importantes même si la taille absolue diminue
+            knee_hip_adapted = base_knee_hip * scale_factor * 0.8  # Réduction moins agressive
+            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.85  # Réduction moins agressive
+            sitting_ratio_adapted = base_sitting_ratio * 0.9  # Légèrement plus tolérant
         elif zone == 'middle':
             # Zone médiane: seuils normaux avec légère adaptation d'échelle
-            knee_hip_adapted = base_knee_hip * scale_factor * 0.8
-            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.9
+            knee_hip_adapted = base_knee_hip * scale_factor * 0.9
+            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.95
             sitting_ratio_adapted = base_sitting_ratio
         else:  # zone == 'low'
             # Zone basse: personnes plus proches, seuils normaux ou légèrement augmentés
@@ -253,37 +254,65 @@ class PoseAnalyzer:
             knee_hip_proximity_threshold = 45  # Tolérance moyenne
             ankle_knee_threshold = 20
         else:  # zone == 'high'
-            knee_hip_proximity_threshold = 20  # Plus strict en haut
-            ankle_knee_threshold = 10
+            # Zone haute (fond): seuils adaptés pour les petites silhouettes
+            knee_hip_proximity_threshold = 25  # Légèrement plus tolérant qu'avant
+            ankle_knee_threshold = 12  # Seuil adapté aux petites distances
         
         # Calculer la distance verticale cheville-genou pour détecter position assise
         ankle_knee_diff = avg_ankle_y - avg_knee_y if ankles_present else float('inf')
         
-        # Détecter position assise avec critères renforcés
-        is_sitting_posture = (
-            knees_present and
-            (
-                # Critère 1: Genoux très proches des hanches (position pliée)
-                abs(knee_hip_diff) < knee_hip_proximity_threshold or
-                # Critère 2: Chevilles trop hautes par rapport aux genoux (jambes pliées)
-                (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
-                # Critère 3: Ratio tête-hanche/hanche-pieds élevé (tronc long, jambes courtes)
-                (ratios and ratio_value > sitting_ratio_threshold * 1.2)
-            ) and
-            # Exclure les cas où les chevilles sont clairement visibles et bien en dessous
-            not (ankles_present and ankle_knee_diff > 50 and knee_hip_diff > knee_hip_threshold * 0.8)
-        )
-        
-        # Détecter position debout avec critères plus robustes
-        is_standing_posture = (
-            ankles_present and
-            avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
-            knee_hip_diff > knee_hip_threshold and    # Distance suffisante genou-hanche
-            ankle_knee_diff > ankle_knee_threshold and  # Distance suffisante cheville-genou
-            not is_sitting_posture and  # Pas déjà identifié comme assis
-            # Critère supplémentaire: ratio cohérent avec position debout
-            (not ratios or ratio_value < sitting_ratio_threshold)
-        )
+        # Logique adaptée pour la zone haute (fond de l'image)
+        if zone == 'high':
+            # Dans le fond, privilégier l'analyse des proportions relatives
+            # Le ratio tête-hanche/hanche-pieds est plus fiable que les distances absolues
+            is_sitting_posture = (
+                knees_present and
+                (
+                    # Privilégier le ratio pour les petites silhouettes
+                    (ratios and ratio_value > sitting_ratio_threshold * 1.1) or
+                    # Critère de proximité adapté aux petites distances
+                    abs(knee_hip_diff) < knee_hip_proximity_threshold or
+                    # Chevilles cachées ou très proches des genoux
+                    (ankles_present and ankle_knee_diff < ankle_knee_threshold)
+                )
+            )
+            
+            # Position debout dans le fond: critères plus souples sur les distances absolues
+            is_standing_posture = (
+                ankles_present and
+                avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre vertical respecté
+                knee_hip_diff > knee_hip_threshold * 0.7 and  # Seuil réduit pour les petites silhouettes
+                ankle_knee_diff > ankle_knee_threshold * 0.8 and  # Seuil réduit
+                not is_sitting_posture and
+                # Ratio cohérent avec position debout (jambes visibles)
+                (not ratios or ratio_value < sitting_ratio_threshold * 1.3)
+            )
+        else:
+            # Logique standard pour zones middle et low
+            is_sitting_posture = (
+                knees_present and
+                (
+                    # Critère 1: Genoux très proches des hanches (position pliée)
+                    abs(knee_hip_diff) < knee_hip_proximity_threshold or
+                    # Critère 2: Chevilles trop hautes par rapport aux genoux (jambes pliées)
+                    (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
+                    # Critère 3: Ratio tête-hanche/hanche-pieds élevé (tronc long, jambes courtes)
+                    (ratios and ratio_value > sitting_ratio_threshold * 1.2)
+                ) and
+                # Exclure les cas où les chevilles sont clairement visibles et bien en dessous
+                not (ankles_present and ankle_knee_diff > 50 and knee_hip_diff > knee_hip_threshold * 0.8)
+            )
+            
+            # Détecter position debout avec critères plus robustes
+            is_standing_posture = (
+                ankles_present and
+                avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
+                knee_hip_diff > knee_hip_threshold and    # Distance suffisante genou-hanche
+                ankle_knee_diff > ankle_knee_threshold and  # Distance suffisante cheville-genou
+                not is_sitting_posture and  # Pas déjà identifié comme assis
+                # Critère supplémentaire: ratio cohérent avec position debout
+                (not ratios or ratio_value < sitting_ratio_threshold)
+            )
         
         if is_sitting_posture:
             stature = 'assis'
