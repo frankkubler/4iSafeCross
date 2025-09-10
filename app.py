@@ -90,7 +90,7 @@ zone_overlay_lock = threading.Lock()
 frame_cache = {}
 frame_cache_lock = threading.Lock()
 frame_cache_timestamp = {}
-FRAME_CACHE_DURATION = 0.15  # Cache de 150ms pour capturer plus de requêtes
+FRAME_CACHE_DURATION = 0.1  # Cache de 100ms pour un nettoyage plus strict
 FRAME_QUALITY_OPTIMIZED = 70  # Qualité JPEG optimisée
 
 # Statistiques du cache
@@ -107,8 +107,8 @@ def cleanup_frame_cache():
     with frame_cache_lock:
         expired_cameras = []
         for cam_id, timestamp in frame_cache_timestamp.items():
-            # Plus conservateur : expire seulement après 5x la durée du cache
-            if current_time - timestamp > FRAME_CACHE_DURATION * 5:
+            # Nettoyage plus strict : expire après 2x la durée du cache (300ms au lieu de 750ms)
+            if current_time - timestamp > FRAME_CACHE_DURATION * 2:
                 expired_cameras.append(cam_id)
         
         if expired_cameras:
@@ -429,6 +429,14 @@ def gen_frames(cid):
         with frame_cache_lock:
             cached_frame = frame_cache.get(cid)
             cache_time = frame_cache_timestamp.get(cid, 0)
+            
+            # Nettoyage proactif : supprimer les frames expirées immédiatement
+            if cached_frame is not None and current_time - cache_time > FRAME_CACHE_DURATION:
+                logger.debug(f"🗑️ Suppression proactive cache expiré caméra {cid} (âge: {(current_time - cache_time)*1000:.1f}ms)")
+                frame_cache.pop(cid, None)
+                frame_cache_timestamp.pop(cid, None)
+                cached_frame = None
+                cache_time = 0
             
         # Debug détaillé du cache
         if cached_frame is not None:
@@ -799,6 +807,18 @@ def set_zones():
     return jsonify({'status': 'ok'})
 
 
+@app.route('/clear_frame_cache', methods=['POST'])
+def clear_frame_cache():
+    """Force le nettoyage du cache de frames"""
+    with frame_cache_lock:
+        cache_size = len(frame_cache)
+        frame_cache.clear()
+        frame_cache_timestamp.clear()
+        logger.debug(f"🗑️ Cache de frames vidé manuellement ({cache_size} entrées supprimées)")
+    
+    return jsonify({'status': 'ok', 'cleared_entries': cache_size})
+
+
 @app.route('/clear_zone_cache', methods=['POST'])
 def clear_zone_cache():
     """Vide le cache des overlays de zones"""
@@ -822,25 +842,41 @@ def cache_stats():
     with frame_cache_lock:
         cache_info = {}
         total_size = 0
+        expired_count = 0
+        
         for cam_id, frame_data in frame_cache.items():
             timestamp = frame_cache_timestamp.get(cam_id, 0)
             age_ms = (current_time - timestamp) * 1000
             size_bytes = len(frame_data)
             total_size += size_bytes
+            is_fresh = age_ms < FRAME_CACHE_DURATION * 1000
+            
+            if not is_fresh:
+                expired_count += 1
             
             cache_info[cam_id] = {
                 'age_ms': round(age_ms, 1),
                 'size_bytes': size_bytes,
                 'size_kb': round(size_bytes / 1024, 1),
-                'is_fresh': age_ms < FRAME_CACHE_DURATION * 1000
+                'is_fresh': is_fresh,
+                'expired': age_ms > FRAME_CACHE_DURATION * 1000
             }
+
+        # Calculer les statistiques de performance
+        total_requests = cache_performance_stats['hits'] + cache_performance_stats['misses']
+        hit_rate = (cache_performance_stats['hits'] / max(total_requests, 1)) * 100
+        avg_generation_time = cache_performance_stats['total_generation_time'] / max(cache_performance_stats['misses'], 1)
 
         stats = {
             'cache_duration_ms': FRAME_CACHE_DURATION * 1000,
             'frame_quality': FRAME_QUALITY_OPTIMIZED,
             'total_entries': len(frame_cache),
+            'expired_entries': expired_count,
             'total_size_bytes': total_size,
             'total_size_kb': round(total_size / 1024, 1),
+            'hit_rate_percent': round(hit_rate, 1),
+            'average_generation_time_ms': round(avg_generation_time, 1),
+            'total_requests': total_requests,
             'cameras': cache_info
         }
 
