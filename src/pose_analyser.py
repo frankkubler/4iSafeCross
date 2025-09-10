@@ -16,16 +16,103 @@ class PoseAnalyzer:
     LEFT_ANKLE = 15
     RIGHT_ANKLE = 16
 
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # 🎯 CONFIGURATION DES ZONES D'ADAPTATION
+    # ═══════════════════════════════════════════════════════════════════════════════
+    
+    # Délimitation des zones (en pourcentage de la hauteur d'image)
+    ZONE_HIGH_LIMIT = 0.28      # 28% supérieur = fond de l'image (personnes éloignées)
+    ZONE_MIDDLE_LIMIT = 0.6     # 60% = zone médiane (distance normale)
+    # Zone LOW = reste (60-100%) = premier plan (personnes proches)
+    
+    # ───────────────────────────────────────────────────────────────────────────────
+    # 🔵 ZONE HIGH (Fond 0-28%) - Petites silhouettes éloignées
+    # ───────────────────────────────────────────────────────────────────────────────
+    ZONE_HIGH_CONFIG = {
+        # Seuils de proximité pour détection "assis"
+        'knee_hip_proximity_threshold': 25,    # Distance max genoux-hanches pour "assis"
+        'ankle_knee_threshold': 12,            # Distance max chevilles-genoux pour "assis"
+        
+        # Facteurs d'adaptation des seuils principaux
+        'knee_hip_factor': 0.8,                # Réduction 20% du seuil debout
+        'ankle_spread_factor': 0.85,           # Réduction 15% du seuil marche
+        'sitting_ratio_factor': 0.9,           # Réduction 10% du ratio assis
+        
+        # Multiplicateurs pour logique de détection
+        'sitting_ratio_multiplier': 1.4,       # Ratio très élevé requis pour "assis"
+        'knee_hip_strict_factor': 0.7,         # Genoux très proches hanches
+        'ankle_knee_strict_factor': 0.8,       # Chevilles cachées modérées
+        'ankle_knee_very_strict_factor': 0.6,  # Chevilles très cachées
+        'standing_knee_hip_factor': 0.6,       # Seuil debout réduit
+        'standing_ankle_knee_factor': 0.7,     # Seuil cheville-genou réduit
+        'standing_ratio_factor': 1.1,          # Ratio debout plus strict
+    }
+    
+    # ───────────────────────────────────────────────────────────────────────────────
+    # 🟡 ZONE MIDDLE (Médiane 28-60%) - Proportions équilibrées
+    # ───────────────────────────────────────────────────────────────────────────────
+    ZONE_MIDDLE_CONFIG = {
+        # Seuils de proximité pour détection "assis"
+        'knee_hip_proximity_threshold': 45,    # Distance max genoux-hanches
+        'ankle_knee_threshold': 20,            # Distance max chevilles-genoux
+        
+        # Facteurs d'adaptation des seuils principaux
+        'knee_hip_factor': 0.9,                # Réduction 10% du seuil debout
+        'ankle_spread_factor': 0.95,           # Réduction 5% du seuil marche
+        'sitting_ratio_factor': 1.0,           # Aucune modification du ratio
+        
+        # Multiplicateurs pour logique de détection (standards)
+        'sitting_ratio_multiplier': 1.2,       # Ratio élevé requis pour "assis"
+        'exclusion_ankle_knee_factor': 50,     # Seuil exclusion chevilles visibles
+        'exclusion_knee_hip_factor': 0.8,      # Seuil exclusion debout évident
+        'standing_ratio_factor': 1.0,          # Ratio debout standard
+    }
+    
+    # ───────────────────────────────────────────────────────────────────────────────
+    # 🔴 ZONE LOW (Premier plan 60-100%) - Grandes silhouettes proches
+    # ───────────────────────────────────────────────────────────────────────────────
+    ZONE_LOW_CONFIG = {
+        # Seuils de proximité pour détection "assis"
+        'knee_hip_proximity_threshold': 45,    # Distance max genoux-hanches
+        'ankle_knee_threshold': 20,            # Distance max chevilles-genoux
+        
+        # Facteurs d'adaptation des seuils principaux
+        'knee_hip_factor': 1.0,                # Aucune réduction
+        'ankle_spread_factor': 1.0,            # Aucune réduction
+        'sitting_ratio_factor': 1.1,           # Augmentation 10% tolérance
+        
+        # Multiplicateurs pour logique de détection renforcée
+        'sitting_ankle_knee_factor': 1.2,      # Chevilles cachées plus strictes
+        'sitting_ratio_multiplier': 1.3,       # Ratio très élevé pour assis
+        'sitting_knee_hip_factor': 0.8,        # Genoux proches hanches strict
+        'exclusion_ankle_knee_factor': 1.5,    # Exclusion chevilles visibles
+        'exclusion_knee_hip_factor': 0.7,      # Exclusion debout évident
+        'standing_knee_hip_factor': 0.9,       # Seuil debout légèrement réduit
+        'standing_ankle_knee_factor': 0.9,     # Seuil cheville-genou réduit
+        'standing_ratio_factor': 0.9,          # Ratio debout plus strict
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+
     def __init__(self, confidence_threshold=0.5, knee_hip_threshold=35, ankle_spread_threshold=25,
                  sitting_ratio_threshold=0.9, enable_zone_adaptation=True, image_height=1080):
         """
+        Initialisation du PoseAnalyzer avec adaptation zonale.
+        
+        Paramètres principaux:
         - confidence_threshold : Seuil pour filtrer les keypoints (ignoré si pas de confiance).
         - knee_hip_threshold : Distance min entre genou et hanche pour 'debout'.
         - ankle_spread_threshold : Écart max entre chevilles pour 'assis' (chevilles proches = assis).
         - sitting_ratio_threshold : Seuil pour le ratio H2H/H2F pour confirmer 'assis' (ratio élevé = tête proche hanche).
         - enable_zone_adaptation : Active l'adaptation des seuils selon la zone dans l'image.
         - image_height : Hauteur de l'image pour les calculs d'adaptation.
+        
+        Zones d'adaptation automatique:
+        - HIGH (0-28%) : Fond, petites silhouettes, seuils réduits
+        - MIDDLE (28-60%) : Médiane, seuils standards
+        - LOW (60-100%) : Premier plan, grandes silhouettes, seuils adaptés
         """
+        # Paramètres de base
         self.confidence_threshold = confidence_threshold
         self.knee_hip_threshold = knee_hip_threshold
         self.ankle_spread_threshold = ankle_spread_threshold
@@ -33,10 +120,16 @@ class PoseAnalyzer:
         self.enable_zone_adaptation = enable_zone_adaptation
         self.image_height = image_height
         
-        # Zones d'adaptation (en pourcentage de la hauteur d'image)
-        self.zone_high = 0.28  # 28% supérieur (zone problématique mentionnée: ~300px/1080px)
-        self.zone_middle = 0.6  # Zone médiane
-        # Zone basse: reste de l'image
+        # Configuration des zones (utilise les constantes de classe)
+        self.zone_high = self.ZONE_HIGH_LIMIT
+        self.zone_middle = self.ZONE_MIDDLE_LIMIT
+        
+        # Stockage des configurations par zone pour accès rapide
+        self.zone_configs = {
+            'high': self.ZONE_HIGH_CONFIG,
+            'middle': self.ZONE_MIDDLE_CONFIG,
+            'low': self.ZONE_LOW_CONFIG
+        }
 
     def filter_keypoints_by_confidence(self, pose_keypoints):
         """
@@ -105,6 +198,7 @@ class PoseAnalyzer:
     def _get_adaptive_thresholds(self, zone, pose_keypoints):
         """
         Calcule des seuils adaptatifs selon la zone et la taille apparente de la personne.
+        Utilise les configurations centralisées définies au début de la classe.
         """
         base_knee_hip = self.knee_hip_threshold
         base_ankle_spread = self.ankle_spread_threshold
@@ -125,23 +219,13 @@ class PoseAnalyzer:
         # Plus la personne semble petite (loin), plus on réduit les seuils
         scale_factor = max(0.3, min(2.0, person_height / 200))  # Normalisé autour de 200px de hauteur
         
-        # Adaptations spécifiques par zone
-        if zone == 'high':
-            # Zone haute (fond): réduction modérée pour préserver la discrimination
-            # Les proportions relatives restent importantes même si la taille absolue diminue
-            knee_hip_adapted = base_knee_hip * scale_factor * 0.8  # Réduction moins agressive
-            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.85  # Réduction moins agressive
-            sitting_ratio_adapted = base_sitting_ratio * 0.9  # Légèrement plus tolérant
-        elif zone == 'middle':
-            # Zone médiane: seuils normaux avec légère adaptation d'échelle
-            knee_hip_adapted = base_knee_hip * scale_factor * 0.9
-            ankle_spread_adapted = base_ankle_spread * scale_factor * 0.95
-            sitting_ratio_adapted = base_sitting_ratio
-        else:  # zone == 'low'
-            # Zone basse: personnes plus proches, seuils normaux ou légèrement augmentés
-            knee_hip_adapted = base_knee_hip * scale_factor
-            ankle_spread_adapted = base_ankle_spread * scale_factor
-            sitting_ratio_adapted = base_sitting_ratio * 1.1
+        # Récupérer la configuration de la zone
+        config = self.zone_configs[zone]
+        
+        # Application des facteurs d'adaptation selon la configuration de zone
+        knee_hip_adapted = base_knee_hip * scale_factor * config['knee_hip_factor']
+        ankle_spread_adapted = base_ankle_spread * scale_factor * config['ankle_spread_factor']
+        sitting_ratio_adapted = base_sitting_ratio * config['sitting_ratio_factor']
             
         return knee_hip_adapted, ankle_spread_adapted, sitting_ratio_adapted
 
@@ -243,21 +327,10 @@ class PoseAnalyzer:
         # Logique corrigée avec seuils adaptatifs
         knee_hip_diff = avg_knee_y - avg_hip_y  # Positif si genou plus bas que hanche (debout)
         
-        # Seuils adaptatifs pour différencier assis/debout selon la zone
-        knee_hip_proximity_threshold = 30
-        ankle_knee_threshold = 15  # Seuil pour détecter chevilles cachées (typique position assise)
-        
-        if zone == 'low':
-            # Zone basse: équilibrer pour éviter confusion assis/debout
-            knee_hip_proximity_threshold = 45  # Réduit de 60 à 45 (trop tolérant avant)
-            ankle_knee_threshold = 20  # Réduit de 25 à 20
-        elif zone == 'middle':
-            knee_hip_proximity_threshold = 45  # Tolérance moyenne
-            ankle_knee_threshold = 20
-        else:  # zone == 'high'
-            # Zone haute (fond): seuils adaptés pour les petites silhouettes
-            knee_hip_proximity_threshold = 25  # Légèrement plus tolérant qu'avant
-            ankle_knee_threshold = 12  # Seuil adapté aux petites distances
+        # Récupération des seuils adaptatifs selon la zone (centralisés)
+        config = self.zone_configs[zone]
+        knee_hip_proximity_threshold = config['knee_hip_proximity_threshold']
+        ankle_knee_threshold = config['ankle_knee_threshold']
         
         # Calculer la distance verticale cheville-genou pour détecter position assise
         ankle_knee_diff = avg_ankle_y - avg_knee_y if ankles_present else float('inf')
