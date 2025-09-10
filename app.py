@@ -90,7 +90,7 @@ zone_overlay_lock = threading.Lock()
 frame_cache = {}
 frame_cache_lock = threading.Lock()
 frame_cache_timestamp = {}
-FRAME_CACHE_DURATION = 0.1  # Cache de 100ms pour un nettoyage plus strict
+FRAME_CACHE_DURATION = 0.15  # Cache de 150ms - plus stable pour éviter alternance
 FRAME_QUALITY_OPTIMIZED = 70  # Qualité JPEG optimisée
 
 # Statistiques du cache
@@ -107,8 +107,8 @@ def cleanup_frame_cache():
     with frame_cache_lock:
         expired_cameras = []
         for cam_id, timestamp in frame_cache_timestamp.items():
-            # Nettoyage plus strict : expire après 2x la durée du cache (300ms au lieu de 750ms)
-            if current_time - timestamp > FRAME_CACHE_DURATION * 2:
+            # Nettoyage plus conservateur : expire après 3x la durée du cache (450ms)
+            if current_time - timestamp > FRAME_CACHE_DURATION * 3:
                 expired_cameras.append(cam_id)
         
         if expired_cameras:
@@ -137,7 +137,7 @@ def start_cache_cleanup():
                     logger.debug(f"📊 Stats cache (30s): {total_requests} requêtes, {hit_rate:.1f}% HIT, temps économisé: {time_saved:.0f}ms")
                 last_stats_log = current_time
             
-            time.sleep(1)  # Nettoyer toutes les secondes
+            time.sleep(3)  # Nettoyer toutes les 3 secondes au lieu de chaque seconde
     
     cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
     cleanup_thread.start()
@@ -430,28 +430,21 @@ def gen_frames(cid):
             cached_frame = frame_cache.get(cid)
             cache_time = frame_cache_timestamp.get(cid, 0)
             
-            # Nettoyage proactif : supprimer les frames expirées immédiatement
-            if cached_frame is not None and current_time - cache_time > FRAME_CACHE_DURATION:
-                logger.debug(f"🗑️ Suppression proactive cache expiré caméra {cid} (âge: {(current_time - cache_time)*1000:.1f}ms)")
-                frame_cache.pop(cid, None)
-                frame_cache_timestamp.pop(cid, None)
-                cached_frame = None
-                cache_time = 0
-            
-        # Debug détaillé du cache
+        # Debug détaillé du cache (réduit)
         if cached_frame is not None:
             cache_age_ms = (current_time - cache_time) * 1000
-            cache_valid = cache_age_ms < FRAME_CACHE_DURATION * 1000
-            logger.debug(f"🔍 Cache check caméra {cid}: âge={cache_age_ms:.1f}ms, limite={FRAME_CACHE_DURATION*1000:.0f}ms, valide={cache_valid}")
-        else:
-            logger.debug(f"🔍 Cache check caméra {cid}: aucune entrée trouvée")
-            
+            # Log seulement si on est proche de l'expiration ou si c'est un problème
+            if cache_age_ms > FRAME_CACHE_DURATION * 800:  # 80% de la durée
+                logger.debug(f"🔍 Cache check caméra {cid}: âge={cache_age_ms:.1f}ms, limite={FRAME_CACHE_DURATION*1000:.0f}ms")
+        
         # Utiliser le cache si la frame est récente
         if cached_frame is not None and current_time - cache_time < FRAME_CACHE_DURATION:
             cache_age_ms = (current_time - cache_time) * 1000
             cache_performance_stats['hits'] += 1
-            hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-            logger.debug(f"📋 Cache HIT pour caméra {cid} - Frame âgée de {cache_age_ms:.1f}ms (taille: {len(cached_frame)} bytes) - Taux: {hit_rate:.1f}%")
+            # Log moins verbeux des hits
+            if cache_performance_stats['hits'] % 10 == 0:  # Log tous les 10 hits
+                hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
+                logger.debug(f"📋 Cache HIT pour caméra {cid} - Taux: {hit_rate:.1f}% (dernier âge: {cache_age_ms:.1f}ms)")
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + cached_frame + b'\r\n')
             last_frame_time = current_time
@@ -460,10 +453,20 @@ def gen_frames(cid):
         frame = manager.get_frame_array(cam_id)
         if frame is not None:
             cache_performance_stats['misses'] += 1
-            logger.debug(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
+            # Log moins verbeux des misses
+            if cache_performance_stats['misses'] % 5 == 0:  # Log tous les 5 misses
+                logger.debug(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
             generation_start_time = time.time()
-            frame = frame.copy()  # Correction : rendre la frame modifiable
-            h, w = frame.shape[:2]
+            
+            # Vérifier que la frame est valide avant de la copier
+            try:
+                frame = frame.copy()  # Rendre la frame modifiable
+                h, w = frame.shape[:2]
+            except Exception as e:
+                logger.error(f"❌ Erreur lors de la copie de frame pour caméra {cid}: {e}")
+                time.sleep(0.1)
+                continue
+                
             with shared_detections_lock:
                 detections = shared_detections.get(cid, [])
             with shared_motion_roi_lock:
@@ -548,8 +551,10 @@ def gen_frames(cid):
                 
                 avg_generation_time = cache_performance_stats['total_generation_time'] / cache_performance_stats['misses']
                 hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-                logger.debug(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
-                logger.debug(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
+                # Log moins verbeux des générations
+                if cache_performance_stats['misses'] % 10 == 0:  # Log tous les 10 misses
+                    logger.debug(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
+                    logger.debug(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
 
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
