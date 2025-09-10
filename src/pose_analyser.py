@@ -289,30 +289,58 @@ class PoseAnalyzer:
             )
         else:
             # Logique standard pour zones middle et low
-            is_sitting_posture = (
-                knees_present and
-                (
-                    # Critère 1: Genoux très proches des hanches (position pliée)
-                    abs(knee_hip_diff) < knee_hip_proximity_threshold or
-                    # Critère 2: Chevilles trop hautes par rapport aux genoux (jambes pliées)
-                    (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
-                    # Critère 3: Ratio tête-hanche/hanche-pieds élevé (tronc long, jambes courtes)
-                    (ratios and ratio_value > sitting_ratio_threshold * 1.2)
-                ) and
-                # Exclure les cas où les chevilles sont clairement visibles et bien en dessous
-                not (ankles_present and ankle_knee_diff > 50 and knee_hip_diff > knee_hip_threshold * 0.8)
-            )
-            
-            # Détecter position debout avec critères plus robustes
-            is_standing_posture = (
-                ankles_present and
-                avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
-                knee_hip_diff > knee_hip_threshold and    # Distance suffisante genou-hanche
-                ankle_knee_diff > ankle_knee_threshold and  # Distance suffisante cheville-genou
-                not is_sitting_posture and  # Pas déjà identifié comme assis
-                # Critère supplémentaire: ratio cohérent avec position debout
-                (not ratios or ratio_value < sitting_ratio_threshold)
-            )
+            # Zone low: critères adaptés aux grandes silhouettes du premier plan
+            if zone == 'low':
+                # Au premier plan, les distances sont plus importantes, on ajuste les critères
+                is_sitting_posture = (
+                    knees_present and
+                    (
+                        # Critère 1: Genoux proches des hanches (plus tolérant pour grandes silhouettes)
+                        abs(knee_hip_diff) < knee_hip_proximity_threshold or
+                        # Critère 2: Chevilles cachées ou très proches des genoux
+                        (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
+                        # Critère 3: Ratio élevé (priorité aux conducteurs)
+                        (ratios and ratio_value > sitting_ratio_threshold * 1.15)
+                    )
+                    # Pas d'exclusion trop stricte au premier plan (grandes distances normales)
+                )
+                
+                # Position debout au premier plan: critères adaptés aux grandes distances
+                is_standing_posture = (
+                    ankles_present and
+                    avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre vertical respecté
+                    knee_hip_diff > knee_hip_threshold * 0.8 and  # Seuil légèrement réduit
+                    ankle_knee_diff > ankle_knee_threshold * 0.7 and  # Plus tolérant sur cheville-genou
+                    not is_sitting_posture and
+                    # Ratio cohérent avec position debout
+                    (not ratios or ratio_value < sitting_ratio_threshold * 1.1)
+                )
+            else:
+                # Zone middle: logique standard
+                is_sitting_posture = (
+                    knees_present and
+                    (
+                        # Critère 1: Genoux très proches des hanches (position pliée)
+                        abs(knee_hip_diff) < knee_hip_proximity_threshold or
+                        # Critère 2: Chevilles trop hautes par rapport aux genoux (jambes pliées)
+                        (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
+                        # Critère 3: Ratio tête-hanche/hanche-pieds élevé (tronc long, jambes courtes)
+                        (ratios and ratio_value > sitting_ratio_threshold * 1.2)
+                    ) and
+                    # Exclure les cas où les chevilles sont clairement visibles et bien en dessous
+                    not (ankles_present and ankle_knee_diff > 50 and knee_hip_diff > knee_hip_threshold * 0.8)
+                )
+                
+                # Détecter position debout avec critères plus robustes
+                is_standing_posture = (
+                    ankles_present and
+                    avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
+                    knee_hip_diff > knee_hip_threshold and    # Distance suffisante genou-hanche
+                    ankle_knee_diff > ankle_knee_threshold and  # Distance suffisante cheville-genou
+                    not is_sitting_posture and  # Pas déjà identifié comme assis
+                    # Critère supplémentaire: ratio cohérent avec position debout
+                    (not ratios or ratio_value < sitting_ratio_threshold)
+                )
         
         if is_sitting_posture:
             stature = 'assis'
@@ -325,7 +353,27 @@ class PoseAnalyzer:
         elif not ankles_present:
             stature = 'jambes_masquees'
         else:
-            stature = 'inconnu'
+            # Logique de fallback pour éviter les "inconnu" quand on a des keypoints valides
+            # Si on a des hanches et genoux mais pas de classification claire
+            if hips_present and knees_present:
+                # Heuristique basée sur l'ordre vertical des points
+                if ankles_present and avg_hip_y < avg_knee_y < avg_ankle_y:
+                    # Ordre vertical respecté = probablement debout
+                    if ankle_spread > ankle_spread_threshold * 0.7:  # Seuil réduit
+                        stature = 'marchant'
+                    else:
+                        stature = 'debout'
+                elif ankles_present and ankle_knee_diff < ankle_knee_threshold * 1.5:
+                    # Chevilles proches des genoux = probablement assis
+                    stature = 'assis'
+                else:
+                    # Cas par défaut: utiliser le ratio si disponible
+                    if ratios and ratio_value > sitting_ratio_threshold:
+                        stature = 'assis'
+                    else:
+                        stature = 'debout'  # Choix par défaut plutôt qu'inconnu
+            else:
+                stature = 'inconnu'
 
         if debug:
             debug_info = {
