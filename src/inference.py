@@ -101,7 +101,7 @@ class InferenceServerThread(threading.Thread):
                 padding=getattr(self.motion_detector, 'padding', 40),
                 white_pixels_threshold=self.white_pixels_threshold,
                 min_contour_area=getattr(self.motion_detector, 'min_area', 30),
-                varThreshold=getattr(self.motion_detector, 'varThreshold', 16),
+                varThreshold=getattr(self.motion_detector, 'varThreshold', 11),
                 history=getattr(self.motion_detector, 'history', 500),
                 detectShadows=getattr(self.motion_detector, 'detectShadows', True)
             )
