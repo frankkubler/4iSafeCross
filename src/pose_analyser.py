@@ -242,28 +242,47 @@ class PoseAnalyzer:
         # Logique corrigée avec seuils adaptatifs
         knee_hip_diff = avg_knee_y - avg_hip_y  # Positif si genou plus bas que hanche (debout)
         
-        # Seuil adaptatif pour la proximité genou-hanche (pour détecter "assis")
-        # Dans la zone basse, les personnes assises peuvent avoir des genoux plus éloignés des hanches
+        # Seuils adaptatifs pour différencier assis/debout selon la zone
         knee_hip_proximity_threshold = 30
-        if zone == 'low':
-            knee_hip_proximity_threshold = 50  # Plus tolérant en bas
-        elif zone == 'high':
-            knee_hip_proximity_threshold = 20  # Plus strict en haut
+        ankle_knee_threshold = 15  # Seuil pour détecter chevilles cachées (typique position assise)
         
-        # Détecter d'abord les positions assises (priorité pour éviter les faux "debout")
+        if zone == 'low':
+            knee_hip_proximity_threshold = 60  # Plus tolérant en bas (conducteurs)
+            ankle_knee_threshold = 25  # Chevilles plus cachées acceptées
+        elif zone == 'middle':
+            knee_hip_proximity_threshold = 45  # Tolérance moyenne
+            ankle_knee_threshold = 20
+        else:  # zone == 'high'
+            knee_hip_proximity_threshold = 20  # Plus strict en haut
+            ankle_knee_threshold = 10
+        
+        # Calculer la distance verticale cheville-genou pour détecter position assise
+        ankle_knee_diff = avg_ankle_y - avg_knee_y if ankles_present else float('inf')
+        
+        # Détecter position assise avec critères renforcés
         is_sitting_posture = (
             knees_present and
-            abs(knee_hip_diff) < knee_hip_proximity_threshold and
-            (not ankles_present or avg_ankle_y >= avg_knee_y) and  # Chevilles au niveau ou en dessous des genoux
-            (not ratios or ratio_value > sitting_ratio_threshold)
+            (
+                # Critère 1: Genoux très proches des hanches (position pliée)
+                abs(knee_hip_diff) < knee_hip_proximity_threshold or
+                # Critère 2: Chevilles trop hautes par rapport aux genoux (jambes pliées)
+                (ankles_present and ankle_knee_diff < ankle_knee_threshold) or
+                # Critère 3: Ratio tête-hanche/hanche-pieds élevé (tronc long, jambes courtes)
+                (ratios and ratio_value > sitting_ratio_threshold * 1.2)
+            ) and
+            # Exclure les cas où les chevilles sont clairement visibles et bien en dessous
+            not (ankles_present and ankle_knee_diff > 50 and knee_hip_diff > knee_hip_threshold * 0.8)
         )
         
-        # Détecter les positions debout avec des critères plus stricts
+        # Détecter position debout avec critères plus robustes
         is_standing_posture = (
             ankles_present and
             avg_hip_y < avg_knee_y < avg_ankle_y and  # Ordre strict: hanche < genou < cheville
-            knee_hip_diff > knee_hip_threshold and    # Distance suffisante entre genou et hanche
-            not is_sitting_posture  # Pas déjà identifié comme assis
+            knee_hip_diff > knee_hip_threshold and    # Distance suffisante genou-hanche
+            ankle_knee_diff > ankle_knee_threshold and  # Distance suffisante cheville-genou
+            not is_sitting_posture and  # Pas déjà identifié comme assis
+            # Critère supplémentaire: ratio cohérent avec position debout
+            (not ratios or ratio_value < sitting_ratio_threshold)
         )
         
         if is_sitting_posture:
@@ -286,7 +305,8 @@ class PoseAnalyzer:
                     'knee_hip_threshold': knee_hip_threshold,
                     'ankle_spread_threshold': ankle_spread_threshold,
                     'sitting_ratio_threshold': sitting_ratio_threshold,
-                    'knee_hip_proximity_threshold': knee_hip_proximity_threshold
+                    'knee_hip_proximity_threshold': knee_hip_proximity_threshold,
+                    'ankle_knee_threshold': ankle_knee_threshold
                 },
                 'original_thresholds': {
                     'knee_hip_threshold': self.knee_hip_threshold,
@@ -297,6 +317,7 @@ class PoseAnalyzer:
                 'avg_knee_y': avg_knee_y,
                 'avg_ankle_y': avg_ankle_y,
                 'knee_hip_diff': knee_hip_diff,
+                'ankle_knee_diff': ankle_knee_diff,
                 'ankle_spread': ankle_spread,
                 'hips_present': hips_present,
                 'knees_present': knees_present,
