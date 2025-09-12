@@ -636,7 +636,7 @@ def set_motion_param(cid):
                 'detectShadows': value if param == 'detectShadows' else getattr(detector, 'detectShadows', None)
             }
             detector.update_fgbg_params(**kwargs)
-            logger.info(f"[ROUTE] Appel update_fgbg_params sur MotionDetector id={id(detector)} pour cid={cid} avec param={param}, value={value}")
+            logger.debug(f"[ROUTE] Appel update_fgbg_params sur MotionDetector id={id(detector)} pour cid={cid} avec param={param}, value={value}")
             
 
         return jsonify({'status': 'ok'})

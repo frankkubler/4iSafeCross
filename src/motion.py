@@ -18,12 +18,12 @@ class MotionDetector:
             detectShadows=self.detectShadows
         )
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
-        self.logger.info(f"MotionDetector instancié: history={self.history}, varThreshold={self.varThreshold}, detectShadows={self.detectShadows}, padding={self.padding}, min_contour_area={self.min_contour_area}")
+        self.logger.debug(f"MotionDetector instancié: history={self.history}, varThreshold={self.varThreshold}, detectShadows={self.detectShadows}, padding={self.padding}, min_contour_area={self.min_contour_area}")
         self.background = None  # pour méthode frame differencing
         self.frame_diff_threshold = 50
 
     def update_fgbg_params(self, varThreshold=None, history=None, detectShadows=None):
-        self.logger.info(f"Appel update_fgbg_params avec: varThreshold={varThreshold}, history={history}, detectShadows={detectShadows}")
+        self.logger.debug(f"Appel update_fgbg_params avec: varThreshold={varThreshold}, history={history}, detectShadows={detectShadows}")
         updated = False
         if varThreshold is not None and varThreshold != self.varThreshold:
             self.varThreshold = varThreshold
