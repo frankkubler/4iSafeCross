@@ -34,6 +34,7 @@ class MotionDetector:
         if detectShadows is not None and detectShadows != self.detectShadows:
             self.detectShadows = detectShadows
             updated = True
+        self.logger.info(f"Update {updated} : Paramètres après mise à jour: history={history} / {self.history}, varThreshold= {varThreshold} /  {self.varThreshold}, detectShadows={detectShadows} / {self.detectShadows}")
         if updated:
             self.logger.info(f"Updating MOG2 params: history={self.history}, varThreshold={self.varThreshold}, detectShadows={self.detectShadows}")
             self.fgbg = cv2.createBackgroundSubtractorMOG2(
