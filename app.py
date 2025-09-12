@@ -307,8 +307,8 @@ def detection_callback_factory(cid, main_loop=None):
                     loop
                 )
 
-            # Filtrer pour l'alerte uniquement class_id == 1 ET personne_type == "pieton"
-            detections_person = [det for det in detections if det.get("class_id") == 1 and det.get("personne_type") == "pieton"]
+            # Filtrer pour l'alerte uniquement label == "person" ET personne_type == "pieton"
+            detections_person = [det for det in detections if det.get("label") == "person" and det.get("personne_type") == "pieton"]
             
             # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
             detections_person_with_zone = []
@@ -524,7 +524,8 @@ def gen_frames(cid):
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
                 # tracker_id = det.get("tracker_id", -1)
-                label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {stature}"
+                label = det.get("label", "unknown")
+                # label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {stature}"
                 cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
                 # Afficher la zone sur la détection
                 if zone_names:
