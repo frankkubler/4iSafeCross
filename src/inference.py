@@ -36,7 +36,7 @@ class InferenceServerThread(threading.Thread):
         if DETECTION == 'extended':
             self.class_id = [1, 3, 6, 7, 8]
         elif DETECTION == 'finetuned':
-            self.class_id = [1 , 2]
+            self.class_id = [0 , 1]
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
