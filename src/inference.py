@@ -26,7 +26,6 @@ class InferenceServerThread(threading.Thread):
         self.fonction = FONCTION
         self.url = rf"{URL}/{self.fonction}"
         self.is_detection = False
-        self.motion_detector = MotionDetector()
         self.white_pixels_threshold = white_pixels_threshold
         self._motion = False  # Attribut privé
         # self.old_motion_bool = False
@@ -47,7 +46,7 @@ class InferenceServerThread(threading.Thread):
             enable_zone_adaptation=True,
             image_height=1080
         )
-        
+        self.motion_detector = MotionDetector()
         # Initialisation des paramètres
         self.motion_detector.update_fgbg_params(
             varThreshold=getattr(self.motion_detector, 'varThreshold', 16),
