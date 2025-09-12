@@ -634,8 +634,9 @@ def set_motion_param(cid):
                 varThreshold=getattr(detector, 'varThreshold', None),
                 history=getattr(detector, 'history', None),
                 detectShadows=getattr(detector, 'detectShadows', None)
-        logger.info(f"[ROUTE] Appel update_fgbg_params sur MotionDetector id={id(detector)} pour cid={cid} avec param={param}, value={value}")
             )
+            logger.info(f"[ROUTE] Appel update_fgbg_params sur MotionDetector id={id(detector)} pour cid={cid} avec param={param}, value={value}")
+            
 
         return jsonify({'status': 'ok'})
 
