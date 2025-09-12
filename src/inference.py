@@ -36,7 +36,7 @@ class InferenceServerThread(threading.Thread):
         if DETECTION == 'extended':
             self.class_id = [1, 3, 6, 7, 8]
         elif DETECTION == 'finetuned':
-            self.class_id = [0 , 1]
+            self.class_id = [1 , 2]
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
@@ -169,7 +169,7 @@ class InferenceServerThread(threading.Thread):
                                 "label": d.get("label", ""),
                                 "tracker_id": int(d.get("tracker_id") or -1),  # Utilise 'or -1' au lieu de la valeur par défaut
                                 "pose": d.get("pose", []),
-                                "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if int(d["class_id"]) == 1 else ""))
+                                "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if int(d["label"]) == "person" else ""))
                             }
                             for d in detections if d["class_id"] in self.class_id
                         ]
@@ -208,8 +208,8 @@ class InferenceServerThread(threading.Thread):
                         for detection in current_detections:
                             # if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
                             #     detection["personne_type"] = 'pieton'
-                            # Analyser la stature si pose est présente et class_id == 1
-                            if detection["class_id"] == 1 and detection["pose"]:
+                            # Analyser la stature si pose est présente et label == "person"
+                            if detection["label"] == "person" and detection["pose"]:
                                 detection["stature"] = self.pose_analyzer.analyze_stature(detection["pose"], debug=True)
                             else:
                                 detection["stature"] = "inconnu"
