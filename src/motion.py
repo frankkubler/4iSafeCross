@@ -18,6 +18,7 @@ class MotionDetector:
             detectShadows=self.detectShadows
         )
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
+        self.logger.info(f"MotionDetector instancié: history={self.history}, varThreshold={self.varThreshold}, detectShadows={self.detectShadows}, padding={self.padding}, min_contour_area={self.min_contour_area}")
         self.background = None  # pour méthode frame differencing
         self.frame_diff_threshold = 50
 
