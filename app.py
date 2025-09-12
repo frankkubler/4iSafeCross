@@ -524,8 +524,8 @@ def gen_frames(cid):
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
                 # tracker_id = det.get("tracker_id", -1)
-                label = det.get("label", "unknown")
-                # label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')} {stature}"
+                # label = det.get("label", "unknown")
+                label = f"{confidence:.2f} {det.get("label", "unknown")} {stature}"
                 cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
                 # Afficher la zone sur la détection
                 if zone_names:
