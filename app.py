@@ -591,6 +591,12 @@ def set_motion_param(cid):
     param = data.get('param')
     value = data.get('value')
 
+    # Correction : rediriger 'min_area' vers 'min_contour_area' pour le MotionDetector
+    if param == 'min_area':
+        param_detector = 'min_contour_area'
+    else:
+        param_detector = param
+
     if cid not in inference_threads:
         return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
 
@@ -606,6 +612,7 @@ def set_motion_param(cid):
     if detector is None:
         return jsonify({'status': 'error', 'message': 'MotionDetector non trouvé'}), 400
 
+
     try:
         # Conversion typée
         if param in ('padding', 'min_area', 'varThreshold', 'history'):
@@ -615,8 +622,8 @@ def set_motion_param(cid):
 
         # Mise à jour simple pour champ non MOG2
         if param not in ('varThreshold', 'history', 'detectShadows'):
-            if hasattr(detector, param):
-                setattr(detector, param, value)
+            if hasattr(detector, param_detector):
+                setattr(detector, param_detector, value)
             else:
                 return jsonify({'status': 'error', 'message': f'Paramètre {param} inconnu'}), 400
 
