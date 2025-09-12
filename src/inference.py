@@ -6,7 +6,7 @@ import requests
 import io
 import cv2
 from src.context_vehicle import infer_in_vehicle_context
-from utils.constants import (MOTIONTRESHOLD, INF_THRESHOLD,
+from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
                              DETECTION, URL, FONCTION)
 from src.motion import MotionDetector
 from src.pose_analyser import PoseAnalyzer
@@ -15,7 +15,7 @@ from src.pose_analyser import PoseAnalyzer
 
 class InferenceServerThread(threading.Thread):
     def __init__(self, home_dir, get_frame_func,
-                 white_pixels_threshold=MOTIONTRESHOLD,
+                 white_pixels_threshold=MOTIONTHRESHOLD,
                  detection_callback=None, stop_event=None):
         super().__init__()
         self.home_dir = home_dir
@@ -48,6 +48,13 @@ class InferenceServerThread(threading.Thread):
             image_height=1080
         )
         
+        # Initialisation des paramètres
+        self.motion_detector.update_fgbg_params(
+            varThreshold=getattr(self.motion_detector, 'varThreshold', 16),
+            history=getattr(self.motion_detector, 'history', 500),
+            detectShadows=getattr(self.motion_detector, 'detectShadow', True)
+        )
+        
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
         self.last_inference_time = 0
         self.min_inference_interval = 0.2  # 200ms minimum entre inférences (5 FPS max)
@@ -73,7 +80,7 @@ class InferenceServerThread(threading.Thread):
             return False
         
         # 🚀 Hash de frame pour éviter les inférences redondantes
-        frame_hash = hash(frame.tobytes())
+        frame_hash = self.fast_frame_hash(frame.tobytes())
         if frame_hash == self.last_sent_frame_hash:
             self.inference_skip_count += 1
             return False
@@ -81,6 +88,18 @@ class InferenceServerThread(threading.Thread):
         self.last_sent_frame_hash = frame_hash
         self.last_inference_time = current_time
         return True
+
+    def fast_frame_hash(self, frame, downscale_size=(16, 16)):
+        """
+        Calcule un hash rapide pour une image en :
+        - convertissant en niveaux de gris
+        - redimensionnant à petite taille fixe
+        - calculant le hash sur bytes réduits
+        """
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        small = cv2.resize(gray, downscale_size, interpolation=cv2.INTER_AREA)
+        return hash(small.tobytes())
+
 
     def _call_detection_callback(self, result):
         """Appelle le callback de détection s'il est défini."""
@@ -96,20 +115,18 @@ class InferenceServerThread(threading.Thread):
             if frame is None:
                 time.sleep(0.1)
                 continue
-                
-            # Détection de mouvement (toujours nécessaire)
-            roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_roi_info(
+            # 🚀 Étape de détection de mouvement (10ms)
+            # Ensuite, lancez la détection (sans paramètres redondants ici)
+            roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_info(
                 frame,
                 padding=getattr(self.motion_detector, 'padding', 40),
                 white_pixels_threshold=self.white_pixels_threshold,
                 min_contour_area=getattr(self.motion_detector, 'min_area', 30),
-                varThreshold=getattr(self.motion_detector, 'varThreshold', 11),
-                history=getattr(self.motion_detector, 'history', 500),
-                detectShadows=getattr(self.motion_detector, 'detectShadows', True)
             )
+
             x_pad, y_pad, w_pad, h_pad, x, y, w, h = coords
             self._motion = motion_bool
-            
+
             # 🚀 Log des statistiques d'optimisation toutes les 100 frames
             if self.total_frames_processed % 100 == 0:
                 skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100

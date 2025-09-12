@@ -61,7 +61,7 @@ LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 TOKEN = config.get('TELEGRAM', 'TOKEN')
 CHAT_ID = config.get('TELEGRAM', 'CHAT_ID')
 
-MOTIONTRESHOLD = config.getint('APP', 'MOTIONTRESHOLD')
+MOTIONTHRESHOLD = config.getint('APP', 'MOTIONTHRESHOLD')
 APP_NAME = config.get('APP', 'APP_NAME')
 APP_VERSION = config.get('APP', 'APP_VERSION')
 INF_THRESHOLD = config.getfloat('APP', 'INF_THRESHOLD')

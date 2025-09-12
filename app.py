@@ -585,50 +585,54 @@ def index():
     return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled, stature_colors=STATURE_COLORS)
 
 # --- Ajout route pour modifier dynamiquement les paramètres motion ---
-
-
 @app.route('/set_motion_param/<int:cid>', methods=['POST'])
 def set_motion_param(cid):
-    data = request.get_json()
+    data = request.json
     param = data.get('param')
     value = data.get('value')
-    if cid in inference_threads:
-        # Gestion spéciale pour le seuil white_pixels_threshold (attribut du thread, pas du motion_detector)
-        if param == 'white_pixels_threshold':
-            try:
-                value = int(value)
-                inference_threads[cid].white_pixels_threshold = value
-                return jsonify({'status': 'ok'})
-            except Exception as e:
-                return jsonify({'status': 'error', 'message': str(e)}), 400
-        detector = getattr(inference_threads[cid], 'motion_detector', None)
-        if detector is None:
-            return jsonify({'status': 'error', 'message': 'MotionDetector non trouvé'}), 400
+
+    if cid not in inference_threads:
+        return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
+
+    # Traitez le paramètre spécial pour le thread
+    if param == 'white_pixels_threshold':
         try:
-            # Conversion des types selon le paramètre
-            if param in ('padding', 'min_area', 'varThreshold', 'history'):
-                value = int(value)
-            if param == 'detectShadows':
-                value = value in (True, 'true', 'True', 1, '1', 'on')
-                setattr(detector, 'detectShadows', value)
-            elif param in ('varThreshold', 'history'):
-                # Toujours stocker ces valeurs dans l'objet pour la réinstanciation
-                setattr(detector, param, value)
-            elif hasattr(detector, param):
-                setattr(detector, param, value)
-            else:
-                return jsonify({'status': 'error', 'message': f'Paramètre {param} inconnu'}), 400
-            # Si on modifie varThreshold, history ou detectShadows, il faut ré-instancier le MOG2
-            if param in ('varThreshold', 'history', 'detectShadows'):
-                detector.fgbg = cv2.createBackgroundSubtractorMOG2(
-                    history=getattr(detector, 'history', 500),
-                    varThreshold=getattr(detector, 'varThreshold', 16),
-                    detectShadows=getattr(detector, 'detectShadows', True)
-                )
+            inference_threads[cid].white_pixels_threshold = int(value)
             return jsonify({'status': 'ok'})
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
-    return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
+
+    detector = getattr(inference_threads[cid], 'motion_detector', None)
+    if detector is None:
+        return jsonify({'status': 'error', 'message': 'MotionDetector non trouvé'}), 400
+
+    try:
+        # Conversion typée
+        if param in ('padding', 'min_area', 'varThreshold', 'history'):
+            value = int(value)
+        if param == 'detectShadows':
+            value = value in (True, 'true', 'True', 1, '1', 'on')
+
+        # Mise à jour simple pour champ non MOG2
+        if param not in ('varThreshold', 'history', 'detectShadows'):
+            if hasattr(detector, param):
+                setattr(detector, param, value)
+            else:
+                return jsonify({'status': 'error', 'message': f'Paramètre {param} inconnu'}), 400
+
+        # Mise à jour via la méthode dédiée pour MOG2
+        if param in ('varThreshold', 'history', 'detectShadows'):
+            setattr(detector, param, value)
+            detector.update_fgbg_params(
+                varThreshold=getattr(detector, 'varThreshold', None),
+                history=getattr(detector, 'history', None),
+                detectShadows=getattr(detector, 'detectShadows', None)
+            )
+
+        return jsonify({'status': 'ok'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/video_feed/<int:cid>')
@@ -725,21 +729,6 @@ def quit_server():
         import os
         os._exit(0)
     return 'Serveur arrêté.'
-
-
-@app.route('/set_white_pixels_threshold/<int:cid>', methods=['POST'])
-def set_white_pixels_threshold(cid):
-    data = request.get_json()
-    threshold = data.get('threshold')
-    if threshold is not None and cid in inference_threads:
-        try:
-            threshold = int(threshold)
-            # logger.info(f"Setting white pixels threshold for camera {cid} to {threshold}")
-            inference_threads[cid].white_pixels_threshold = threshold
-            return jsonify({'status': 'ok', 'threshold': threshold})
-        except Exception as e:
-            return jsonify({'status': 'error', 'message': str(e)}), 400
-    return jsonify({'status': 'error', 'message': 'Caméra ou seuil invalide'}), 400
 
 
 @app.route('/debug_info')
