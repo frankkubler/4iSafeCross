@@ -170,7 +170,7 @@ class InferenceServerThread(threading.Thread):
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])
                     inference_time = (time.time() - inference_start_time) * 1000  # en ms
-                    self.logger.debug(f"⚡ Inférence IA: {inference_time:.1f}ms")
+                    self.logger.info(f"⚡ Inférence IA: {inference_time:.1f}ms")
                     
                     if detections:
                         # Remettre les coordonnées dans le repère image d'origine
