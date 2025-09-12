@@ -629,12 +629,13 @@ def set_motion_param(cid):
 
         # Mise à jour via la méthode dédiée pour MOG2
         if param in ('varThreshold', 'history', 'detectShadows'):
-            setattr(detector, param, value)
-            detector.update_fgbg_params(
-                varThreshold=getattr(detector, 'varThreshold', None),
-                history=getattr(detector, 'history', None),
-                detectShadows=getattr(detector, 'detectShadows', None)
-            )
+            # Ne pas faire le setattr ici, laisser update_fgbg_params gérer l'affectation et la comparaison
+            kwargs = {
+                'varThreshold': value if param == 'varThreshold' else getattr(detector, 'varThreshold', None),
+                'history': value if param == 'history' else getattr(detector, 'history', None),
+                'detectShadows': value if param == 'detectShadows' else getattr(detector, 'detectShadows', None)
+            }
+            detector.update_fgbg_params(**kwargs)
             logger.info(f"[ROUTE] Appel update_fgbg_params sur MotionDetector id={id(detector)} pour cid={cid} avec param={param}, value={value}")
             
 
