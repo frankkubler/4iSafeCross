@@ -13,7 +13,7 @@ import sys
 import os
 from datetime import datetime
 import time
-from utils.constants import (MOTIONTRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
+from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
@@ -395,7 +395,7 @@ for i in range(len(CAM_IDS)):
     inference_stop_events[i] = stop_event
     thread = InferenceServerThread(
         home_dir=".",
-        white_pixels_threshold=MOTIONTRESHOLD,
+        white_pixels_threshold=MOTIONTHRESHOLD,
         get_frame_func=get_frame_func_factory(i),
         detection_callback=detection_callback_factory(i, MAIN_LOOP),
         stop_event=stop_event
@@ -573,9 +573,9 @@ def index():
     # Préparer une liste de dicts avec l'id et le seuil de chaque caméra
     cam_infos = []
     for idx, cam_id in enumerate(CAM_IDS):
-        threshold = MOTIONTRESHOLD  # valeur par défaut
+        threshold = MOTIONTHRESHOLD  # valeur par défaut
         if idx in inference_threads:
-            threshold = getattr(inference_threads[idx], 'white_pixels_threshold', MOTIONTRESHOLD)
+            threshold = getattr(inference_threads[idx], 'white_pixels_threshold', MOTIONTHRESHOLD)
         cam_infos.append({
             'id': cam_id,
             'idx': idx,
