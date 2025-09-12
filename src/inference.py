@@ -35,6 +35,8 @@ class InferenceServerThread(threading.Thread):
         self.confidence_threshold = INF_THRESHOLD
         if DETECTION == 'extended':
             self.class_id = [1, 3, 6, 7, 8]
+        elif DETECTION == 'finetuned':
+            self.class_id = [1 , 2]
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
