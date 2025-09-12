@@ -80,7 +80,7 @@ class InferenceServerThread(threading.Thread):
             return False
         
         # 🚀 Hash de frame pour éviter les inférences redondantes
-        frame_hash = self.fast_frame_hash(frame.tobytes())
+        frame_hash = self.fast_frame_hash(frame)
         if frame_hash == self.last_sent_frame_hash:
             self.inference_skip_count += 1
             return False
