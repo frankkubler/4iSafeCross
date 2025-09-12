@@ -23,7 +23,7 @@ class MotionDetector:
         self.frame_diff_threshold = 50
 
     def update_fgbg_params(self, varThreshold=None, history=None, detectShadows=None):
-        self.logger.debug(f"Appel update_fgbg_params avec: varThreshold={varThreshold}, history={history}, detectShadows={detectShadows}")
+        self.logger.info(f"Appel update_fgbg_params avec: varThreshold={varThreshold}, history={history}, detectShadows={detectShadows}")
         updated = False
         if varThreshold is not None and varThreshold != self.varThreshold:
             self.varThreshold = varThreshold
