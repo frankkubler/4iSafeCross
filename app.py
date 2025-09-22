@@ -318,8 +318,8 @@ def detection_callback_factory(cid, main_loop=None):
                 det_with_zone["zones"] = zone_names  # Ajoute les zones
                 
                 # Vérifier si cette détection doit déclencher une alerte selon les règles de stature/zone
-                if alert_manager.should_trigger_alert_for_detection(det_with_zone):
-                    detections_person_with_zone.append(det_with_zone)
+                # if alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                detections_person_with_zone.append(det_with_zone)
             
             # Déclencher l'alerte seulement si il y a des détections valides après filtrage
             if len(detections_person_with_zone) > 0:
