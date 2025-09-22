@@ -138,7 +138,7 @@ class InferenceServerThread(threading.Thread):
             if (not motion_bool) or (w_pad <= 0 or h_pad <= 0):
                 # Appeler le callback avec une détection vide pour effacer l'affichage côté client
                 self._call_detection_callback([])
-                self.logger.debug("Aucune détection de mouvement ou zone de mouvement invalide (w_pad <= 0 ou h_pad <= 0).")
+                # self.logger.debug("Aucune détection de mouvement ou zone de mouvement invalide (w_pad <= 0 ou h_pad <= 0).")
                 # 🚀 Pas de mouvement = sleep plus long (économie CPU)
                 time.sleep(0.05)  # 50ms au lieu de 10ms quand pas de mouvement
                 continue
