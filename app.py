@@ -512,8 +512,8 @@ def gen_frames(cid):
                 y2 = max(0, min(h-1, int(det["y_max"])))
                 # Dessiner le rectangle de détection
                 # Déterminer la couleur basée sur le type detectée
-                object_type = det.get("label", "unknown")
-                color_rgb = OBJECT_COLORS.get(object_type, (0, 0, 255))  # Bleu par défaut
+                label = det.get("label", "Unknown")
+                color_rgb = OBJECT_COLORS.get(label, (0, 0, 255))  # Bleu par défaut
                 color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
@@ -522,7 +522,7 @@ def gen_frames(cid):
                 class_id = det.get("class_id", -1)
                 # tracker_id = det.get("tracker_id", -1)
                 # label = det.get("label", "unknown")
-                label = f'{confidence:.2f} {det.get("label", "unknown")} {object_type}'
+                label = f'{confidence:.2f} {label} '
                 cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
                 # Afficher la zone sur la détection
                 if zone_names:
