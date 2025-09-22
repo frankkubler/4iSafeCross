@@ -512,7 +512,12 @@ def gen_frames(cid):
                 y2 = max(0, min(h-1, int(det["y_max"])))
                 # Dessiner le rectangle de détection
                 # Déterminer la couleur basée sur le type detectée
-                label = det.get("label", "Unknown")
+                label = det.get("label")
+                if isinstance(label, tuple) and len(label) > 0:
+                    label = label[0]  # Extraire la stature du tuple (stature, debug_info)
+                if not isinstance(label, str):
+                    label = "Unknown"
+
                 color_rgb = OBJECT_COLORS.get(label, (0, 0, 255))  # Bleu par défaut
                 color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])  # Conversion RGB vers BGR pour OpenCV
 
