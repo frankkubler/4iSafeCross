@@ -434,17 +434,17 @@ def gen_frames(cid):
         if cached_frame is not None:
             cache_age_ms = (current_time - cache_time) * 1000
             # Log seulement si on est proche de l'expiration ou si c'est un problème
-            if cache_age_ms > FRAME_CACHE_DURATION * 800:  # 80% de la durée
-                logger.debug(f"🔍 Cache check caméra {cid}: âge={cache_age_ms:.1f}ms, limite={FRAME_CACHE_DURATION*1000:.0f}ms")
+            # if cache_age_ms > FRAME_CACHE_DURATION * 800:  # 80% de la durée
+            #     logger.debug(f"🔍 Cache check caméra {cid}: âge={cache_age_ms:.1f}ms, limite={FRAME_CACHE_DURATION*1000:.0f}ms")
         
         # Utiliser le cache si la frame est récente
         if cached_frame is not None and current_time - cache_time < FRAME_CACHE_DURATION:
             cache_age_ms = (current_time - cache_time) * 1000
             cache_performance_stats['hits'] += 1
             # Log moins verbeux des hits
-            if cache_performance_stats['hits'] % 10 == 0:  # Log tous les 10 hits
-                hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-                logger.debug(f"📋 Cache HIT pour caméra {cid} - Taux: {hit_rate:.1f}% (dernier âge: {cache_age_ms:.1f}ms)")
+            # if cache_performance_stats['hits'] % 10 == 0:  # Log tous les 10 hits
+                # hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
+                # logger.debug(f"📋 Cache HIT pour caméra {cid} - Taux: {hit_rate:.1f}% (dernier âge: {cache_age_ms:.1f}ms)")
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + cached_frame + b'\r\n')
             last_frame_time = current_time
@@ -454,8 +454,8 @@ def gen_frames(cid):
         if frame is not None:
             cache_performance_stats['misses'] += 1
             # Log moins verbeux des misses
-            if cache_performance_stats['misses'] % 5 == 0:  # Log tous les 5 misses
-                logger.debug(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
+            # if cache_performance_stats['misses'] % 5 == 0:  # Log tous les 5 misses
+                # logger.debug(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
             generation_start_time = time.time()
             
             # Vérifier que la frame est valide avant de la copier
@@ -553,9 +553,9 @@ def gen_frames(cid):
                 avg_generation_time = cache_performance_stats['total_generation_time'] / cache_performance_stats['misses']
                 hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
                 # Log moins verbeux des générations
-                if cache_performance_stats['misses'] % 10 == 0:  # Log tous les 10 misses
-                    logger.debug(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
-                    logger.debug(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
+                # if cache_performance_stats['misses'] % 10 == 0:  # Log tous les 10 misses
+                    # logger.debug(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
+                    # logger.debug(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
 
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
