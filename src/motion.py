@@ -4,7 +4,7 @@ import logging
 from utils.constants import MOTIONTHRESHOLD
 
 class MotionDetector:
-    def __init__(self, history=500, varThreshold=16, detectShadows=True,
+    def __init__(self, history=500, varThreshold=11, detectShadows=True,
                  padding=40, min_contour_area=30):
         self.history = history
         self.varThreshold = varThreshold
