@@ -165,3 +165,12 @@ COCO_CLASSES_YOLO = {
     79: "toothbrush",
 }
 # Note: Les indices des classes dans COCO_CLASSES_YOLO commencent à 0, contrairement à COCO_CLASSES qui commence à 1.
+
+SELF_TRAINED_CLASSES = {
+    0: "Bus",
+    1: "Driver",
+    2: "Forklift",
+    3: "Person",
+    4: "Truck",
+    5: "Car"
+}

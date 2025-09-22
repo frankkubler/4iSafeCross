@@ -7,7 +7,9 @@ import io
 import cv2
 from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
-                             DETECTION, URL, FONCTION)
+                             DETECTION, URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
+                             EXTENDED_CLASSES, TRANSFERT_CLASSES, SIMPLE_CLASSES)
+
 from src.motion import MotionDetector
 from src.pose_analyser import PoseAnalyzer
 
@@ -23,8 +25,8 @@ class InferenceServerThread(threading.Thread):
         self.detection_callback = detection_callback  # Callback pour envoyer les résultats
         self.stop_event = stop_event or threading.Event()
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
-        self.fonction = FONCTION
-        self.url = rf"{URL}/{self.fonction}"
+        self.fonction = FONCTION_RFDETR
+        self.url = rf"{URL_RFDETR}/{self.fonction}"
         self.is_detection = False
         self.white_pixels_threshold = white_pixels_threshold
         self._motion = False  # Attribut privé
@@ -33,9 +35,11 @@ class InferenceServerThread(threading.Thread):
         self.detections = []
         self.confidence_threshold = INF_THRESHOLD
         if DETECTION == 'extended':
-            self.class_id = [1, 3, 6, 7, 8]
+            self.class_id = EXTENDED_CLASSES
         elif DETECTION == 'finetuned':
-            self.class_id = [1 , 2]
+            self.class_id = SIMPLE_CLASSES
+        elif DETECTION == 'transfert':
+            self.class_id = TRANSFERT_CLASSES
         else:
             self.class_id = [1]
         # self.class_id = 1 if "rf_detr" in self.fonction else 0
@@ -290,18 +294,19 @@ class InferenceServerThread(threading.Thread):
 
     def switch_inference_mode(self):
         """Bascule entre YOLO (predict_frame) et RFDETR (predict_frame_rf_detr)."""
-        if self.fonction == "predict_frame/" or self.fonction == "/predict_frame/":
-            self.fonction = "/predict_frame_rf_detr/"
-            self.class_id = 1
+        if self.fonction == FONCTION_RFDETR:
+            self.fonction = FONCTION_YOLO
+            self.url = rf"{URL_YOLO}/{self.fonction}"
+            # self.class_id = 1
         else:
-            self.fonction = "/predict_frame/"
-            self.class_id = 0
-        self.url = rf"{URL}/{self.fonction}"
+            self.fonction = FONCTION_RFDETR
+            # self.class_id = 0
+            self.url = rf"{URL_RFDETR}/{self.fonction}"
         self.logger.info(f"Mode d'inférence changé : {self.fonction}")
 
     @property
     def inference_mode(self):
-        return "RFDETR" if self.fonction == "/predict_frame_rf_detr/" else "YOLO"
+        return "RFDETR" if self.fonction == FONCTION_RFDETR else "YOLO"
 
     def get_optimization_stats(self):
         """Retourne les statistiques d'optimisation de l'inférence."""

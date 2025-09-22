@@ -73,13 +73,20 @@ RTSP_STREAM = config.get('RTSP', 'STREAM')
 
 DB_PATH = config.get('APP', 'DB_PATH')
 DETECTION = config.get('APP', 'DETECTION', fallback='simple')
+EXTENDED_CLASSES = config.get('APP', 'EXTENDED_CLASSES', fallback='[1, 3, 6, 7, 8]')
+TRANSFERT_CLASSES = config.get('APP', 'TRANSFERT_CLASSES', fallback='[0, 1, 2, 3, 4, 5]')
+SIMPLE_CLASSES = config.get('APP', 'SIMPLE_CLASSES', fallback='[1, 2]')
 
 # Nouvelle constante pour le temps d'attente avant test RTSP
-WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=20)
+WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=10)
 
 # Ajout des constantes pour la fonction et l'URL d'inférence
-FONCTION = config.get('APP', 'FONCTION', fallback='/predict_frame_rf_detr/')
-URL = config.get('APP', 'URL', fallback='http://127.0.0.1:8002')
+FONCTION_RFDETR = config.get('APP', 'FONCTION_RFDETR', fallback='/predict_frame_rf_detr/')
+URL_RFDETR = config.get('APP', 'URL_RFDETR', fallback='http://127.0.0.1:8002/')
+
+FONCTION_YOLO = config.get('APP', 'FONCTION_YOLO', fallback='/predict_frame/')
+URL_YOLO = config.get('APP', 'URL_YOLO', fallback='http://127.0.0.1:8004/')
+
 
 # Chargement des couleurs de stature depuis config.ini
 STATURE_COLORS = {}
