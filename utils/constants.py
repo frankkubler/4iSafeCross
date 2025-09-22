@@ -94,6 +94,11 @@ if 'STATURE_COLORS' in config:
     for key, value in config['STATURE_COLORS'].items():
         STATURE_COLORS[key] = ast.literal_eval(value)
 
+OBJECT_COLORS = {}
+if 'OBJECT_COLORS' in config:
+    for key, value in config['OBJECT_COLORS'].items():
+        OBJECT_COLORS[key] = ast.literal_eval(value)
+
 # # Définition des zones de détection par caméra (exemple pour 2 caméras)
 # ZONES_BY_CAMERA = {
 #     0: [
