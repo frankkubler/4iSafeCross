@@ -283,7 +283,7 @@ class AlerteManager:
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             confidence = det.get("confidence", 0)
             class_id = det.get("class_id", -1)
-            label = det.get("label", "unknown")
+            label = f"{det.get("label", "unknown")} {confidence:.2f}"
             # label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')}"
             cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             zone_names = det.get("zones", [])

@@ -53,7 +53,7 @@ class InferenceServerThread(threading.Thread):
         self.motion_detector = MotionDetector()
         # Initialisation des paramètres
         self.motion_detector.update_fgbg_params(
-            varThreshold=getattr(self.motion_detector, 'varThreshold', 16),
+            varThreshold=getattr(self.motion_detector, 'varThreshold', 11),
             history=getattr(self.motion_detector, 'history', 500),
             detectShadows=getattr(self.motion_detector, 'detectShadow', True)
         )
