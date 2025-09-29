@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
-                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS)
+                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -584,7 +584,7 @@ def index():
             'white_pixels_threshold': threshold,
             'roi_display_enabled': roi_display_enabled.get(idx, False)
         })
-    return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled, stature_colors=STATURE_COLORS)
+    return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled, stature_colors=OBJECT_COLORS)
 
 # --- Ajout route pour modifier dynamiquement les paramètres motion ---
 @app.route('/set_motion_param/<int:cid>', methods=['POST'])
