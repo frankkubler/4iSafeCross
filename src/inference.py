@@ -25,8 +25,8 @@ class InferenceServerThread(threading.Thread):
         self.detection_callback = detection_callback  # Callback pour envoyer les résultats
         self.stop_event = stop_event or threading.Event()
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
-        self.fonction = FONCTION_RFDETR
-        self.url = rf"{URL_RFDETR}/{self.fonction}"
+        self.fonction = FONCTION_YOLO
+        self.url = rf"{URL_YOLO}/{self.fonction}"
         self.is_detection = False
         self.white_pixels_threshold = white_pixels_threshold
         self._motion = False  # Attribut privé
@@ -53,9 +53,9 @@ class InferenceServerThread(threading.Thread):
         self.motion_detector = MotionDetector()
         # Initialisation des paramètres
         self.motion_detector.update_fgbg_params(
-            varThreshold=getattr(self.motion_detector, 'varThreshold', 11),
-            history=getattr(self.motion_detector, 'history', 500),
-            detectShadows=getattr(self.motion_detector, 'detectShadow', True)
+            varThreshold=getattr(self.motion_detector, 'varThreshold', 7),
+            history=getattr(self.motion_detector, 'history', 250),
+            detectShadows=getattr(self.motion_detector, 'detectShadow', False)
         )
         
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
