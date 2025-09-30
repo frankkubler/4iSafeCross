@@ -407,7 +407,7 @@ for i in range(len(CAM_IDS)):
 def gen_frames(cid):
     cam_id = CAM_IDS[cid]
     last_frame_time = 0
-    frame_interval = 0.1  # 10 FPS = 100ms entre frames
+    frame_interval = 0.2  # 5 FPS = 200ms entre frames
     logger.debug(f"🎬 Nouveau générateur de frames démarré pour caméra {cid}")
     
     while True:
