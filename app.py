@@ -355,17 +355,40 @@ CAM_IDS = []
 for host in RTSP_HOST:
     CAM_IDS.append(f"rtsp://{RTSP_LOGIN}:{RTSP_PASSWORD}@{host}:{RTSP_PORT}/{RTSP_STREAM}")
 
-# Vérification des flux RTSP avant d'instancier CameraManager
-results = CameraManager.test_rtsp_streams_parallel(CAM_IDS)
-filtered_cam_ids = [cid for cid, ok in results.items() if ok]
-for cid, ok in results.items():
-    if ok:
-        logger.info(f"Ping OK pour {cid}, attente {WAIT_BEFORE_TEST_RTSP}s avant test RTSP...")
-        time.sleep(WAIT_BEFORE_TEST_RTSP)
-        break  # On passe à la suite dès qu'une caméra est OK
-    else:
-        logger.warning(f"Flux RTSP {cid} ignoré (non disponible)")
-CAM_IDS = filtered_cam_ids
+if not CAM_IDS:
+    logger.error("Aucun flux RTSP configuré. Vérifiez la section RTSP du fichier config.ini")
+    raise RuntimeError("No RTSP streams configured")
+
+# Vérification des flux RTSP avant d'instancier CameraManager : attente active jusqu'à ce qu'au moins une caméra réponde au ping
+available_cam_ids = []
+attempt = 0
+retry_delay = max(1, WAIT_BEFORE_TEST_RTSP)
+while not available_cam_ids:
+    attempt += 1
+    results = CameraManager.test_rtsp_streams_parallel(CAM_IDS)
+    available_cam_ids = [cid for cid, ok in results.items() if ok]
+
+    # Logger l'état de chaque caméra pour cette tentative
+    for cid in CAM_IDS:
+        if results.get(cid, False):
+            logger.info(f"Ping OK pour {cid} (tentative {attempt})")
+        else:
+            logger.warning(f"Ping échoué pour {cid} (tentative {attempt})")
+
+    if available_cam_ids:
+        if WAIT_BEFORE_TEST_RTSP > 0:
+            logger.info(
+                f"Au moins une caméra répond au ping ({available_cam_ids[0]}). Attente de {WAIT_BEFORE_TEST_RTSP}s avant démarrage des flux RTSP..."
+            )
+            time.sleep(WAIT_BEFORE_TEST_RTSP)
+        break
+
+    logger.warning(
+        f"Aucune caméra ne répond au ping (tentative {attempt}). Nouvelle tentative dans {retry_delay}s..."
+    )
+    time.sleep(retry_delay)
+
+CAM_IDS = available_cam_ids
 logger.info(f"Caméras RTSP disponibles : {CAM_IDS}")
 manager = CameraManager(CAM_IDS, frame_width=1920, frame_height=1080)
 
