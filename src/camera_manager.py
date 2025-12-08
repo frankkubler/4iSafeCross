@@ -7,7 +7,7 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 import os
-
+import numpy as np
 class CameraManager:
     def __init__(self, cam_ids, buffer_size=5, frame_width=None, frame_height=None):
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
@@ -91,7 +91,6 @@ class CameraManager:
                     caps = sample.get_caps()
                     width = caps.get_structure(0).get_value('width')
                     height = caps.get_structure(0).get_value('height')
-                    import numpy as np
                     success, mapinfo = buf.map(Gst.MapFlags.READ)
                     if success:
                         frame = np.frombuffer(mapinfo.data, dtype=np.uint8)

@@ -95,31 +95,29 @@ class BotThread():
         if not ret:
             self.logger.error("Erreur d'encodage JPEG de la frame OpenCV.")
             return False
-        image_bytes = io.BytesIO(buf.tobytes())
-        image_bytes.name = 'detection.jpg'
-        files = {'photo': image_bytes}
-        url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto?chat_id={CHAT_ID}"
-        data = {}
-        if caption:
-            data['caption'] = caption
-        # Ajout de logs détaillés pour le diagnostic
-        self.logger.info(
-            f"Préparation envoi image Telegram : taille={image_bytes.getbuffer().nbytes} octets, "
-            f"shape={frame.shape}, dtype={frame.dtype}"
-        )
-        try:
-            resp = requests.post(url, files=files, data=data, timeout=30)
-            self.logger.debug(f"Réponse Telegram : status_code={resp.status_code}, text={resp.text}")
-            resp.raise_for_status()
-            self.logger.info("Frame envoyée à Telegram (HTTP API)")
-            return True
-        except Exception as e:
-            self.logger.error(f"Erreur envoi frame Telegram (HTTP API) : {e}")
-            if 'resp' in locals():
-                self.logger.error(
-                    f"Réponse Telegram : status_code={resp.status_code}, text={resp.text}"
-                )
-            return False
+        
+        # Utiliser with pour fermer automatiquement le BytesIO et éviter les fuites mémoire
+        with io.BytesIO(buf.tobytes()) as image_bytes:
+            image_bytes.name = 'detection.jpg'
+            files = {'photo': image_bytes}
+            url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto?chat_id={CHAT_ID}"
+            data = {}
+            if caption:
+                data['caption'] = caption
+            # Ajout de logs détaillés pour le diagnostic
+            self.logger.info(
+                f"Préparation envoi image Telegram : taille={image_bytes.getbuffer().nbytes} octets, "
+                f"shape={frame.shape}, dtype={frame.dtype}"
+            )
+            try:
+                resp = requests.post(url, files=files, data=data, timeout=30)
+                self.logger.debug(f"Réponse Telegram : status_code={resp.status_code}, text={resp.text}")
+                resp.raise_for_status()
+                self.logger.info("Frame envoyée à Telegram (HTTP API)")
+                return True
+            except Exception as e:
+                self.logger.error(f"Erreur envoi frame Telegram (HTTP API) : {e}")
+                return False
 
     def message_handler(self):
         """

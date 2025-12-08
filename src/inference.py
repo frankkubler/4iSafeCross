@@ -159,18 +159,19 @@ class InferenceServerThread(threading.Thread):
                 continue
 
             # Inférence IA (100ms) - maintenant limitée à 5 FPS max
-            buffer = io.BytesIO()
-            np.save(buffer, frame, allow_pickle=True)
-            buffer.seek(0)
             current_detections = []
             
             inference_start_time = time.time()
             try:
-                response = requests.post(
-                    self.url,
-                    files={"frame": buffer.getvalue()},
-                    params={"confidence": self.confidence_threshold}
-                )
+                # Utiliser with pour fermer automatiquement le BytesIO et éviter les fuites mémoire
+                with io.BytesIO() as buffer:
+                    np.save(buffer, frame, allow_pickle=True)
+                    buffer.seek(0)
+                    response = requests.post(
+                        self.url,
+                        files={"frame": buffer.getvalue()},
+                        params={"confidence": self.confidence_threshold}
+                    )
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])
                     inference_time = (time.time() - inference_start_time) * 1000  # en ms
