@@ -1,6 +1,7 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
 from utils.utils import save_frame_to_file
 from datetime import datetime
 import logging
@@ -8,6 +9,10 @@ import cv2
 import asyncio
 from src.detection_db import init_db, insert_relay_event  # , insert_detection
 from utils.coco_classes import COCO_CLASSES
+
+# Queue avec limite pour éviter l'accumulation de tâches en mémoire
+MAX_RECORDING_QUEUE_SIZE = 20
+
 
 class AlerteManager:
     def __init__(self, relays, telegram_bot=None, zones=None, telegram_alert_enabled=False):
@@ -25,8 +30,11 @@ class AlerteManager:
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         # Dictionnaire pour suivre le dernier temps de détection par caméra
         self.camera_last_detection = {}
-        # ExecutorService pour gérer les enregistrements en arrière-plan
+        # ExecutorService pour gérer les enregistrements en arrière-plan avec queue limitée
+        self._recording_queue = Queue(maxsize=MAX_RECORDING_QUEUE_SIZE)
         self.recording_executor = ThreadPoolExecutor(max_workers=4)
+        self._pending_tasks = 0
+        self._pending_tasks_lock = threading.Lock()
         self.telegram_bot = telegram_bot  # Injecté depuis app.py
         self.last_telegram_sent = {}  # par caméra
         self.telegram_alert_enabled = telegram_alert_enabled
@@ -47,6 +55,11 @@ class AlerteManager:
             self.timer_task[name] = None
             self.last_detection_time_by_zone[name] = 0
         init_db()  # Initialise la base de données à la création du manager
+
+    def _on_task_done(self):
+        """Callback appelé quand une tâche d'enregistrement est terminée."""
+        with self._pending_tasks_lock:
+            self._pending_tasks = max(0, self._pending_tasks - 1)
 
     def set_telegram_alert_enabled(self, enabled: bool):
         self.telegram_alert_enabled = enabled
@@ -144,7 +157,14 @@ class AlerteManager:
                 # Enregistrement si la dernière détection remonte à >120s
                 if last_time is None or (now - last_time).total_seconds() >= 120:
                     self.camera_last_detection[cid] = now
-                    self.recording_executor.submit(save_frame_to_file, current_frame, cid, now)
+                    # Limiter la queue pour éviter l'accumulation en mémoire
+                    with self._pending_tasks_lock:
+                        if self._pending_tasks < MAX_RECORDING_QUEUE_SIZE:
+                            self._pending_tasks += 1
+                            future = self.recording_executor.submit(save_frame_to_file, current_frame, cid, now)
+                            future.add_done_callback(lambda f: self._on_task_done())
+                        else:
+                            self.logger.warning(f"Queue d'enregistrement pleine ({MAX_RECORDING_QUEUE_SIZE}), frame ignorée pour caméra {cid}")
                 # Envoi Telegram
                 if self.telegram_alert_enabled:
                     last_telegram = self.last_telegram_sent.get(cid)
