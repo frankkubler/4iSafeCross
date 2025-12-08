@@ -83,10 +83,12 @@ zones_by_camera = ZONES_BY_CAMERA
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
 # Cache pour les couleurs des zones par caméra pour optimisation
 zone_color_cache = {}
+MAX_ZONE_COLOR_CACHE_SIZE = 20  # Limite pour éviter les fuites mémoire
 
 # Cache pour les overlays des zones par caméra
 zone_overlay_cache = {}
 zone_overlay_lock = threading.Lock()
+MAX_ZONE_OVERLAY_CACHE_SIZE = 10  # Limite pour éviter les fuites mémoire (~6 Mo par entrée)
 
 # Cache pour les frames générées (optimisation 10 FPS)
 frame_cache = {}
@@ -187,7 +189,14 @@ def get_zone_overlay(frame_shape, cid):
     with zone_overlay_lock:
         cache_key = f"{cid}_{frame_shape[0]}_{frame_shape[1]}"
         
+        # Limiter la taille du cache pour éviter les fuites mémoire
         if cache_key not in zone_overlay_cache:
+            if len(zone_overlay_cache) >= MAX_ZONE_OVERLAY_CACHE_SIZE:
+                # Supprimer la plus ancienne entrée
+                oldest_key = next(iter(zone_overlay_cache))
+                del zone_overlay_cache[oldest_key]
+                logger.debug(f"🗑️ Cache overlay plein, suppression de {oldest_key}")
+            
             zones = zones_by_camera.get(cid, [])
             zone_overlay_cache[cache_key] = create_zone_overlay(frame_shape, zones, cid)
             logger.debug(f"🎨 Overlay des zones créé pour caméra {cid} (résolution: {frame_shape[1]}x{frame_shape[0]})")
