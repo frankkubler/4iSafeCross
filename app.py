@@ -69,8 +69,9 @@ logger = logging.getLogger(__name__)
 relays = YoctoMultiRelay()
 for i in range(len(relays.relays)):
     logger.debug(f"Relais {i} : {relays.get_relay_state(i)}")
-    relays.action_off(i)  # Assure que tous les relais sont éteints au démarrage
+    relays.action_on(i)  # MODE FAIL-SAFE : Alertes ON par défaut au démarrage
     logger.debug(f"Relais {i} : {relays.get_relay_state(i)}")
+logger.warning(f"⚠️  MODE FAIL-SAFE ACTIVÉ : {len(relays.relays)} relais allumés par défaut")
 # logger.info(f"Relais initialisé : {relays.is_initialized}, état actuel : {relays.states}")
 # Lancer le bot Telegram au démarrage de l'app
 telegram_bot = BotThread(overwrite_file=False)
@@ -81,6 +82,51 @@ zones_by_camera = ZONES_BY_CAMERA
 
 # On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
+
+# ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
+# Variables globales pour le heartbeat
+heartbeat_lock = threading.Lock()
+last_heartbeat = time.time()
+HEARTBEAT_TIMEOUT = 30  # Si pas de heartbeat pendant 30s, considérer comme dysfonctionnel
+application_healthy = True
+
+def update_heartbeat():
+    """Appelé régulièrement pour indiquer que l'application fonctionne correctement."""
+    global last_heartbeat, application_healthy
+    with heartbeat_lock:
+        last_heartbeat = time.time()
+        application_healthy = True
+
+def failsafe_watchdog():
+    """Thread surveillant la santé de l'application via heartbeat.
+    Si aucun heartbeat reçu pendant HEARTBEAT_TIMEOUT secondes, active le mode fail-safe."""
+    global application_healthy
+    logger.info("🔒 Watchdog fail-safe démarré - Surveillance active")
+    
+    while True:
+        time.sleep(5)  # Vérification toutes les 5 secondes
+        
+        with heartbeat_lock:
+            time_since_heartbeat = time.time() - last_heartbeat
+            
+            if time_since_heartbeat > HEARTBEAT_TIMEOUT:
+                if application_healthy:
+                    application_healthy = False
+                    logger.error(f"⚠️  ALERTE FAIL-SAFE : Aucun heartbeat depuis {time_since_heartbeat:.1f}s - Maintien des relais ON")
+                    # S'assurer que tous les relais sont ON
+                    for i in range(len(relays.relays)):
+                        if not relays.get_relay_state(i):
+                            logger.warning(f"🔧 Réactivation du relais {i} en mode fail-safe")
+                            relays.action_on(i)
+            else:
+                if not application_healthy:
+                    application_healthy = True
+                    logger.info(f"✅ Application de nouveau opérationnelle (heartbeat reçu)")
+
+# Démarrer le watchdog fail-safe
+failsafe_thread = threading.Thread(target=failsafe_watchdog, daemon=True)
+failsafe_thread.start()
+
 # Cache pour les couleurs des zones par caméra pour optimisation
 zone_color_cache = {}
 MAX_ZONE_COLOR_CACHE_SIZE = 20  # Limite pour éviter les fuites mémoire
@@ -288,6 +334,10 @@ def detection_callback_factory(cid, main_loop=None):
                 }
         now = datetime.now()
         current_timestamp = now.timestamp()
+        
+        # ===== HEARTBEAT FAIL-SAFE =====
+        # Mise à jour du heartbeat pour indiquer que l'application fonctionne
+        update_heartbeat()
 
         # Correction asyncio event loop pour thread
         loop = main_loop
@@ -759,6 +809,27 @@ def toggle_telegram_alert():
 def shutdown():
     manager.release()
     return "Cameras released"
+
+
+@app.route('/failsafe_status')
+def failsafe_status():
+    """Endpoint pour vérifier l'état du système fail-safe."""
+    with heartbeat_lock:
+        time_since_heartbeat = time.time() - last_heartbeat
+        
+    relay_states = {}
+    for i in range(len(relays.relays)):
+        relay_states[f"relay_{i}"] = relays.get_relay_state(i)
+    
+    return jsonify({
+        'application_healthy': application_healthy,
+        'last_heartbeat_seconds_ago': round(time_since_heartbeat, 2),
+        'heartbeat_timeout': HEARTBEAT_TIMEOUT,
+        'failsafe_mode': 'ACTIVE' if not application_healthy else 'STANDBY',
+        'relay_states': relay_states,
+        'relays_initialized': relays.is_initialized,
+        'message': 'Système opérationnel' if application_healthy else '⚠️  MODE FAIL-SAFE ACTIF - Alertes maintenues ON'
+    })
 
 
 @app.route('/quit', methods=['POST'])

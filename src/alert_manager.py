@@ -47,8 +47,8 @@ class AlerteManager:
             for relay_num in self._get_relay_nums_from_zone(zone["name"]):
                 relay_nums.add(relay_num)
         for relay_num in relay_nums:
-            self.relay_on[relay_num] = False
-            self.relay_on_time[relay_num] = None
+            self.relay_on[relay_num] = True  # MODE FAIL-SAFE : relais ON par défaut
+            self.relay_on_time[relay_num] = datetime.now()  # Enregistrer l'heure de démarrage
             self.relay_active_zones[relay_num] = set()
         for zone in self.zones:
             name = zone["name"]
