@@ -51,7 +51,15 @@ docker run --rm \
       g++ \
       ccache \
       patchelf \
+      pkg-config \
+      ninja-build \
+      meson \
       libglib2.0-0 \
+      libglib2.0-dev \
+      libcairo2-dev \
+      libgirepository1.0-dev \
+      gobject-introspection \
+      libffi-dev \
       libsm6 \
       libxrender1 \
       libxext6 \
