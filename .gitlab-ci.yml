@@ -17,8 +17,8 @@ build:arm64:
   image: docker:24.0
   services:
     - docker:24.0-dind
-  tags:
-    - docker  # Utilise un runner GitLab avec support Docker
+  # tags:
+  #   - docker  # Commenté pour utiliser n'importe quel runner disponible
   before_script:
     - docker info
     # Installer QEMU pour émulation ARM64
@@ -47,7 +47,15 @@ build:arm64:
             g++ \
             ccache \
             patchelf \
+            pkg-config \
+            ninja-build \
+            meson \
             libglib2.0-0 \
+            libglib2.0-dev \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            gobject-introspection \
+            libffi-dev \
             libsm6 \
             libxrender1 \
             libxext6 \
@@ -105,8 +113,8 @@ build:arm64:
 package:arm64:
   stage: package
   image: alpine:latest
-  tags:
-    - docker
+  # tags:
+  #   - docker
   dependencies:
     - build:arm64
   before_script:
@@ -143,8 +151,8 @@ package:arm64:
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
-  tags:
-    - docker
+  # tags:
+  #   - docker
   dependencies:
     - package:arm64
   script:
@@ -191,8 +199,8 @@ test:local:
   image: docker:24.0
   services:
     - docker:24.0-dind
-  tags:
-    - docker
+  # tags:
+  #   - docker
   script:
     - echo "🧪 Test de compilation local (job manuel)"
     - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
