@@ -14,9 +14,9 @@ variables:
 # Job de compilation ARM64 avec émulation QEMU
 build:arm64:
   stage: build
-  image: docker:24.0
+  image: docker:25-cli
   services:
-    - docker:24.0-dind
+    - docker:25-dind
   # tags:
   #   - docker  # Commenté pour utiliser n'importe quel runner disponible
   before_script:
@@ -196,9 +196,9 @@ release:
 # Job optionnel : test local (manuel)
 test:local:
   stage: build
-  image: docker:24.0
+  image: docker:25-cli
   services:
-    - docker:24.0-dind
+    - docker:25-dind
   # tags:
   #   - docker
   script:
