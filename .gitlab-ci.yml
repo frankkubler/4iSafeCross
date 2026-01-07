@@ -26,10 +26,12 @@ build:arm64:
     - echo "✅ QEMU ARM64 configuré"
   script:
     - echo "🚀 Début de la compilation Nuitka ARM64"
+    - echo "📂 Répertoire de travail: $(pwd)"
+    - ls -la
     - |
       docker run --rm \
         --platform linux/arm64 \
-        -v "$(pwd)":/workspace \
+        -v "${CI_PROJECT_DIR}":/workspace \
         -w /workspace \
         arm64v8/ubuntu:22.04 \
         bash -c '
