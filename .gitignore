@@ -11,3 +11,23 @@ __pycache__/app.cpython-312.pyc
 .python-version
 uv.lock
 .venv/
+
+# Nuitka build artifacts
+dist/
+*.dist/
+*.build/
+*.onefile-build/
+app.build/
+app.dist/
+app.onefile-build/
+
+# Compiled executables
+4isafecross
+4isafecross.bin
+
+# Archives
+*.tar.gz
+*.zip
+
+# Nuitka cache
+.nuitka/

@@ -308,13 +308,44 @@ Ce script ajoute le paramètre `usbcore.autosuspend=-1` à la fin du fichier `/b
 > Vérifiez que le chemin du fichier de configuration correspond à votre distribution (Jetson, etc.).
 
 ## Création de l'exécutable avec Nuitka
-Pour compiler l'application en un exécutable autonome, utilisez Nuitka. Assurez-vous d'avoir installé Nuitka et ses dépendances.
-### Commande de compilation
+
+### Compilation locale
+
+Pour compiler l'application en un exécutable autonome localement sur le Jetson, utilisez Nuitka :
 
 ```sh
-uv run nuitka --standalone   --include-data-dir=config=config --include-data-dir=templates=templates   --include-data-dir=static=static   --include-data-dir=db=db --include-data-dir=logs=logs --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so   --output-dir=dist app.py
+uv run nuitka --standalone \
+  --include-data-dir=config=config \
+  --include-data-dir=templates=templates \
+  --include-data-dir=static=static \
+  --include-data-dir=db=db \
+  --include-data-dir=logs=logs \
+  --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so \
+  --output-dir=dist \
+  app.py
 ```
-Le dossier dist/app.dist/ contiendra l'exécutable et tous les fichiers nécessaires.  
+
+Le dossier `dist/app.dist/` contiendra l'exécutable et tous les fichiers nécessaires.
+
+### Compilation automatique avec GitLab CI/CD
+
+Pour compiler automatiquement l'exécutable ARM64 via **GitLab CI/CD** (sans avoir besoin du Jetson), consultez le guide complet : **[GITLAB_CI_BUILD.md](GITLAB_CI_BUILD.md)**
+
+**Déclenchement rapide :**
+```bash
+# Via push
+git push origin main
+
+# Via tag (crée automatiquement une release)
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+
+# Ou manuellement via l'interface GitLab CI/CD > Pipelines > Run Pipeline
+```
+
+L'exécutable compilé sera disponible dans les artefacts du pipeline, prêt à être déployé sur votre Jetson Orin NX.
+
+**Prérequis :** Votre GitLab auto-hébergé doit avoir un Runner configuré avec Docker et les privilèges activés. Voir [GITLAB_CI_BUILD.md](GITLAB_CI_BUILD.md) pour les détails de configuration.  
 
 ## Auteurs
 
