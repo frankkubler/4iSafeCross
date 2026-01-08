@@ -28,6 +28,8 @@ build:arm64:
     - echo "🚀 Début de la compilation Nuitka ARM64"
     - echo "📂 Répertoire de travail':' ${CI_PROJECT_DIR}"
     - ls -la
+    - echo "🔍 Vérification de pyproject.toml dans CI_PROJECT_DIR :"
+    - ls -la pyproject.toml || echo "❌ pyproject.toml non trouvé dans ${CI_PROJECT_DIR}"
     - |
       docker run --rm \
         --platform linux/arm64 \
@@ -69,7 +71,14 @@ build:arm64:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH=\"/root/.local/bin:\$PATH\"
           
-          echo '📚 Synchronisation des dépendances...'
+          echo '� Diagnostic du répertoire de travail...'
+          pwd
+          echo '📂 Contenu du répertoire actuel :'
+          ls -la
+          echo '🔍 Recherche de pyproject.toml :'
+          find /workspace -name 'pyproject.toml' -type f 2>/dev/null || echo 'Aucun pyproject.toml trouvé'
+          
+          echo '�📚 Synchronisation des dépendances...'
           # Générer le lock file si absent, puis synchroniser
           if [ ! -f uv.lock ]; then
             echo '🔒 Génération du fichier uv.lock...'
