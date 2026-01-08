@@ -1,6 +1,6 @@
 # Multi-stage build pour image Docker ARM64 avec Cython
-# Base image Ubuntu ARM64 pour compilation
-FROM arm64v8/ubuntu:22.04 AS builder
+# Base image NVIDIA JetPack pour compilation (registry NVIDIA officiel)
+FROM nvcr.io/nvidia/l4t-base:36.2.0 AS builder
 
 WORKDIR /app
 
@@ -14,6 +14,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     libglib2.0-0 \
     libglib2.0-dev \
+    libgirepository1.0-dev \
+    gobject-introspection \
+    gir1.2-gstreamer-1.0 \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
     libsm6 \
     libxrender1 \
     libxext6 \
@@ -54,8 +63,8 @@ RUN python3 setup_cython.py build_ext --inplace && \
     # Nettoyer les fichiers de build intermediaires
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
-# Stage final - Image minimale Ubuntu ARM64
-FROM arm64v8/ubuntu:22.04
+# Stage final - Image NVIDIA JetPack minimale avec GStreamer
+FROM nvcr.io/nvidia/l4t-base:36.2.0
 
 WORKDIR /app
 
@@ -63,10 +72,18 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY --from=builder /app/.venv /app/.venv
 
-# Installation runtime minimal
+# Installation runtime minimal avec GStreamer + plugins NVIDIA
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     libglib2.0-0 \
+    libgirepository-1.0-1 \
+    gir1.2-gstreamer-1.0 \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav \
+    nvidia-l4t-gstreamer \
     libsm6 \
     libxrender1 \
     libxext6 \
