@@ -83,6 +83,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     libglib2.0-0 \
     libgirepository-1.0-1 \
+    libcairo2 \
     gir1.2-gstreamer-1.0 \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
@@ -94,6 +95,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libxext6 \
     libgl1-mesa-glx \
+    libgomp1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libavcodec58 \
+    libavformat58 \
+    libswscale5 \
+    libtbb2 \
+    libatlas-base-dev \
+    libhdf5-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
