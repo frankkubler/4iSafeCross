@@ -1,5 +1,5 @@
 # Pipeline GitLab CI/CD pour compilation Nuitka ARM64 (Jetson Orin NX)
-# Compatible avec GitLab auto-hébergé
+# Compatible avec GitLab auto-heberge
 
 stages:
   - build
@@ -11,48 +11,53 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   ARTIFACT_NAME: "4isafecross-arm64-jetson"
 
-# Job de compilation ARM64 avec émulation QEMU
+# Job de compilation ARM64 avec emulation QEMU
 build:arm64:
   stage: build
   image: docker:25-cli
   services:
     - docker:25-dind
-  # tags:
-  #   - docker  # Commenté pour utiliser n'importe quel runner disponible
   before_script:
     - docker info
-    # Installer QEMU pour émulation ARM64
+    # Installer QEMU pour emulation ARM64
     - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-    - echo "✅ QEMU ARM64 configuré"
+    - echo "QEMU ARM64 configure"
   script:
-    - echo "🚀 Début de la compilation Nuitka ARM64"
-    - echo "📂 Répertoire de travail':' ${CI_PROJECT_DIR}"
+    - echo "Debut de la compilation Nuitka ARM64"
+    - echo "Repertoire de travail: ${CI_PROJECT_DIR}"
     - ls -la
-    - echo "🔍 Vérification de pyproject.toml dans CI_PROJECT_DIR :"
-    - ls -la pyproject.toml || echo "❌ pyproject.toml non trouvé dans ${CI_PROJECT_DIR}"
+    - echo "Verification de pyproject.toml:"
+    - ls -la pyproject.toml || echo "pyproject.toml non trouve"
+    - cat pyproject.toml | head -5 || true
     - |
-      docker run --rm \
-        --platform linux/arm64 \
-        -v "${CI_PROJECT_DIR}":/workspace \
-        -w /workspace \
-        arm64v8/ubuntu:22.04 \
-        bash -c "
+      # Creer un conteneur et copier les fichiers au lieu de monter un volume
+      echo "Creation du conteneur ARM64..."
+      CONTAINER_ID=$(docker create --platform linux/arm64 -w /workspace arm64v8/ubuntu:22.04 sleep 3600)
+      echo "Container ID: ${CONTAINER_ID}"
+      
+      echo "Copie des fichiers dans le conteneur..."
+      docker cp "${CI_PROJECT_DIR}/." ${CONTAINER_ID}:/workspace/
+      
+      echo "Demarrage du conteneur..."
+      docker start ${CONTAINER_ID}
+      
+      echo "Execution du build..."
+      docker exec ${CONTAINER_ID} bash -c "
           set -ex
           
-          echo '� DIAGNOSTIC - Contenu du répertoire monté :'
+          echo 'DIAGNOSTIC - Contenu du repertoire:'
           pwd
           ls -la
-          echo '🔍 Recherche de pyproject.toml :'
+          echo 'Verification pyproject.toml:'
           if [ -f pyproject.toml ]; then
-            echo '✅ pyproject.toml trouvé'
-            head -5 pyproject.toml
+            echo 'pyproject.toml trouve'
+            cat pyproject.toml | head -5
           else
-            echo '❌ pyproject.toml NON trouvé'
-            echo 'Contenu de /workspace :'
-            ls -la /workspace/
+            echo 'pyproject.toml NON trouve'
+            exit 1
           fi
           
-          echo '�📦 Installation des dépendances système...'
+          echo 'Installation des dependances systeme...'
           apt-get update -qq
           apt-get install -y -qq \
             python3.10 \
@@ -80,14 +85,14 @@ build:arm64:
             curl \
             git
           
-          echo '🔧 Installation de uv...'
+          echo 'Installation de uv...'
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH=\"/root/.local/bin:\$PATH\"
           
-          echo '📚 Synchronisation des dépendances...'
+          echo 'Synchronisation des dependances...'
           uv sync
           
-          echo '⚙️  Compilation avec Nuitka...'
+          echo 'Compilation avec Nuitka...'
           uv run nuitka \
             --standalone \
             --onefile \
@@ -102,7 +107,7 @@ build:arm64:
             --output-filename=4isafecross \
             app.py
           
-          echo '✅ Compilation terminée !'
+          echo 'Compilation terminee!'
           ls -lh dist/
           
           if [ -f 'dist/4isafecross' ]; then
@@ -111,7 +116,14 @@ build:arm64:
             file dist/app.dist/app
           fi
         "
-    - echo "📋 Contenu du dossier dist/"
+      
+      echo "Copie des artifacts depuis le conteneur..."
+      docker cp ${CONTAINER_ID}:/workspace/dist ./dist
+      
+      echo "Nettoyage du conteneur..."
+      docker stop ${CONTAINER_ID}
+      docker rm ${CONTAINER_ID}
+    - echo "Contenu du dossier dist/"
     - ls -lh dist/
   artifacts:
     name: "${ARTIFACT_NAME}-${CI_COMMIT_SHORT_SHA}"
@@ -125,33 +137,31 @@ build:arm64:
   except:
     - schedules
 
-# Job de packaging (création de l'archive)
+# Job de packaging (creation de l'archive)
 package:arm64:
   stage: package
   image: alpine:latest
-  # tags:
-  #   - docker
   dependencies:
     - build:arm64
   before_script:
     - apk add --no-cache tar gzip file
   script:
-    - echo "📦 Création de l'archive de déploiement..."
+    - echo "Creation de l'archive de deploiement..."
     - cd dist
     - |
       if [ -d "app.dist" ]; then
         tar -czf ${ARTIFACT_NAME}.tar.gz app.dist/
-        echo "✅ Archive créée : ${ARTIFACT_NAME}.tar.gz (dossier)"
+        echo "Archive creee: ${ARTIFACT_NAME}.tar.gz (dossier)"
       elif [ -f "4isafecross" ]; then
         tar -czf ${ARTIFACT_NAME}.tar.gz 4isafecross
-        echo "✅ Archive créée : ${ARTIFACT_NAME}.tar.gz (fichier unique)"
+        echo "Archive creee: ${ARTIFACT_NAME}.tar.gz (fichier unique)"
       else
-        echo "❌ Aucun exécutable trouvé !"
+        echo "Aucun executable trouve!"
         exit 1
       fi
     - cd ..
     - ls -lh dist/*.tar.gz
-    - echo "📊 Taille de l'archive :"
+    - echo "Taille de l'archive:"
     - du -h dist/*.tar.gz
   artifacts:
     name: "${ARTIFACT_NAME}-${CI_COMMIT_SHORT_SHA}"
@@ -167,31 +177,29 @@ package:arm64:
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
-  # tags:
-  #   - docker
   dependencies:
     - package:arm64
   script:
-    - echo "🚀 Création de la release ${CI_COMMIT_TAG}"
+    - echo "Creation de la release ${CI_COMMIT_TAG}"
   release:
     tag_name: '$CI_COMMIT_TAG'
     name: 'Release $CI_COMMIT_TAG'
     description: |
-      ## 🎉 Release automatique $CI_COMMIT_TAG
+      ## Release automatique $CI_COMMIT_TAG
       
-      ### 📦 Exécutable ARM64 pour Nvidia Jetson Orin NX
+      ### Executable ARM64 pour Nvidia Jetson Orin NX
       
-      **Compilation :**
-      - Architecture : ARM64 (aarch64)
-      - Python : 3.10
-      - JetPack : 6.1 compatible
+      **Compilation:**
+      - Architecture: ARM64 (aarch64)
+      - Python: 3.10
+      - JetPack: 6.1 compatible
       
-      **Téléchargement :**
-      Téléchargez l'archive depuis les artifacts du job `package:arm64` de cette pipeline.
+      **Telechargement:**
+      Telechargez l'archive depuis les artifacts du job `package:arm64` de cette pipeline.
       
-      **Déploiement :**
+      **Deploiement:**
       ```bash
-      # Transférer sur le Jetson
+      # Transferer sur le Jetson
       scp ${ARTIFACT_NAME}.tar.gz user-4itec@<jetson-ip>:/home/user-4itec/
       
       # Sur le Jetson, extraire et lancer
@@ -202,23 +210,21 @@ release:
       ./app
       ```
       
-      ### 📝 Changements
-      Voir le CHANGELOG pour plus de détails.
+      ### Changements
+      Voir le CHANGELOG pour plus de details.
   only:
     - tags
   except:
     - branches
 
-# Job optionnel : test local (manuel)
+# Job optionnel: test local (manuel)
 test:local:
   stage: build
   image: docker:25-cli
   services:
     - docker:25-dind
-  # tags:
-  #   - docker
   script:
-    - echo "🧪 Test de compilation local (job manuel)"
+    - echo "Test de compilation local (job manuel)"
     - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
     - bash scripts/test-build-local.sh || true
   when: manual
