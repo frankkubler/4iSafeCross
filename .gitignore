@@ -9,7 +9,6 @@ static/ffmpeg/bin/ffprobe.exe
 /detections
 __pycache__/app.cpython-312.pyc
 .python-version
-uv.lock
 .venv/
 
 # Nuitka build artifacts
