@@ -71,19 +71,7 @@ build:arm64:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH=\"/root/.local/bin:\$PATH\"
           
-          echo '� Diagnostic du répertoire de travail...'
-          pwd
-          echo '📂 Contenu du répertoire actuel :'
-          ls -la
-          echo '🔍 Recherche de pyproject.toml :'
-          find /workspace -name 'pyproject.toml' -type f 2>/dev/null || echo 'Aucun pyproject.toml trouvé'
-          
-          echo '�📚 Synchronisation des dépendances...'
-          # Générer le lock file si absent, puis synchroniser
-          if [ ! -f uv.lock ]; then
-            echo '🔒 Génération du fichier uv.lock...'
-            uv lock
-          fi
+          echo '📚 Synchronisation des dépendances...'
           uv sync
           
           echo '⚙️  Compilation avec Nuitka...'
