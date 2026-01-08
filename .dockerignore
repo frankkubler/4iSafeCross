@@ -2,14 +2,14 @@
 .git
 .gitignore
 .gitlab-ci.yml
+.gitlab-ci-docker.yml
+.gitlab-ci-nuitka.yml
 .venv
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.so
-*.coverage
 *.log
 .pytest_cache
 .mypy_cache
@@ -24,5 +24,10 @@ logs/*
 detections/
 README.md
 *.md
+!CYTHON_README.md
 .github/
 scripts/
+# Fichiers de build Cython (intermediaires)
+build/
+*.c
+*.so

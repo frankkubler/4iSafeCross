@@ -1,15 +1,19 @@
-# Multi-stage build pour image Docker ARM64 optimisee
+# Multi-stage build pour image Docker ARM64 avec Cython
 # Base image Jetson compatible
-FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.1-py3 AS base
+FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.1-py3 AS builder
 
 WORKDIR /app
 
-# Installation des dependances systeme
+# Installation des dependances systeme pour compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     python3.10-dev \
     python3-pip \
+    build-essential \
+    gcc \
+    g++ \
     libglib2.0-0 \
+    libglib2.0-dev \
     libsm6 \
     libxrender1 \
     libxext6 \
@@ -21,20 +25,42 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
+# Installation de Cython
+RUN pip install --no-cache-dir cython setuptools wheel
+
 # Copie des fichiers de dependances
 COPY pyproject.toml uv.lock ./
 
 # Installation des dependances Python
 RUN uv sync --frozen --no-dev
 
+# Copie du code source
+COPY config/ ./config/
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY db/ ./db/
+COPY src/ ./src/
+COPY utils/ ./utils/
+COPY app.py .
+COPY setup_cython.py .
+
+# Compilation avec Cython
+# Compile tous les fichiers .py en .so (binaires)
+RUN python3 setup_cython.py build_ext --inplace && \
+    # Nettoyer les fichiers .py originaux (garder uniquement les .so)
+    find src/ -name "*.py" -type f -delete && \
+    find utils/ -name "*.py" -type f -delete && \
+    # Nettoyer les fichiers de build intermediaires
+    rm -rf build/ *.c src/**/*.c utils/**/*.c
+
 # Stage final - Image minimale
 FROM nvcr.io/nvidia/l4t-base:r36.2.0
 
 WORKDIR /app
 
-# Copie uniquement le necessaire depuis base
-COPY --from=base /root/.local /root/.local
-COPY --from=base /app/.venv /app/.venv
+# Copie uniquement le necessaire depuis builder
+COPY --from=builder /root/.local /root/.local
+COPY --from=builder /app/.venv /app/.venv
 
 # Installation runtime minimal
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -47,14 +73,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copie du code application
-COPY config/ ./config/
-COPY templates/ ./templates/
-COPY static/ ./static/
-COPY db/ ./db/
-COPY src/ ./src/
-COPY utils/ ./utils/
-COPY app.py .
+# Copie des fichiers compiles (.so) et configuration
+COPY --from=builder /app/config/ ./config/
+COPY --from=builder /app/templates/ ./templates/
+COPY --from=builder /app/static/ ./static/
+COPY --from=builder /app/db/ ./db/
+COPY --from=builder /app/src/ ./src/
+COPY --from=builder /app/utils/ ./utils/
+COPY --from=builder /app/app.py .
 
 # Creation des repertoires necessaires
 RUN mkdir -p /app/logs /app/data
