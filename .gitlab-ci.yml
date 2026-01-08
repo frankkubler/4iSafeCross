@@ -28,7 +28,7 @@ build:arm64:
     - ls -la
     - echo "Verification de pyproject.toml:"
     - test -f pyproject.toml && echo "pyproject.toml present" || echo "pyproject.toml absent"
-    - CONTAINER_ID=$(docker create --platform linux/arm64 -w /workspace arm64v8/ubuntu:22.04 sleep 3600)
+    - CONTAINER_ID=$(docker create --platform linux/arm64 --cpus=4 --memory=15g -w /workspace arm64v8/ubuntu:22.04 sleep 3600)
     - echo "Container ID':' ${CONTAINER_ID}"
     - docker cp "${CI_PROJECT_DIR}/." ${CONTAINER_ID}:/workspace/
     - docker start ${CONTAINER_ID}
