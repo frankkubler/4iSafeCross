@@ -15,6 +15,7 @@ variables:
 build:arm64:
   stage: build
   image: docker:25-cli
+  timeout: 3h
   services:
     - docker:25-dind
   before_script:
