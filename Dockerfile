@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
+    cmake \
+    ninja-build \
+    pkg-config \
     libglib2.0-0 \
     libglib2.0-dev \
     libgirepository1.0-dev \
@@ -23,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-plugins-bad \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
+    libcairo2-dev \
+    libgirepository1.0-dev \
+    python3-dev \
     libsm6 \
     libxrender1 \
     libxext6 \
