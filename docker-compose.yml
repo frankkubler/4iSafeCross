@@ -1,6 +1,6 @@
 services:
   app:
-    image: gitlab.4itec.ddns.net/frank-k/4isafecross:latest
+    image: registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest
     container_name: 4isafecross
     network_mode: host
     runtime: nvidia
