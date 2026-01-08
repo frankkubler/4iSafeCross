@@ -39,7 +39,20 @@ build:arm64:
         bash -c "
           set -ex
           
-          echo '📦 Installation des dépendances système...'
+          echo '� DIAGNOSTIC - Contenu du répertoire monté :'
+          pwd
+          ls -la
+          echo '🔍 Recherche de pyproject.toml :'
+          if [ -f pyproject.toml ]; then
+            echo '✅ pyproject.toml trouvé'
+            head -5 pyproject.toml
+          else
+            echo '❌ pyproject.toml NON trouvé'
+            echo 'Contenu de /workspace :'
+            ls -la /workspace/
+          fi
+          
+          echo '�📦 Installation des dépendances système...'
           apt-get update -qq
           apt-get install -y -qq \
             python3.10 \
