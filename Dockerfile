@@ -79,29 +79,29 @@ COPY --from=builder /root/.local /root/.local
 COPY --from=builder /app/.venv /app/.venv
 
 # Installation runtime minimal avec GStreamer + plugins NVIDIA
+# Note: on ignore les erreurs pour nvidia-l4t-gstreamer car il est pre-installe dans l4t-jetpack
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     libglib2.0-0 \
     libgirepository-1.0-1 \
     libcairo2 \
+    libcairo-gobject2 \
     gir1.2-gstreamer-1.0 \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-libav \
-    nvidia-l4t-gstreamer \
     libsm6 \
     libxrender1 \
     libxext6 \
     libgl1-mesa-glx \
     libgomp1 \
-    libglib2.0-0 \
     libgtk-3-0 \
-    libavcodec58 \
-    libavformat58 \
-    libswscale5 \
-    libtbb2 \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libtbb-dev \
     libatlas-base-dev \
     libhdf5-dev \
     && rm -rf /var/lib/apt/lists/* \
