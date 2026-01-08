@@ -1,6 +1,6 @@
 # Multi-stage build pour image Docker ARM64 avec Cython
 # Base image NVIDIA JetPack pour compilation (registry NVIDIA officiel)
-FROM nvcr.io/nvidia/l4t-base:36.2.0 AS builder
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS builder
 
 WORKDIR /app
 
@@ -64,7 +64,7 @@ RUN python3 setup_cython.py build_ext --inplace && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
 # Stage final - Image NVIDIA JetPack minimale avec GStreamer
-FROM nvcr.io/nvidia/l4t-base:36.2.0
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
 
 WORKDIR /app
 
