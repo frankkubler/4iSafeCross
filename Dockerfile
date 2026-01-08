@@ -1,6 +1,6 @@
 # Multi-stage build pour image Docker ARM64 avec Cython
-# Base image Jetson compatible
-FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.1-py3 AS builder
+# Base image Ubuntu ARM64 pour compilation
+FROM arm64v8/ubuntu:22.04 AS builder
 
 WORKDIR /app
 
@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libgl1-mesa-glx \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation de uv pour gestion des dependances
@@ -53,8 +54,8 @@ RUN python3 setup_cython.py build_ext --inplace && \
     # Nettoyer les fichiers de build intermediaires
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
-# Stage final - Image minimale
-FROM nvcr.io/nvidia/l4t-base:r36.2.0
+# Stage final - Image minimale Ubuntu ARM64
+FROM arm64v8/ubuntu:22.04
 
 WORKDIR /app
 
