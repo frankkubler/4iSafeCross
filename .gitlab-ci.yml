@@ -19,111 +19,27 @@ build:arm64:
     - docker:25-dind
   before_script:
     - docker info
-    # Installer QEMU pour emulation ARM64
     - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
     - echo "QEMU ARM64 configure"
   script:
     - echo "Debut de la compilation Nuitka ARM64"
-    - echo "Repertoire de travail: ${CI_PROJECT_DIR}"
+    - echo "Repertoire de travail':' ${CI_PROJECT_DIR}"
     - ls -la
     - echo "Verification de pyproject.toml:"
-    - ls -la pyproject.toml || echo "pyproject.toml non trouve"
-    - cat pyproject.toml | head -5 || true
-    - |
-      # Creer un conteneur et copier les fichiers au lieu de monter un volume
-      echo "Creation du conteneur ARM64..."
-      CONTAINER_ID=$(docker create --platform linux/arm64 -w /workspace arm64v8/ubuntu:22.04 sleep 3600)
-      echo "Container ID: ${CONTAINER_ID}"
-      
-      echo "Copie des fichiers dans le conteneur..."
-      docker cp "${CI_PROJECT_DIR}/." ${CONTAINER_ID}:/workspace/
-      
-      echo "Demarrage du conteneur..."
-      docker start ${CONTAINER_ID}
-      
-      echo "Execution du build..."
-      docker exec ${CONTAINER_ID} bash -c "
-          set -ex
-          
-          echo 'DIAGNOSTIC - Contenu du repertoire:'
-          pwd
-          ls -la
-          echo 'Verification pyproject.toml:'
-          if [ -f pyproject.toml ]; then
-            echo 'pyproject.toml trouve'
-            cat pyproject.toml | head -5
-          else
-            echo 'pyproject.toml NON trouve'
-            exit 1
-          fi
-          
-          echo 'Installation des dependances systeme...'
-          apt-get update -qq
-          apt-get install -y -qq \
-            python3.10 \
-            python3.10-dev \
-            python3.10-venv \
-            python3-pip \
-            build-essential \
-            gcc \
-            g++ \
-            ccache \
-            patchelf \
-            pkg-config \
-            ninja-build \
-            meson \
-            libglib2.0-0 \
-            libglib2.0-dev \
-            libcairo2-dev \
-            libgirepository1.0-dev \
-            gobject-introspection \
-            libffi-dev \
-            libsm6 \
-            libxrender1 \
-            libxext6 \
-            libgl1-mesa-glx \
-            curl \
-            git
-          
-          echo 'Installation de uv...'
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          export PATH=\"/root/.local/bin:\$PATH\"
-          
-          echo 'Synchronisation des dependances...'
-          uv sync
-          
-          echo 'Compilation avec Nuitka...'
-          uv run nuitka \
-            --standalone \
-            --onefile \
-            --assume-yes-for-downloads \
-            --include-data-dir=config=config \
-            --include-data-dir=templates=templates \
-            --include-data-dir=static=static \
-            --include-data-dir=db=db \
-            --include-data-dir=logs=logs \
-            --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so \
-            --output-dir=dist \
-            --output-filename=4isafecross \
-            app.py
-          
-          echo 'Compilation terminee!'
-          ls -lh dist/
-          
-          if [ -f 'dist/4isafecross' ]; then
-            file dist/4isafecross
-          elif [ -d 'dist/app.dist' ]; then
-            file dist/app.dist/app
-          fi
-        "
-      
-      echo "Copie des artifacts depuis le conteneur..."
-      docker cp ${CONTAINER_ID}:/workspace/dist ./dist
-      
-      echo "Nettoyage du conteneur..."
-      docker stop ${CONTAINER_ID}
-      docker rm ${CONTAINER_ID}
-    - echo "Contenu du dossier dist/"
+    - test -f pyproject.toml && echo "pyproject.toml present" || echo "pyproject.toml absent"
+    - CONTAINER_ID=$(docker create --platform linux/arm64 -w /workspace arm64v8/ubuntu:22.04 sleep 3600)
+    - echo "Container ID':' ${CONTAINER_ID}"
+    - docker cp "${CI_PROJECT_DIR}/." ${CONTAINER_ID}:/workspace/
+    - docker start ${CONTAINER_ID}
+    - docker exec ${CONTAINER_ID} bash -c 'pwd && ls -la && test -f pyproject.toml && echo "pyproject.toml OK" || exit 1'
+    - docker exec ${CONTAINER_ID} bash -c 'apt-get update -qq && apt-get install -y -qq python3.10 python3.10-dev python3.10-venv python3-pip build-essential gcc g++ ccache patchelf pkg-config ninja-build meson libglib2.0-0 libglib2.0-dev libcairo2-dev libgirepository1.0-dev gobject-introspection libffi-dev libsm6 libxrender1 libxext6 libgl1-mesa-glx curl git'
+    - docker exec ${CONTAINER_ID} bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH="/root/.local/bin:$PATH" && uv --version'
+    - docker exec ${CONTAINER_ID} bash -c 'export PATH="/root/.local/bin:$PATH" && uv sync'
+    - docker exec ${CONTAINER_ID} bash -c 'export PATH="/root/.local/bin:$PATH" && uv run nuitka --standalone --onefile --assume-yes-for-downloads --include-data-dir=config=config --include-data-dir=templates=templates --include-data-dir=static=static --include-data-dir=db=db --include-data-dir=logs=logs --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so --output-dir=dist --output-filename=4isafecross app.py'
+    - docker exec ${CONTAINER_ID} bash -c 'ls -lh dist/ && if [ -f dist/4isafecross ]; then file dist/4isafecross; elif [ -d dist/app.dist ]; then file dist/app.dist/app; fi'
+    - docker cp ${CONTAINER_ID}:/workspace/dist ./dist
+    - docker stop ${CONTAINER_ID}
+    - docker rm ${CONTAINER_ID}
     - ls -lh dist/
   artifacts:
     name: "${ARTIFACT_NAME}-${CI_COMMIT_SHORT_SHA}"
@@ -195,23 +111,10 @@ release:
       - JetPack: 6.1 compatible
       
       **Telechargement:**
-      Telechargez l'archive depuis les artifacts du job `package:arm64` de cette pipeline.
+      Telechargez l'archive depuis les artifacts du job package:arm64 de cette pipeline.
       
       **Deploiement:**
-      ```bash
-      # Transferer sur le Jetson
-      scp ${ARTIFACT_NAME}.tar.gz user-4itec@<jetson-ip>:/home/user-4itec/
-      
-      # Sur le Jetson, extraire et lancer
-      ssh user-4itec@<jetson-ip>
-      tar -xzf ${ARTIFACT_NAME}.tar.gz
-      cd app.dist/  # ou utilisez directement ./4isafecross si onefile
-      chmod +x app
-      ./app
-      ```
-      
-      ### Changements
-      Voir le CHANGELOG pour plus de details.
+      Voir CHANGELOG pour plus de details.
   only:
     - tags
   except:
