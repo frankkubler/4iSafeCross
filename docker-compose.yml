@@ -1,0 +1,53 @@
+services:
+  app:
+    image: gitlab.4itec.ddns.net/frank-k/4isafecross:latest
+    container_name: 4isafecross
+    network_mode: host
+    runtime: nvidia
+    privileged: true
+    restart: unless-stopped
+    ipc: host
+    tty: true
+    stdin_open: true
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - TZ=Europe/Paris
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    devices:
+      - /dev/nvhost-ctrl
+      - /dev/nvhost-ctrl-gpu
+      - /dev/nvhost-prof-gpu
+      - /dev/nvmap
+      - /dev/nvhost-vic
+      - /dev/video0
+      - /dev/video1
+    
+    volumes:
+      - /data/4isafecross:/app/data
+      - /tmp/argus_socket:/tmp/argus_socket
+      - /etc/enctune.conf:/etc/enctune.conf:ro
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
