@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} — Éditeur de zones — {{ cam_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/zone_editor.css') }}">
+    <script src="{{ url_for('static', filename='js/fabric.min.js') }}"></script>
+</head>
+<body>
+
+    <!-- Barre supérieure -->
+    <div class="editor-header">
+        <div style="display:flex;align-items:center;">
+            <h1>Éditeur de zones</h1>
+            <span class="subtitle">{{ cam_name }}</span>
+        </div>
+        <div class="header-actions">
+            <span id="image-info" style="font-size:0.8rem;color:#888;"></span>
+            <button id="btn-refresh" class="btn btn-secondary" title="Recharger le snapshot">⟳ Snapshot</button>
+            <button id="btn-reset" class="btn btn-secondary" title="Réinitialiser les zones">↺ Réinitialiser</button>
+            <button id="btn-save" class="btn btn-primary" title="Sauvegarder les zones">💾 Sauvegarder</button>
+            <a href="/" class="btn btn-back">← Retour</a>
+        </div>
+    </div>
+
+    <!-- Layout principal -->
+    <div class="editor-layout">
+
+        <!-- Panneau latéral -->
+        <div class="side-panel">
+            <h2>Zones ({{ cam_name }})</h2>
+            <div id="zone-list" class="zone-list">
+                <div style="color:#888;font-size:0.85rem;padding:8px;">Chargement...</div>
+            </div>
+
+            <div class="instructions">
+                <h3>Instructions</h3>
+                <p><kbd>Clic gauche</kbd> — Ajouter un point</p>
+                <p><kbd>Clic droit</kbd> — Fermer le polygone (≥3 pts)</p>
+                <p><kbd>Clic</kbd> sur une zone — Sélectionner</p>
+                <p><kbd>Suppr</kbd> — Supprimer la zone sélectionnée</p>
+                <p><kbd>Échap</kbd> — Annuler le dessin en cours</p>
+                <p style="margin-top:8px;color:#888;">
+                    Les points proches des bords (&lt;10px) sont alignés automatiquement.
+                </p>
+            </div>
+        </div>
+
+        <!-- Zone canvas -->
+        <div class="canvas-area">
+            <div id="canvas-wrapper" class="canvas-wrapper">
+                <canvas id="editor-canvas" data-cam-id="{{ cid }}"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Barre de statut -->
+    <div class="status-bar">
+        <span id="status-message" class="status-message">Chargement...</span>
+        <span id="status-coords" style="font-family:monospace;">0, 0</span>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Overlay de chargement -->
+    <div id="loading-overlay" class="loading-overlay">
+        <span>Chargement...</span>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/zone_editor.js') }}"></script>
+</body>
+</html>
