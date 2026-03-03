@@ -8,9 +8,32 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 import os
 import numpy as np
+
+# ---------------------------------------------------------------------------
+# Backends GStreamer H.264 supportés :
+#   jetson      — nvv4l2decoder + nvvidconv (NVIDIA Jetson L4T / JetPack ≥ 4.x)
+#   vaapi_new   — vah264dec + vapostproc    (Intel iGPU, GStreamer ≥ 1.20,
+#                                            paquet gstreamer1.0-plugins-bad ≥ 1.20
+#                                            + intel-media-va-driver-non-free)
+#   vaapi_legacy— vaapidecode + vaapipostproc (Intel iGPU, gstreamer1.0-vaapi
+#                                            + i965-va-driver ou intel-media-va-driver)
+#   software    — avdec_h264 (décodage CPU pur, fallback universel)
+# ---------------------------------------------------------------------------
+
+
 class CameraManager:
     def __init__(self, cam_ids, buffer_size=5, frame_width=None, frame_height=None):
+        """Initialise le gestionnaire de caméras RTSP.
+
+        Args:
+            cam_ids: Liste d'identifiants caméra (int pour V4L2, str pour RTSP).
+            buffer_size: Taille du buffer (non utilisé directement par appsink).
+            frame_width: Largeur cible des frames (None = résolution native caméra).
+            frame_height: Hauteur cible des frames (None = résolution native caméra).
+        """
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
+        self.frame_width = frame_width
+        self.frame_height = frame_height
         self.cams = {}
         filtered_cam_ids = []
         for cid in cam_ids:
@@ -27,26 +50,88 @@ class CameraManager:
         self.threads = []
         self.cams_status = {cid: 'unknown' for cid in filtered_cam_ids}  # online/offline/unknown
 
+        # Initialisation GStreamer une seule fois (pas dans chaque thread)
+        Gst.init(None)
+
+        # Détection automatique du backend GPU disponible
+        self.backend = CameraManager.detect_backend()
+        self.logger.info(f"Backend GStreamer sélectionné : {self.backend}")
+
         for cid in filtered_cam_ids:
             t = threading.Thread(target=self.update, args=(cid,), daemon=True)
             t.start()
             self.threads.append(t)
 
+    @staticmethod
+    def detect_backend() -> str:
+        """Détecte automatiquement le backend de décodage H.264 disponible.
+
+        Ordre de priorité :
+            1. ``jetson``       : nvv4l2decoder (NVIDIA Jetson / L4T)
+            2. ``vaapi_new``    : vah264dec     (Intel iGPU, GStreamer ≥ 1.20)
+            3. ``vaapi_legacy`` : vaapidecode   (Intel iGPU, gstreamer1.0-vaapi)
+            4. ``software``     : avdec_h264    (CPU pur, fallback)
+
+        Returns:
+            Chaîne identifiant le backend sélectionné.
+        """
+        # Gst.init doit avoir été appelé avant (fait dans __init__)
+        probe_order = [
+            ('nvv4l2decoder', 'jetson'),
+            ('vah264dec',     'vaapi_new'),
+            ('vaapidecode',   'vaapi_legacy'),
+            ('avdec_h264',    'software'),
+        ]
+        logger = logging.getLogger(__name__).getChild('detect_backend')
+        for element_name, backend_id in probe_order:
+            if Gst.ElementFactory.find(element_name) is not None:
+                logger.info(f"Élément GStreamer '{element_name}' trouvé → backend '{backend_id}'")
+                return backend_id
+        logger.warning("Aucun décodeur H.264 GStreamer trouvé (jetson/vaapi/software). Fallback 'software'.")
+        return 'software'
+
+    def _build_pipeline_str(self, cid: str) -> str:
+        """Construit la chaîne de pipeline GStreamer adaptée au backend détecté.
+
+        Args:
+            cid: URL RTSP de la caméra.
+
+        Returns:
+            Chaîne décrivant le pipeline GStreamer complète.
+        """
+        # Caps de conversion/rescale (optionnel si résolution non définie)
+        if self.frame_width and self.frame_height:
+            resize_caps = f"video/x-raw,format=BGRx,width={self.frame_width},height={self.frame_height}"
+        else:
+            resize_caps = "video/x-raw,format=BGRx"
+
+        source = f"rtspsrc location={cid} latency=200 ! rtph264depay ! h264parse"
+        tail = "videoconvert ! video/x-raw,format=BGR ! appsink name=sink"
+
+        if self.backend == 'jetson':
+            # Décodage hardware Tegra + conversion GPU
+            decode = f"nvv4l2decoder ! nvvidconv ! {resize_caps}"
+        elif self.backend == 'vaapi_new':
+            # Intel iGPU — GStreamer ≥ 1.20 (gstreamer1.0-plugins-bad)
+            decode = f"vah264dec ! vapostproc ! {resize_caps}"
+        elif self.backend == 'vaapi_legacy':
+            # Intel iGPU — gstreamer1.0-vaapi (legacy)
+            decode = f"vaapidecode ! vaapipostproc ! {resize_caps}"
+        else:
+            # Fallback software CPU
+            decode = f"avdec_h264 ! videoconvert ! {resize_caps}"
+
+        return f"{source} ! {decode} ! {tail}"
+
     def update(self, cid):
-        Gst.init(None)
+        # Gst.init() est appelé une seule fois dans __init__
         reconnect_delay = 3  # secondes entre tentatives
         while self.running:
             # Boucle de tentative de connexion au flux RTSP
             pipeline = None
             while self.running:
-                pipeline_str = (
-                    f"rtspsrc location={cid} latency=200 ! "
-                    "rtph264depay ! h264parse ! nvv4l2decoder ! "
-                    "nvvidconv ! video/x-raw,format=BGRx,width=1920,height=1080 ! "
-                    "videoconvert ! video/x-raw,format=BGR ! "
-                    "appsink name=sink"
-                )
-                self.logger.info(f"Pipeline GStreamer: {pipeline_str}")
+                pipeline_str = self._build_pipeline_str(cid)
+                self.logger.info(f"Pipeline GStreamer [{self.backend}]: {pipeline_str}")
                 try:
                     pipeline = Gst.parse_launch(pipeline_str)
                     appsink = pipeline.get_by_name('sink')
