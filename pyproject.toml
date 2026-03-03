@@ -11,6 +11,8 @@ dependencies = [
     "nuitka>=2.7.12",
     "opencv-python>=4.11.0.86",
     "psutil>=7.0.0",
+    # pygobject nécessite libgirepository1.0-dev (apt) pour la compilation
+    # Voir INSTALL_SYSTEM_DEPS.md pour les commandes complètes par plateforme
     "pygobject<3.51.0; platform_system != 'Windows'",
     "requests>=2.32.3",
     "setuptools>=80.8.0",
