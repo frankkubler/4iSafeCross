@@ -567,9 +567,9 @@
                     <button id="btn_res_switch_{{ cam.idx }}" onclick="switchResolution({{ cam.idx }})" style="background:#2196f3;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">
                         720p
                     </button>
-                    <a href="/zone_editor/{{ cam.idx }}" target="_blank" style="background:#9c27b0;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;text-decoration:none;font-size:inherit;display:inline-block;">
+                    <button onclick="window.open('/zone_editor/{{ cam.idx }}', '_blank')" style="background:#9c27b0;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:inherit;">
                         ✏️ Éditer zones
-                    </a>
+                    </button>
     <script>
     function saveMotionParams(idx) {
         const params = {
