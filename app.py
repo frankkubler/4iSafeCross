@@ -16,7 +16,7 @@ from datetime import datetime
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS,
-                             load_zones_by_camera_from_ini)
+                             load_zones_by_camera_from_ini, NUM_RELAYS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -1011,7 +1011,7 @@ def save_zones(cid):
 @app.route('/api/relay-count')
 def relay_count():
     """Retourne le nombre de relais physiques disponibles."""
-    return jsonify({'count': len(relays.relays)})
+    return jsonify({'count': len(relays.relays) or NUM_RELAYS})
 
 
 @app.route('/zone_editor/<int:cid>')
@@ -1026,7 +1026,7 @@ def zone_editor(cid):
         cam_name=cam_name,
         app_name=APP_NAME,
         app_version=APP_VERSION,
-        num_relays=len(relays.relays),
+        num_relays=len(relays.relays) or NUM_RELAYS,
     )
 
 
