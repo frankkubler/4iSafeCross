@@ -82,6 +82,9 @@ SIMPLE_CLASSES = ast.literal_eval(config.get('APP', 'SIMPLE_CLASSES', fallback='
 # Nouvelle constante pour le temps d'attente avant test RTSP
 WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=10)
 
+# Nombre de relais physiques (fallback si Yoctopuce non connecté)
+NUM_RELAYS = config.getint('APP', 'NUM_RELAYS', fallback=5)
+
 # Ajout des constantes pour la fonction et l'URL d'inférence
 FONCTION_RFDETR = config.get('APP', 'FONCTION_RFDETR', fallback='/predict_frame_rf_detr/')
 URL_RFDETR = config.get('APP', 'URL_RFDETR', fallback='http://127.0.0.1:8002/')
