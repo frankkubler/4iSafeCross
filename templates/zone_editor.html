@@ -20,7 +20,7 @@
             <button id="btn-refresh" class="btn btn-secondary" title="Recharger le snapshot">⟳ Snapshot</button>
             <button id="btn-reset" class="btn btn-secondary" title="Réinitialiser les zones">↺ Réinitialiser</button>
             <button id="btn-save" class="btn btn-primary" title="Sauvegarder les zones">💾 Sauvegarder</button>
-            <a href="/" class="btn btn-back">← Retour</a>
+            <button class="btn btn-back" onclick="if(window.opener){window.close();}else{window.location.href='/';}">← Retour</button>
         </div>
     </div>
 
