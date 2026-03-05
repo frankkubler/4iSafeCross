@@ -535,7 +535,7 @@
                         <span>${rn}</span>
                     </label>`;
                 }
-                relayCheckboxes = `<div class="zone-relays"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
+                relayCheckboxes = `<div class="zone-relays" onclick="event.stopPropagation()"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
             }
             html += `
                 <div class="zone-item${selected}" data-idx="${i}" onclick="zoneEditor.selectZone(${i})">
