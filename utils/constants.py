@@ -25,6 +25,8 @@ def load_zones_by_camera_from_ini(ini_path):
             zone["polygon"] = [ (int(x), int(y)) for x, y in pts ]
         if "color" in config[section]:
             zone["color"] = tuple(map(int, config[section]["color"].split(',')))
+        relays_str = config[section].get("relays", "").strip()
+        zone["relays"] = [int(r.strip()) for r in relays_str.split(',') if r.strip().isdigit()]
         if "_cam" in section:
             try:
                 cam_id = int(section.split("_cam")[-1])

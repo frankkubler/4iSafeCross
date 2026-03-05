@@ -137,8 +137,8 @@ body {
 
 .zone-item {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
     padding: 8px 10px;
     background: #1a1a2e;
     border-radius: 6px;
@@ -190,6 +190,61 @@ body {
 
 .zone-item-delete:hover {
     background: rgba(204, 0, 0, 0.2);
+}
+
+.zone-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Relais checkboxes */
+.zone-relays {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-left: 4px;
+    margin-top: 2px;
+}
+
+.zone-relays-label {
+    font-size: 0.7rem;
+    color: #888;
+    flex-shrink: 0;
+}
+
+.relay-cb {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: #ccc;
+    cursor: pointer;
+    user-select: none;
+    background: #2a2a4a;
+    border-radius: 4px;
+    padding: 2px 6px;
+    transition: background 0.2s;
+}
+
+.relay-cb:hover {
+    background: #3a3a6a;
+}
+
+.relay-cb input[type="checkbox"] {
+    accent-color: #4caf50;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.relay-cb span {
+    font-family: monospace;
+    font-weight: 600;
+    color: #4caf50;
 }
 
 /* Instructions */

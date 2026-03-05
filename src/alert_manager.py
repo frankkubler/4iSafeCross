@@ -15,8 +15,7 @@ MAX_RECORDING_QUEUE_SIZE = 20
 
 
 class AlerteManager:
-    def __init__(self, relays, telegram_bot=None, zones=None, telegram_alert_enabled=False):
-        # ...existing code...
+    def __init__(self, relays, telegram_bot=None, zones=None, zones_by_camera=None, telegram_alert_enabled=False):
         self.relays = relays
         self.last_detection_time = 0
         # self.relay_on devient un dict par relais
@@ -38,9 +37,19 @@ class AlerteManager:
         self.telegram_bot = telegram_bot  # Injecté depuis app.py
         self.last_telegram_sent = {}  # par caméra
         self.telegram_alert_enabled = telegram_alert_enabled
-        # Définition des zones (exemple : deux zones rectangulaires)
-        # Format : (x1, y1, x2, y2) en pixels sur l'image
-        self.zones = zones if zones is not None else []
+        # Construire le lookup plat zone_name -> zone_dict pour toutes les caméras
+        # Doit être fait AVANT _get_relay_nums_from_zone (appelé dans la boucle d'init)
+        if zones_by_camera is not None:
+            self._zones_flat = {
+                z["name"]: z
+                for cam_zones in zones_by_camera.values()
+                for z in cam_zones
+            }
+            self.zones = [z for cam_zones in zones_by_camera.values() for z in cam_zones]
+        else:
+            flat_zones = zones if zones is not None else []
+            self._zones_flat = {z["name"]: z for z in flat_zones}
+            self.zones = flat_zones
         # Initialiser relay_on et timer_task pour chaque zone
         relay_nums = set()
         for zone in self.zones:
@@ -65,13 +74,22 @@ class AlerteManager:
         self.telegram_alert_enabled = enabled
 
     def _get_relay_nums_from_zone(self, zone_name):
-        # Retourne une liste de relais à activer/éteindre selon la zone
+        """Retourne la liste des relais associés à une zone.
+
+        Cherche d'abord dans la config data-driven (_zones_flat[zone_name]['relays']).
+        Si absent ou liste vide, utilise le mapping hardcodé (rétrocompatibilité).
+        """
+        zone = self._zones_flat.get(zone_name, {})
+        relays = zone.get("relays")
+        if relays:  # liste non-vide définie dans la config
+            return relays
+        # Fallback hardcodé (rétrocompatibilité zones sans champ 'relays')
         if "zone1" in zone_name or "zone3" in zone_name:
             return [0, 1, 2]
         elif "zone2" in zone_name or "zone4" in zone_name or "zone5" in zone_name:
             return [1]
         self.logger.warning(f"Zone {zone_name} non reconnue pour le relais")
-        return []  # Si la zone n'est pas reconnue, on ne fait rien
+        return []
 
     def should_trigger_alert_for_detection(self, detection):
         """
@@ -271,10 +289,23 @@ class AlerteManager:
             self.logger.info(f"Extinction annulée (détection relancée) pour relais {relay_num}")
             pass
 
-    def set_zones(self, zones):
-        # zones : liste de dicts {"name": ..., "rect": [x1, y1, x2, y2]}
-        self.zones = zones
-        self.logger.info(f"Zones mises à jour : {self.zones}")
+    def set_zones(self, zones_or_by_camera):
+        """Met à jour les zones et reconstruit le lookup relais.
+
+        Args:
+            zones_or_by_camera: dict {cam_id: [zones]} ou liste de zones.
+        """
+        if isinstance(zones_or_by_camera, dict):
+            self._zones_flat = {
+                z["name"]: z
+                for cam_zones in zones_or_by_camera.values()
+                for z in cam_zones
+            }
+            self.zones = [z for cam_zones in zones_or_by_camera.values() for z in cam_zones]
+        else:
+            self.zones = zones_or_by_camera
+            self._zones_flat = {z["name"]: z for z in self.zones}
+        self.logger.info(f"Zones mises à jour : {len(self.zones)} zones sur {len(set(z['name'].split('_cam')[-1] for z in self.zones if '_cam' in z['name']))} caméra(s)")
         # Réinitialiser relay_on, relay_on_time, relay_active_zones pour chaque relay_num
         relay_nums = set()
         for zone in self.zones:
