@@ -205,10 +205,15 @@ def create_zone_overlay(frame_shape, zones, cid):
     
     # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
     if cid not in zone_color_cache:
-        zone_color_cache[cid] = {zone["name"]: zone.get("color", (255, 0, 0)) for zone in zones}
-    
+        zone_color_cache[cid] = {
+            zone["name"]: (c[2], c[1], c[0])  # RGB → BGR pour OpenCV
+            for zone in zones
+            for c in [zone.get("color", (255, 0, 0))]
+        }
+
     for i, zone in enumerate(zones):
-        color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
+        color_rgb = zone.get("color", (0, 255, 0))
+        color = (color_rgb[2], color_rgb[1], color_rgb[0])  # RGB → BGR pour OpenCV
         if "polygon" in zone:
             # On s'assure que les points sont dans l'image
             pts = [
