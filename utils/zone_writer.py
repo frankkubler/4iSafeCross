@@ -61,12 +61,17 @@ def save_zones_to_ini(ini_path, cam_id, zones):
         # Formater la couleur : R,G,B
         color_str = ",".join(str(int(c)) for c in color)
 
+        relays = zone.get("relays", [])
+        entries = [
+            ("polygon", poly_str),
+            ("color", color_str),
+        ]
+        if relays:
+            entries.append(("relays", ",".join(str(r) for r in relays)))
+
         section = {
             "header": name,
-            "entries": [
-                ("polygon", poly_str),
-                ("color", color_str),
-            ],
+            "entries": entries,
         }
         new_sections.append(section)
 

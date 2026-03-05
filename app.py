@@ -82,8 +82,8 @@ threading.Thread(target=telegram_bot.run, daemon=True).start()
 # Définir les zones pour chaque caméra
 zones_by_camera = ZONES_BY_CAMERA
 
-# On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
-alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
+# Passer toutes les zones (toutes caméras) à l'alert_manager
+alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones_by_camera=zones_by_camera, telegram_alert_enabled=False)
 
 # ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
 # Variables globales pour le heartbeat
@@ -962,6 +962,7 @@ def get_zones(cid):
             'name': zone['name'],
             'polygon': [list(pt) for pt in zone['polygon']],
             'color': list(zone.get('color', (255, 0, 0))),
+            'relays': zone.get('relays', []),
         })
     return jsonify(result)
 
@@ -996,8 +997,8 @@ def save_zones(cid):
             frame_cache_timestamp.clear()
         zone_color_cache.clear()
 
-        # Mettre à jour l'alert manager avec les zones de la caméra 0
-        alert_manager.set_zones(zones_by_camera.get(0, []))
+        # Mettre à jour l'alert manager avec toutes les zones (toutes caméras)
+        alert_manager.set_zones(zones_by_camera)
 
         logger.info(f"✅ Zones cam{cid} sauvegardées et rechargées ({len(zones_data)} zones)")
         return jsonify({'status': 'ok', 'zones_count': len(zones_data)})
@@ -1005,6 +1006,12 @@ def save_zones(cid):
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde zones cam{cid}: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/relay-count')
+def relay_count():
+    """Retourne le nombre de relais physiques disponibles."""
+    return jsonify({'count': len(relays.relays)})
 
 
 @app.route('/zone_editor/<int:cid>')
@@ -1019,6 +1026,7 @@ def zone_editor(cid):
         cam_name=cam_name,
         app_name=APP_NAME,
         app_version=APP_VERSION,
+        num_relays=len(relays.relays),
     )
 
 

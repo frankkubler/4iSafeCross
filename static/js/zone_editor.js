@@ -167,6 +167,7 @@
                         name: zone.name,
                         polygon: canvasPolygon,
                         color: color,
+                        relays: zone.relays || [],
                         fabricObj: fabricObj,
                     });
                 });
@@ -331,6 +332,7 @@
             name: name,
             polygon: canvasPolygon,
             color: color,
+            relays: [],
             fabricObj: fabricObj,
         });
 
@@ -522,12 +524,28 @@
             const [r, g, b] = zone.color;
             const selected = i === selectedZoneIndex ? " selected" : "";
             const pts = zone.polygon.length;
+            const numRelays = typeof NUM_RELAYS !== 'undefined' ? NUM_RELAYS : 0;
+            let relayCheckboxes = '';
+            if (numRelays > 0) {
+                let checkboxHtml = '';
+                for (let rn = 0; rn < numRelays; rn++) {
+                    const checked = (zone.relays || []).includes(rn) ? 'checked' : '';
+                    checkboxHtml += `<label class="relay-cb" title="Relais ${rn}">
+                        <input type="checkbox" ${checked} onchange="zoneEditor.toggleRelay(${i}, ${rn})">
+                        <span>${rn}</span>
+                    </label>`;
+                }
+                relayCheckboxes = `<div class="zone-relays"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
+            }
             html += `
                 <div class="zone-item${selected}" data-idx="${i}" onclick="zoneEditor.selectZone(${i})">
-                    <span class="zone-color-dot" style="background:rgb(${r},${g},${b})"></span>
-                    <span class="zone-item-name">${zone.name}</span>
-                    <span class="zone-item-points">${pts}pts</span>
-                    <button class="zone-item-delete" onclick="event.stopPropagation();zoneEditor.deleteZone(${i})" title="Supprimer">✕</button>
+                    <div class="zone-item-header">
+                        <span class="zone-color-dot" style="background:rgb(${r},${g},${b})"></span>
+                        <span class="zone-item-name">${zone.name}</span>
+                        <span class="zone-item-points">${pts}pts</span>
+                        <button class="zone-item-delete" onclick="event.stopPropagation();zoneEditor.deleteZone(${i})" title="Supprimer">✕</button>
+                    </div>
+                    ${relayCheckboxes}
                 </div>
             `;
         });
@@ -563,6 +581,7 @@
                 Math.round(pt[1] * scaleFactor),
             ]),
             color: zone.color,
+            relays: zone.relays || [],
         }));
 
         fetch(`/api/zones/${camId}`, {
@@ -621,6 +640,7 @@
             name: z.name,
             polygon: z.polygon.map((pt) => [...pt]),
             color: [...z.color],
+            relays: [...(z.relays || [])],
         }));
 
         showLoading(true);
@@ -653,6 +673,7 @@
                     name: z.name,
                     polygon: z.polygon,
                     color: z.color,
+                    relays: z.relays || [],
                     fabricObj: fabricObj,
                 });
             });
@@ -704,10 +725,27 @@
         }, 3000);
     }
 
+    /**
+     * Bascule l'activation d'un relais pour une zone.
+     */
+    function toggleRelay(zoneIdx, relayNum) {
+        const zone = completedZones[zoneIdx];
+        if (!zone) return;
+        const idx = zone.relays.indexOf(relayNum);
+        if (idx >= 0) {
+            zone.relays.splice(idx, 1);
+        } else {
+            zone.relays.push(relayNum);
+            zone.relays.sort((a, b) => a - b);
+        }
+        updateZoneList();
+    }
+
     // === API publique (pour les onclick du HTML) ===
     window.zoneEditor = {
         selectZone: selectZone,
         deleteZone: deleteZone,
+        toggleRelay: toggleRelay,
     };
 
     // Lancer au chargement
