@@ -115,6 +115,26 @@
             color: #4caf50;
             margin-bottom: 5px;
         }
+        .top-right-controls {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+        .top-right-controls button,
+        .top-right-controls .btn-link {
+            padding: 8px 18px;
+            font-size: 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #fff;
+            white-space: nowrap;
+        }
         .legend {
             position: fixed;
             top: 250px;
@@ -483,10 +503,14 @@
     <img src="{{ url_for('static', filename='res/4itec-logo.png') }}" class="header-logo" alt="Logo 4itec">
     <h1>4iSafeCross CONTROL CENTER</h1>
     <div class="main-content">
-        <button onclick="quitServer()" style="position:fixed;top:20px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#c00;color:#fff;border:none;border-radius:6px;cursor:pointer;">Quitter</button>
-        <button onclick="showDebugPanel()" style="position:fixed;top:90px;right:20px;padding:10px 20px;font-size:16px;z-index:200;background:#0074d9;color:#fff;border:none;border-radius:6px;cursor:pointer;">Debug</button>
-        <button onclick="showStatsPanel()" style="position:fixed;top:90px;right:90px;padding:10px 20px;font-size:16px;z-index:200;background:#4caf50;color:#fff;border:none;border-radius:6px;cursor:pointer;">Stats</button>
-        <button id="btn_telegram_alert" onclick="toggleTelegramAlert()" style="position:fixed;top:160px;right:20px;padding:10px 20px;font-size:16px;z-index:200;{{ 'background:#ff9800;' if telegram_alert_enabled else 'background:#888;' }}color:#fff;border:none;border-radius:6px;cursor:pointer;">{{ 'Désactiver alertes Telegram' if telegram_alert_enabled else 'Activer alertes Telegram' }}</button>
+        <div class="top-right-controls">
+            <div style="display:flex;gap:8px;">
+                <button onclick="showStatsPanel()" style="background:#4caf50;">Stats</button>
+                <button onclick="showDebugPanel()" style="background:#0074d9;">Debug</button>
+                <button onclick="quitServer()" style="background:#c00;">Quitter</button>
+            </div>
+            <button id="btn_telegram_alert" onclick="toggleTelegramAlert()" style="{{ 'background:#ff9800;' if telegram_alert_enabled else 'background:#888;' }}">{{ 'Désactiver alertes Telegram' if telegram_alert_enabled else 'Activer alertes Telegram' }}</button>
+        </div>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Synchronise le bouton Telegram à l'état initial
