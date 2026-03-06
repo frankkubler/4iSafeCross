@@ -53,6 +53,7 @@
     let tempLines = [];
     let tempCircles = [];
     let previewLine = null;
+    let isShiftDown = false;
 
     // === Éléments DOM ===
     const $ = (id) => document.getElementById(id);
@@ -205,8 +206,19 @@
             }
 
             // Snap aux bords
-            const x = snapToBorder(pointer.x, canvasWidth);
-            const y = snapToBorder(pointer.y, canvasHeight);
+            let x = snapToBorder(pointer.x, canvasWidth);
+            let y = snapToBorder(pointer.y, canvasHeight);
+
+            // Shift : contraindre aux axes cardinaux par rapport au dernier point
+            if (isShiftDown && currentPoints.length > 0) {
+                const constrained = constrainToCardinalAxes(
+                    currentPoints[currentPoints.length - 1],
+                    { x, y }
+                );
+                x = constrained.x;
+                y = constrained.y;
+            }
+
             addPoint(x, y);
         });
 
@@ -232,12 +244,21 @@
 
         // Touche Suppr : supprimer la zone sélectionnée
         document.addEventListener("keydown", function (e) {
+            if (e.key === "Shift") {
+                isShiftDown = true;
+            }
             if (e.key === "Delete" && selectedZoneIndex >= 0) {
                 deleteZone(selectedZoneIndex);
             }
             // Échap : annuler le dessin en cours
             if (e.key === "Escape" && isDrawing) {
                 cancelDrawing();
+            }
+        });
+
+        document.addEventListener("keyup", function (e) {
+            if (e.key === "Shift") {
+                isShiftDown = false;
             }
         });
     }
@@ -287,18 +308,42 @@
     }
 
     /**
+     * Contraint un point aux axes cardinaux (H ou V) par rapport à l'origine.
+     */
+    function constrainToCardinalAxes(origin, point) {
+        const dx = Math.abs(point.x - origin.x);
+        const dy = Math.abs(point.y - origin.y);
+        if (dx >= dy) {
+            // Axe horizontal
+            return { x: point.x, y: origin.y };
+        } else {
+            // Axe vertical
+            return { x: origin.x, y: point.y };
+        }
+    }
+
+    /**
      * Met à jour la ligne de prévisualisation.
      */
     function updatePreviewLine(opt) {
         const pointer = fabricCanvas.getPointer(opt.e);
         const lastPoint = currentPoints[currentPoints.length - 1];
 
+        // Shift : contraindre aux axes cardinaux
+        let targetX = pointer.x;
+        let targetY = pointer.y;
+        if (isShiftDown) {
+            const constrained = constrainToCardinalAxes(lastPoint, { x: targetX, y: targetY });
+            targetX = constrained.x;
+            targetY = constrained.y;
+        }
+
         if (previewLine) {
             fabricCanvas.remove(previewLine);
         }
 
         previewLine = new fabric.Line(
-            [lastPoint.x, lastPoint.y, pointer.x, pointer.y],
+            [lastPoint.x, lastPoint.y, targetX, targetY],
             {
                 stroke: "rgba(255, 255, 255, 0.5)",
                 strokeWidth: 1,
