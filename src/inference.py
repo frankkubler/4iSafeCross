@@ -55,7 +55,7 @@ class InferenceServerThread(threading.Thread):
         self.motion_detector.update_fgbg_params(
             varThreshold=getattr(self.motion_detector, 'varThreshold', 7),
             history=getattr(self.motion_detector, 'history', 250),
-            detectShadows=getattr(self.motion_detector, 'detectShadow', False)
+            detectShadows=getattr(self.motion_detector, 'detectShadows', False)
         )
         
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
@@ -124,7 +124,7 @@ class InferenceServerThread(threading.Thread):
                 frame,
                 padding=getattr(self.motion_detector, 'padding', 40),
                 white_pixels_threshold=self.white_pixels_threshold,
-                min_contour_area=getattr(self.motion_detector, 'min_area', 30),
+                min_contour_area=getattr(self.motion_detector, 'min_contour_area', 30),
             )
 
             x_pad, y_pad, w_pad, h_pad, x, y, w, h = coords
@@ -248,6 +248,13 @@ class InferenceServerThread(threading.Thread):
                     self.logger.error("La réponse du serveur est invalide ou absente.")
             except requests.ConnectionError:
                 self.logger.error("Impossible de se connecter au serveur.")
+                # Mettre quand même à jour le ROI pour l'affichage vidéo
+                self._call_detection_callback({
+                    "detections": [],
+                    "roi": roi,
+                    "x_pad": (x_pad, y_pad, w_pad, h_pad, x, y, w, h),
+                    "y_pad": None
+                })
                 time.sleep(1)
                 continue
             if self.is_detection is True:
