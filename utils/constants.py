@@ -82,6 +82,9 @@ SIMPLE_CLASSES = ast.literal_eval(config.get('APP', 'SIMPLE_CLASSES', fallback='
 # Nouvelle constante pour le temps d'attente avant test RTSP
 WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=10)
 
+# Période de grâce fail-safe au démarrage avant extinction initiale des relais
+STARTUP_GRACE_PERIOD = config.getint('APP', 'STARTUP_GRACE_PERIOD', fallback=15)
+
 # Nombre de relais physiques (fallback si Yoctopuce non connecté)
 NUM_RELAYS = config.getint('APP', 'NUM_RELAYS', fallback=5)
 

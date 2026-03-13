@@ -16,7 +16,7 @@ from datetime import datetime
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS,
-                             load_zones_by_camera_from_ini, NUM_RELAYS)
+                             load_zones_by_camera_from_ini, NUM_RELAYS, STARTUP_GRACE_PERIOD)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -490,6 +490,38 @@ for i in range(len(CAM_IDS)):
     )
     thread.start()
     inference_threads[i] = thread
+
+
+def startup_relay_off():
+    """Éteint les relais après une période de grâce au démarrage si aucune détection n'a eu lieu.
+
+    Le fail-safe allume tous les relais au démarrage. Ce thread attend que la détection soit
+    opérationnelle (15s), puis demande l'extinction si aucune zone n'est active.
+    La logique interne de _delayed_off_relay (11s + vérification relay_active_zones) protège
+    contre l'extinction si une personne est bien détectée pendant la période de grâce.
+
+    Les relais non associés à une zone (ex : relais 3 et 4 si zones.ini ne les couvre pas)
+    sont également éteints directement après la période de grâce + 11s de sécurité.
+    """
+    logger.info(f"⏳ Période de grâce fail-safe : {STARTUP_GRACE_PERIOD}s avant extinction initiale des relais")
+    time.sleep(STARTUP_GRACE_PERIOD)
+    logger.info("🔓 Période de grâce écoulée — extinction des relais si aucune détection active")
+    # Extinction des relais gérés par les zones (via _delayed_off_relay avec vérification active)
+    asyncio.run_coroutine_threadsafe(
+        alert_manager.on_no_more_detection(time.time()),
+        MAIN_LOOP
+    )
+    # Extinction explicite des relais physiques non couverts par les zones (ex : relais 3, 4…)
+    # On attend la temporisation de sécurité (11s) avant d'agir sur les relais non gérés
+    time.sleep(12)
+    managed_relays = set(alert_manager.relay_on.keys())
+    for i in range(len(relays.relays)):
+        if i not in managed_relays and relays.get_relay_state(i):
+            logger.info(f"🔧 Extinction du relais {i} (non géré par les zones) après période de grâce")
+            relays.action_off(i)
+
+
+threading.Thread(target=startup_relay_off, daemon=True).start()
 
 
 def gen_frames(cid):
