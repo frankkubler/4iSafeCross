@@ -1,10 +1,6 @@
 name: Build Linux Executable for Jetson Orin NX
 
 on:
-  push:
-    branches: [ main, jetson_gpu ]
-    tags:
-      - 'v*.*.*'
   pull_request:
     branches: [ main, jetson_gpu ]
   workflow_dispatch:  # Permet de déclencher manuellement
