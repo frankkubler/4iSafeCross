@@ -1,0 +1,387 @@
+/* Zone Editor - Thème sombre cohérent avec 4iSafeCross */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+}
+
+/* === Barre supérieure === */
+.editor-header {
+    background: #16213e;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.editor-header h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.editor-header .subtitle {
+    font-size: 0.9rem;
+    color: #aaa;
+    margin-left: 12px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* === Boutons === */
+.btn {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    font-family: inherit;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: #4caf50;
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: #43a047;
+}
+
+.btn-secondary {
+    background: #555;
+    color: #fff;
+}
+
+.btn-secondary:hover {
+    background: #666;
+}
+
+.btn-danger {
+    background: #c00;
+    color: #fff;
+}
+
+.btn-danger:hover {
+    background: #d32f2f;
+}
+
+.btn-back {
+    background: #0074d9;
+    color: #fff;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-back:hover {
+    background: #0063b8;
+}
+
+/* === Layout principal === */
+.editor-layout {
+    display: flex;
+    gap: 0;
+    min-height: calc(100vh - 56px);
+}
+
+/* === Panneau latéral === */
+.side-panel {
+    width: 280px;
+    min-width: 280px;
+    background: #16213e;
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid #2a2a4a;
+}
+
+.side-panel h2 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    color: #4caf50;
+    border-bottom: 1px solid #2a2a4a;
+    padding-bottom: 8px;
+}
+
+.zone-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+}
+
+.zone-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    background: #1a1a2e;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 2px solid transparent;
+}
+
+.zone-item:hover {
+    background: #2a2a4a;
+}
+
+.zone-item.selected {
+    border-color: #4caf50;
+    background: #1e3a2e;
+}
+
+.zone-color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.zone-item-name {
+    flex: 1;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zone-item-points {
+    font-size: 0.75rem;
+    color: #888;
+}
+
+.zone-item-delete {
+    background: none;
+    border: none;
+    color: #c00;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.zone-item-delete:hover {
+    background: rgba(204, 0, 0, 0.2);
+}
+
+.zone-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Relais checkboxes */
+.zone-relays {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-left: 4px;
+    margin-top: 2px;
+}
+
+.zone-relays-label {
+    font-size: 0.7rem;
+    color: #888;
+    flex-shrink: 0;
+}
+
+.relay-cb {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: #ccc;
+    cursor: pointer;
+    user-select: none;
+    background: #2a2a4a;
+    border-radius: 4px;
+    padding: 2px 6px;
+    transition: background 0.2s;
+}
+
+.relay-cb:hover {
+    background: #3a3a6a;
+}
+
+.relay-cb input[type="checkbox"] {
+    accent-color: #4caf50;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.relay-cb span {
+    font-family: monospace;
+    font-weight: 600;
+    color: #4caf50;
+}
+
+/* Instructions */
+.instructions {
+    background: #1a1a2e;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    line-height: 1.6;
+}
+
+.instructions h3 {
+    font-size: 0.9rem;
+    color: #4caf50;
+    margin-bottom: 8px;
+}
+
+.instructions kbd {
+    background: #333;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    border: 1px solid #555;
+}
+
+/* === Zone canvas === */
+.canvas-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow: auto;
+    background: #111;
+}
+
+.canvas-wrapper {
+    position: relative;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    overflow: hidden;
+    line-height: 0;
+}
+
+/* === Messages de statut === */
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #16213e;
+    padding: 6px 24px;
+    font-size: 0.8rem;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+    z-index: 100;
+    border-top: 1px solid #2a2a4a;
+}
+
+.status-message {
+    transition: color 0.3s;
+}
+
+.status-message.success {
+    color: #4caf50;
+}
+
+.status-message.error {
+    color: #f44336;
+}
+
+/* === Toast notification === */
+.toast {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.9rem;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateX(100px);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+}
+
+.toast.visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast.success {
+    background: #2e7d32;
+}
+
+.toast.error {
+    background: #c62828;
+}
+
+.toast.info {
+    background: #1565c0;
+}
+
+/* === Overlay de chargement === */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    color: #fff;
+    font-size: 1.2rem;
+}
+
+.loading-overlay.hidden {
+    display: none;
+}
+
+/* === Responsive === */
+@media (max-width: 900px) {
+    .editor-layout {
+        flex-direction: column;
+    }
+
+    .side-panel {
+        width: 100%;
+        min-width: 0;
+        border-right: none;
+        border-bottom: 1px solid #2a2a4a;
+        max-height: 200px;
+    }
+
+    .canvas-area {
+        padding: 10px;
+    }
+}

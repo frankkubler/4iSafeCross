@@ -25,6 +25,8 @@ def load_zones_by_camera_from_ini(ini_path):
             zone["polygon"] = [ (int(x), int(y)) for x, y in pts ]
         if "color" in config[section]:
             zone["color"] = tuple(map(int, config[section]["color"].split(',')))
+        relays_str = config[section].get("relays", "").strip()
+        zone["relays"] = [int(r.strip()) for r in relays_str.split(',') if r.strip().isdigit()]
         if "_cam" in section:
             try:
                 cam_id = int(section.split("_cam")[-1])
@@ -79,6 +81,9 @@ SIMPLE_CLASSES = ast.literal_eval(config.get('APP', 'SIMPLE_CLASSES', fallback='
 
 # Nouvelle constante pour le temps d'attente avant test RTSP
 WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=10)
+
+# Nombre de relais physiques (fallback si Yoctopuce non connecté)
+NUM_RELAYS = config.getint('APP', 'NUM_RELAYS', fallback=5)
 
 # Ajout des constantes pour la fonction et l'URL d'inférence
 FONCTION_RFDETR = config.get('APP', 'FONCTION_RFDETR', fallback='/predict_frame_rf_detr/')

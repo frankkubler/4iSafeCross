@@ -3,6 +3,7 @@ from src.camera_manager import CameraManager
 from src.inference import InferenceServerThread
 from src.alert_manager import AlerteManager
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
+from utils.zone_writer import save_zones_to_ini
 from src.relay_pilot import YoctoMultiRelay
 from src.bot_aiogram import BotThread
 import threading
@@ -14,7 +15,8 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
-                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS)
+                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS,
+                             load_zones_by_camera_from_ini, NUM_RELAYS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -80,8 +82,8 @@ threading.Thread(target=telegram_bot.run, daemon=True).start()
 # Définir les zones pour chaque caméra
 zones_by_camera = ZONES_BY_CAMERA
 
-# On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
-alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
+# Passer toutes les zones (toutes caméras) à l'alert_manager
+alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones_by_camera=zones_by_camera, telegram_alert_enabled=False)
 
 # ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
 # Variables globales pour le heartbeat
@@ -203,10 +205,15 @@ def create_zone_overlay(frame_shape, zones, cid):
     
     # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
     if cid not in zone_color_cache:
-        zone_color_cache[cid] = {zone["name"]: zone.get("color", (255, 0, 0)) for zone in zones}
-    
+        zone_color_cache[cid] = {
+            zone["name"]: (c[2], c[1], c[0])  # RGB → BGR pour OpenCV
+            for zone in zones
+            for c in [zone.get("color", (255, 0, 0))]
+        }
+
     for i, zone in enumerate(zones):
-        color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
+        color_rgb = zone.get("color", (0, 255, 0))
+        color = (color_rgb[2], color_rgb[1], color_rgb[0])  # RGB → BGR pour OpenCV
         if "polygon" in zone:
             # On s'assure que les points sont dans l'image
             pts = [
@@ -913,6 +920,114 @@ def set_zones():
         logger.debug("🗑️ Cache des overlays de zones vidé suite à modification des zones")
     
     return jsonify({'status': 'ok'})
+
+
+# ===== ÉDITEUR DE ZONES =====
+
+ZONES_INI_PATH = 'config/zones.ini'
+
+# Palette de couleurs automatiques pour les zones
+ZONE_COLORS_PALETTE = [
+    (128, 255, 0),    # Vert clair
+    (255, 128, 0),    # Orange
+    (255, 255, 0),    # Jaune
+    (0, 255, 255),    # Cyan
+    (255, 0, 255),    # Magenta
+    (0, 128, 255),    # Bleu clair
+    (255, 64, 64),    # Rouge clair
+    (128, 0, 255),    # Violet
+]
+
+
+@app.route('/snapshot/<int:cid>')
+def snapshot(cid):
+    """Retourne un snapshot JPEG de la caméra spécifiée."""
+    if cid < 0 or cid >= len(CAM_IDS):
+        return jsonify({'error': 'Caméra inconnue'}), 404
+    frame_bytes = manager.get_frame(CAM_IDS[cid])
+    if frame_bytes is None:
+        return jsonify({'error': 'Caméra hors ligne'}), 503
+    return Response(frame_bytes, mimetype='image/jpeg')
+
+
+@app.route('/api/zones/<int:cid>', methods=['GET'])
+def get_zones(cid):
+    """Retourne les zones polygones de la caméra spécifiée en JSON."""
+    zones = zones_by_camera.get(cid, [])
+    result = []
+    for zone in zones:
+        if 'polygon' not in zone:
+            continue  # Ignorer les zones rect
+        result.append({
+            'name': zone['name'],
+            'polygon': [list(pt) for pt in zone['polygon']],
+            'color': list(zone.get('color', (255, 0, 0))),
+            'relays': zone.get('relays', []),
+        })
+    return jsonify(result)
+
+
+@app.route('/api/zones/<int:cid>', methods=['POST'])
+def save_zones(cid):
+    """Sauvegarde les zones d'une caméra dans zones.ini et recharge."""
+    global zones_by_camera
+    data = request.get_json()
+    zones_data = data.get('zones', [])
+
+    # Attribuer les couleurs automatiquement si absentes
+    for i, zone in enumerate(zones_data):
+        if 'color' not in zone or not zone['color']:
+            zone['color'] = list(ZONE_COLORS_PALETTE[i % len(ZONE_COLORS_PALETTE)])
+        # S'assurer du nommage correct
+        if 'name' not in zone or not zone['name']:
+            zone['name'] = f'zone{i + 1}_cam{cid}'
+
+    try:
+        # Sauvegarder dans le fichier INI
+        save_zones_to_ini(ZONES_INI_PATH, cid, zones_data)
+
+        # Recharger toutes les zones depuis le fichier
+        zones_by_camera = load_zones_by_camera_from_ini(ZONES_INI_PATH)
+
+        # Vider tous les caches
+        with zone_overlay_lock:
+            zone_overlay_cache.clear()
+        with frame_cache_lock:
+            frame_cache.clear()
+            frame_cache_timestamp.clear()
+        zone_color_cache.clear()
+
+        # Mettre à jour l'alert manager avec toutes les zones (toutes caméras)
+        alert_manager.set_zones(zones_by_camera)
+
+        logger.info(f"✅ Zones cam{cid} sauvegardées et rechargées ({len(zones_data)} zones)")
+        return jsonify({'status': 'ok', 'zones_count': len(zones_data)})
+
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde zones cam{cid}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/relay-count')
+def relay_count():
+    """Retourne le nombre de relais physiques disponibles."""
+    return jsonify({'count': len(relays.relays) or NUM_RELAYS})
+
+
+@app.route('/zone_editor/<int:cid>')
+def zone_editor(cid):
+    """Page d'édition visuelle des zones pour une caméra."""
+    if cid < 0 or cid >= len(CAM_IDS):
+        return "Caméra inconnue", 404
+    cam_name = f"Camera {cid + 1}"
+    return render_template(
+        'zone_editor.html',
+        cid=cid,
+        cam_name=cam_name,
+        app_name=APP_NAME,
+        app_version=APP_VERSION,
+        num_relays=len(relays.relays) or NUM_RELAYS,
+    )
 
 
 @app.route('/clear_frame_cache', methods=['POST'])
