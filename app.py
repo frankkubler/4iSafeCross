@@ -242,24 +242,30 @@ def detection_callback_factory(cid, main_loop=None):
             x_pad = None
             y_pad = None
         # Stocker les détections dans la structure partagée
+        zones = zones_by_camera.get(cid, [])
+        zone_names_list = [zone["name"] for zone in zones]
+        detections_with_zone = []
+        detections_person_with_zone = []
+        zones_detected = set()
+
         with shared_detections_lock:
-            # Ajoute la zone à la fin de chaque détection
-            zones = zones_by_camera.get(cid, [])
-            zone_names_list = [zone["name"] for zone in zones]
-            detections_with_zone = []
             # Initialiser previous_detection pour chaque zone si besoin
             for zone_name in zone_names_list:
                 if zone_name not in previous_detection:
                     previous_detection[zone_name] = False
-            # Marquer les zones détectées dans cette frame
-            zones_detected = set()
+
             for det in detections:
                 zone_names = get_zone_for_detection(det, zones)
-                for zn in zone_names:
-                    zones_detected.add(zn)
-                det_with_zone = det.copy()  # Copie le dictionnaire
-                det_with_zone["zones"] = zone_names  # Ajoute les zones
+                det_with_zone = det.copy()
+                det_with_zone["zones"] = zone_names
                 detections_with_zone.append(det_with_zone)
+
+                # Seules les détections éligibles à une alerte doivent maintenir la zone active.
+                if det_with_zone.get("label") == "person" and det_with_zone.get("personne_type") == "pieton":
+                    if alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                        detections_person_with_zone.append(det_with_zone)
+                        zones_detected.update(zone_names)
+
             shared_detections[cid] = detections_with_zone
 
         with shared_motion_roi_lock:
@@ -310,33 +316,19 @@ def detection_callback_factory(cid, main_loop=None):
                 previous_detection[zone_name] = False
                 logger.info(f"Plus de détection sur la caméra {cid} dans la zone {zone_name}")
                 asyncio.run_coroutine_threadsafe(
-                    alert_manager.on_no_more_detection(current_timestamp),
+                    alert_manager.on_no_more_detection(current_timestamp, [zone_name]),
                     loop
                 )
 
-            # Filtrer pour l'alerte uniquement label == "person" ET personne_type == "pieton"
-            detections_person = [det for det in detections if det.get("label") == "person" and det.get("personne_type") == "pieton"]
-            
-            # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
-            detections_person_with_zone = []
-            for det in detections_person:
-                zone_names = get_zone_for_detection(det, zones)
-                det_with_zone = det.copy()  # Copie le dictionnaire
-                det_with_zone["zones"] = zone_names  # Ajoute les zones
-                
-                # Vérifier si cette détection doit déclencher une alerte selon les règles de stature/zone
-                # if alert_manager.should_trigger_alert_for_detection(det_with_zone):
-                detections_person_with_zone.append(det_with_zone)
-            
-            # Déclencher l'alerte seulement si il y a des détections valides après filtrage
-            if len(detections_person_with_zone) > 0:
-                current_day = now.strftime('%Y-%m-%d %H:%M:%S')
-                frame = manager.get_frame_array(CAM_IDS[cid])
-                logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
-                asyncio.run_coroutine_threadsafe(
-                    alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
-                    loop
-                )
+        # Déclencher l'alerte seulement si il y a des détections valides après filtrage
+        if detections_person_with_zone:
+            current_day = now.strftime('%Y-%m-%d %H:%M:%S')
+            frame = manager.get_frame_array(CAM_IDS[cid])
+            logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
+            asyncio.run_coroutine_threadsafe(
+                alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
+                loop
+            )
     return detection_callback
 
 
