@@ -347,6 +347,91 @@ L'exécutable compilé sera disponible dans les artefacts du pipeline, prêt à 
 
 **Prérequis :** Votre GitLab auto-hébergé doit avoir un Runner configuré avec Docker et les privilèges activés. Voir [GITLAB_CI_BUILD.md](GITLAB_CI_BUILD.md) pour les détails de configuration.  
 
+## Collecte automatique de dataset
+
+L'application embarque un système de collecte d'images passif et non-intrusif (`DatasetCollectionThread`) qui s'exécute en parallèle des flux vidéo sans générer de charge supplémentaire : il réutilise les frames déjà décodées, les détections YOLO déjà calculées et les masques MOG2 déjà appliqués par les threads d'inférence principaux.
+
+### Activation
+
+Dans `config/config.ini`, passer le flag à `true` :
+
+```ini
+DATASET_COLLECTION = true
+```
+
+### Paramètres de configuration
+
+| Paramètre | Valeur par défaut | Description |
+|---|---|---|
+| `DATASET_COLLECTION` | `false` | Active / désactive la collecte |
+| `DATASET_COLLECTION_INTERVAL` | `10` | Intervalle temporel (minutes) — stratégie 1 |
+| `DATASET_COLLECTION_START_HOUR` | `5` | Heure de début de collecte |
+| `DATASET_COLLECTION_END_HOUR` | `23` | Heure de fin de collecte |
+| `DATASET_COLLECTION_MAX_PER_CLASS_PER_HOUR` | `30` | Quota max d'images par classe et par heure |
+| `DATASET_OUTPUT_DIR` | `dataset` | Dossier de sortie |
+| `DATASET_BG_ENABLED` | `true` | Active la stratégie 3 (fond statique) |
+| `DATASET_BG_INTERVAL` | `30` | Intervalle pour les images de fond (minutes) |
+| `DATASET_HARD_NEG_ENABLED` | `true` | Active la stratégie 4 (négatifs difficiles) |
+| `DATASET_HARD_NEG_CONFIDENCE` | `0.35` | Seuil bas de confiance pour l'inférence secondaire |
+
+### Stratégies de collecte
+
+Quatre stratégies se déclenchent en cascade à chaque cycle :
+
+| # | Nom | Condition | Label généré |
+|---|---|---|---|
+| 1 | `temporal` | Toutes les N minutes (plage horaire) | Labels YOLO des détections présentes |
+| 2 | `event` | Détection active + délai 5 s + quota non atteint | Labels YOLO de l'événement |
+| 3 | `background` | Aucune détection **et** aucun mouvement MOG2 | Fichier label vide (fond pur) |
+| 4 | `hard_neg` | Mouvement MOG2 **sans** détection principale → ré-inférence à seuil bas | Fichier label vide (faux positif potentiel) |
+
+> **Stratégie 3 — `background`** : capture des scènes statiques (poteaux, dalles, clôtures) qui servent à apprendre ce qu'il ne faut pas détecter.  
+> **Stratégie 4 — `hard_neg`** : capture les cas où MOG2 détecte un changement (variation de luminosité, reflet) mais sans objet réel — typiquement les faux positifs de poteaux en contre-jour.
+
+### Correspondance des classes
+
+| ID dataset | Classe |
+|---|---|
+| `0` | `forklift` (chariot élévateur) |
+| `1` | `driver` (conducteur) |
+| `2` | `person` (piéton) |
+
+### Structure de sortie
+
+```
+dataset/
+├── images/
+│   └── raw/
+│       ├── cam0_20240115_143022_event.jpg
+│       ├── cam0_20240115_143027_background.jpg
+│       └── ...
+├── labels/
+│   └── raw/
+│       ├── cam0_20240115_143022_event.txt   # YOLO format : class_id cx cy w h
+│       ├── cam0_20240115_143027_background.txt  # vide — image négative
+│       └── ...
+├── train/images/  val/images/  test/images/
+├── train/labels/  val/labels/  test/labels/
+├── sampling_log.csv   # Historique complet des captures
+└── dataset.yaml       # Configuration YOLO (nc=3, chemins)
+```
+
+### Flux de travail recommandé
+
+1. **Collecter** : activer `DATASET_COLLECTION = true` pendant 1 à 5 jours de fonctionnement normal
+2. **Vérifier les labels** : ouvrir les images dans [Label Studio](https://labelstud.io/) ou [Roboflow](https://roboflow.com/) et corriger les annotations erronées
+3. **Découper en train/val/test** :
+   ```sh
+   uv run scripts/collect_dataset.py --split
+   ```
+   Répartition par défaut : 70 % train · 20 % val · 10 % test
+4. **Fine-tuner YOLO** :
+   ```sh
+   yolo train data=dataset/dataset.yaml model=yolo11m.pt epochs=50 imgsz=640
+   ```
+
+> ⚠️ **Important** : ne pas exécuter `DatasetCollector` (mode autonome) en même temps que `app.py`. Utilisez exclusivement `DatasetCollectionThread` (intégré dans `app.py`) pour éviter de dupliquer les pipelines GStreamer, les appels YOLO et les détecteurs MOG2.
+
 ## Auteurs
 
 - 4itec
