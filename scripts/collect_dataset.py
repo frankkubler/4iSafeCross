@@ -28,6 +28,8 @@ Classes cibles (remappées depuis le modèle en mode "transfert") :
     2  →  person    (piéton)
 """
 
+from __future__ import annotations
+
 import argparse
 import configparser
 import csv
