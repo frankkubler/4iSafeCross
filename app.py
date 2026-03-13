@@ -58,9 +58,9 @@ def logs_settings():
     root.handlers.clear()
     root.addHandler(console_handler)
 
-    # S'assurer que werkzeug hérite du root plutôt que d'utiliser un handler stderr propre
+    # werkzeug est déjà importé via Flask — on vide son handler stderr éventuel
     logging.getLogger('werkzeug').handlers.clear()
-    logging.getLogger('waitress').handlers.clear()
+    # Note : waitress n'est pas encore importé ici, son handler est nettoyé juste avant serve()
 
 
 logs_settings()
@@ -1200,4 +1200,10 @@ def inference_stats():
 
 if __name__ == '__main__':
     from waitress import serve
+    # Waitress ajoute son propre StreamHandler(stderr) au démarrage de serve().
+    # On force le logger waitress à utiliser sys.stdout pour que systemd
+    # écrive tout dans service_stdout.log et non service_stderr.log.
+    waitress_logger = logging.getLogger('waitress')
+    waitress_logger.handlers.clear()
+    waitress_logger.propagate = True  # hérite du root logger (stdout)
     serve(app, host='0.0.0.0', port=5050)
