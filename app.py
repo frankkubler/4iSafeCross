@@ -44,33 +44,23 @@ threading.Thread(target=start_main_loop, args=(MAIN_LOOP,), daemon=True).start()
 
 
 def logs_settings():
-    # try:
-    #     os.mkdir('logs')
-    # except FileExistsError:
-    #     pass
-    # log_dir = 'logs/'
-    # clean_files(log_dir, max_files=5)
-
-    # # Utilisation d'un RotatingFileHandler pour limiter la taille à 5 Mo
-    # log_file_path = os.path.join(log_dir, 'app.log')
-    # file_handler = logging.handlers.RotatingFileHandler(
-    #     log_file_path, maxBytes=5 * 1024 * 1024, backupCount=5
-    # )
     os.makedirs('logs', exist_ok=True)
     console_handler = logging.StreamHandler(sys.stdout)
-    logging.basicConfig(level=LOG_LEVEL,
-                        format='Line: %(lineno)d - %(message)s - %(levelname)s - %(name)s - %(asctime)s',
-                        handlers=[console_handler])
-    # Function to log uncaught exceptions
+    console_handler.setFormatter(logging.Formatter(
+        'Line: %(lineno)d - %(message)s - %(levelname)s - %(name)s - %(asctime)s'
+    ))
 
-    # def log_uncaught_exceptions(exctype, value, tb):
-    #     logging.error("Uncaught exception", exc_info=(exctype, value, tb))
-    #     file_handler.flush()
-    # # Set the exception hook
-    # sys.excepthook = log_uncaught_exceptions
-    # # Flush and close the log file
-    # file_handler.flush()
-    # file_handler.close()
+    # basicConfig() est un no-op si des handlers existent déjà sur le root logger
+    # (ajoutés par flask/werkzeug/waitress lors des imports).
+    # On configure directement le root logger pour garantir stdout.
+    root = logging.getLogger()
+    root.setLevel(LOG_LEVEL)
+    root.handlers.clear()
+    root.addHandler(console_handler)
+
+    # S'assurer que werkzeug hérite du root plutôt que d'utiliser un handler stderr propre
+    logging.getLogger('werkzeug').handlers.clear()
+    logging.getLogger('waitress').handlers.clear()
 
 
 logs_settings()
