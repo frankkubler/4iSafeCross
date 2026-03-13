@@ -512,8 +512,7 @@ def startup_relay_off():
         MAIN_LOOP
     )
     # Extinction explicite des relais physiques non couverts par les zones (ex : relais 3, 4…)
-    # On attend la temporisation de sécurité (11s) avant d'agir sur les relais non gérés
-    time.sleep(12)
+    # À t=STARTUP_GRACE_PERIOD, les 11s de protection sont déjà dépassées → pas d'attente supplémentaire
     managed_relays = set(alert_manager.relay_on.keys())
     for i in range(len(relays.relays)):
         if i not in managed_relays and relays.get_relay_state(i):
