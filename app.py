@@ -260,11 +260,11 @@ def detection_callback_factory(cid, main_loop=None):
                 det_with_zone["zones"] = zone_names
                 detections_with_zone.append(det_with_zone)
 
-                # Seules les détections éligibles à une alerte doivent maintenir la zone active.
+                # Seules les personnes piétons doivent maintenir la zone active
+                # (exclut chariots, conducteurs, etc.)
                 if det_with_zone.get("label") == "person" and det_with_zone.get("personne_type") == "pieton":
-                    if alert_manager.should_trigger_alert_for_detection(det_with_zone):
-                        detections_person_with_zone.append(det_with_zone)
-                        zones_detected.update(zone_names)
+                    detections_person_with_zone.append(det_with_zone)
+                    zones_detected.update(zone_names)
 
             shared_detections[cid] = detections_with_zone
 
