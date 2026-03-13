@@ -3,6 +3,7 @@ from src.camera_manager import CameraManager
 from src.inference import InferenceServerThread
 from src.alert_manager import AlerteManager
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
+from utils.zone_writer import save_zones_to_ini
 from src.relay_pilot import YoctoMultiRelay
 from src.bot_aiogram import BotThread
 import threading
@@ -14,7 +15,8 @@ import os
 from datetime import datetime
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
-                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS)
+                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS,
+                             load_zones_by_camera_from_ini, NUM_RELAYS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -69,8 +71,9 @@ logger = logging.getLogger(__name__)
 relays = YoctoMultiRelay()
 for i in range(len(relays.relays)):
     logger.debug(f"Relais {i} : {relays.get_relay_state(i)}")
-    relays.action_off(i)  # Assure que tous les relais sont éteints au démarrage
+    relays.action_on(i)  # MODE FAIL-SAFE : Alertes ON par défaut au démarrage
     logger.debug(f"Relais {i} : {relays.get_relay_state(i)}")
+logger.warning(f"⚠️  MODE FAIL-SAFE ACTIVÉ : {len(relays.relays)} relais allumés par défaut")
 # logger.info(f"Relais initialisé : {relays.is_initialized}, état actuel : {relays.states}")
 # Lancer le bot Telegram au démarrage de l'app
 telegram_bot = BotThread(overwrite_file=False)
@@ -79,8 +82,53 @@ threading.Thread(target=telegram_bot.run, daemon=True).start()
 # Définir les zones pour chaque caméra
 zones_by_camera = ZONES_BY_CAMERA
 
-# On passe par défaut les zones de la caméra 0 à l'alert_manager (pour compatibilité)
-alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones=zones_by_camera.get(0, []), telegram_alert_enabled=False)
+# Passer toutes les zones (toutes caméras) à l'alert_manager
+alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones_by_camera=zones_by_camera, telegram_alert_enabled=False)
+
+# ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
+# Variables globales pour le heartbeat
+heartbeat_lock = threading.Lock()
+last_heartbeat = time.time()
+HEARTBEAT_TIMEOUT = 30  # Si pas de heartbeat pendant 30s, considérer comme dysfonctionnel
+application_healthy = True
+
+def update_heartbeat():
+    """Appelé régulièrement pour indiquer que l'application fonctionne correctement."""
+    global last_heartbeat, application_healthy
+    with heartbeat_lock:
+        last_heartbeat = time.time()
+        application_healthy = True
+
+def failsafe_watchdog():
+    """Thread surveillant la santé de l'application via heartbeat.
+    Si aucun heartbeat reçu pendant HEARTBEAT_TIMEOUT secondes, active le mode fail-safe."""
+    global application_healthy
+    logger.info("🔒 Watchdog fail-safe démarré - Surveillance active")
+    
+    while True:
+        time.sleep(5)  # Vérification toutes les 5 secondes
+        
+        with heartbeat_lock:
+            time_since_heartbeat = time.time() - last_heartbeat
+            
+            if time_since_heartbeat > HEARTBEAT_TIMEOUT:
+                if application_healthy:
+                    application_healthy = False
+                    logger.error(f"⚠️  ALERTE FAIL-SAFE : Aucun heartbeat depuis {time_since_heartbeat:.1f}s - Maintien des relais ON")
+                    # S'assurer que tous les relais sont ON
+                    for i in range(len(relays.relays)):
+                        if not relays.get_relay_state(i):
+                            logger.warning(f"🔧 Réactivation du relais {i} en mode fail-safe")
+                            relays.action_on(i)
+            else:
+                if not application_healthy:
+                    application_healthy = True
+                    logger.info(f"✅ Application de nouveau opérationnelle (heartbeat reçu)")
+
+# Démarrer le watchdog fail-safe
+failsafe_thread = threading.Thread(target=failsafe_watchdog, daemon=True)
+failsafe_thread.start()
+
 # Cache pour les couleurs des zones par caméra pour optimisation
 zone_color_cache = {}
 MAX_ZONE_COLOR_CACHE_SIZE = 20  # Limite pour éviter les fuites mémoire
@@ -157,10 +205,15 @@ def create_zone_overlay(frame_shape, zones, cid):
     
     # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
     if cid not in zone_color_cache:
-        zone_color_cache[cid] = {zone["name"]: zone.get("color", (255, 0, 0)) for zone in zones}
-    
+        zone_color_cache[cid] = {
+            zone["name"]: (c[2], c[1], c[0])  # RGB → BGR pour OpenCV
+            for zone in zones
+            for c in [zone.get("color", (255, 0, 0))]
+        }
+
     for i, zone in enumerate(zones):
-        color = zone.get("color", (0, 255, 0))  # Utilise la couleur de la zone, vert par défaut
+        color_rgb = zone.get("color", (0, 255, 0))
+        color = (color_rgb[2], color_rgb[1], color_rgb[0])  # RGB → BGR pour OpenCV
         if "polygon" in zone:
             # On s'assure que les points sont dans l'image
             pts = [
@@ -242,30 +295,24 @@ def detection_callback_factory(cid, main_loop=None):
             x_pad = None
             y_pad = None
         # Stocker les détections dans la structure partagée
-        zones = zones_by_camera.get(cid, [])
-        zone_names_list = [zone["name"] for zone in zones]
-        detections_with_zone = []
-        detections_person_with_zone = []
-        zones_detected = set()
-
         with shared_detections_lock:
+            # Ajoute la zone à la fin de chaque détection
+            zones = zones_by_camera.get(cid, [])
+            zone_names_list = [zone["name"] for zone in zones]
+            detections_with_zone = []
             # Initialiser previous_detection pour chaque zone si besoin
             for zone_name in zone_names_list:
                 if zone_name not in previous_detection:
                     previous_detection[zone_name] = False
-
+            # Marquer les zones détectées dans cette frame
+            zones_detected = set()
             for det in detections:
                 zone_names = get_zone_for_detection(det, zones)
-                det_with_zone = det.copy()
-                det_with_zone["zones"] = zone_names
+                for zn in zone_names:
+                    zones_detected.add(zn)
+                det_with_zone = det.copy()  # Copie le dictionnaire
+                det_with_zone["zones"] = zone_names  # Ajoute les zones
                 detections_with_zone.append(det_with_zone)
-
-                # Seules les personnes piétons doivent maintenir la zone active
-                # (exclut chariots, conducteurs, etc.)
-                if det_with_zone.get("label") == "person" and det_with_zone.get("personne_type") == "pieton":
-                    detections_person_with_zone.append(det_with_zone)
-                    zones_detected.update(zone_names)
-
             shared_detections[cid] = detections_with_zone
 
         with shared_motion_roi_lock:
@@ -294,6 +341,10 @@ def detection_callback_factory(cid, main_loop=None):
                 }
         now = datetime.now()
         current_timestamp = now.timestamp()
+        
+        # ===== HEARTBEAT FAIL-SAFE =====
+        # Mise à jour du heartbeat pour indiquer que l'application fonctionne
+        update_heartbeat()
 
         # Correction asyncio event loop pour thread
         loop = main_loop
@@ -316,19 +367,33 @@ def detection_callback_factory(cid, main_loop=None):
                 previous_detection[zone_name] = False
                 logger.info(f"Plus de détection sur la caméra {cid} dans la zone {zone_name}")
                 asyncio.run_coroutine_threadsafe(
-                    alert_manager.on_no_more_detection(current_timestamp, [zone_name]),
+                    alert_manager.on_no_more_detection(current_timestamp),
                     loop
                 )
 
-        # Déclencher l'alerte seulement si il y a des détections valides après filtrage
-        if detections_person_with_zone:
-            current_day = now.strftime('%Y-%m-%d %H:%M:%S')
-            frame = manager.get_frame_array(CAM_IDS[cid])
-            logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
-            asyncio.run_coroutine_threadsafe(
-                alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
-                loop
-            )
+            # Filtrer pour l'alerte uniquement label == "person" ET personne_type == "pieton"
+            detections_person = [det for det in detections if det.get("label") == "person" and det.get("personne_type") == "pieton"]
+            
+            # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
+            detections_person_with_zone = []
+            for det in detections_person:
+                zone_names = get_zone_for_detection(det, zones)
+                det_with_zone = det.copy()  # Copie le dictionnaire
+                det_with_zone["zones"] = zone_names  # Ajoute les zones
+                
+                # Vérifier si cette détection doit déclencher une alerte selon les règles de stature/zone
+                # if alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                detections_person_with_zone.append(det_with_zone)
+            
+            # Déclencher l'alerte seulement si il y a des détections valides après filtrage
+            if len(detections_person_with_zone) > 0:
+                current_day = now.strftime('%Y-%m-%d %H:%M:%S')
+                frame = manager.get_frame_array(CAM_IDS[cid])
+                logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
+                asyncio.run_coroutine_threadsafe(
+                    alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
+                    loop
+                )
     return detection_callback
 
 
@@ -753,6 +818,27 @@ def shutdown():
     return "Cameras released"
 
 
+@app.route('/failsafe_status')
+def failsafe_status():
+    """Endpoint pour vérifier l'état du système fail-safe."""
+    with heartbeat_lock:
+        time_since_heartbeat = time.time() - last_heartbeat
+        
+    relay_states = {}
+    for i in range(len(relays.relays)):
+        relay_states[f"relay_{i}"] = relays.get_relay_state(i)
+    
+    return jsonify({
+        'application_healthy': application_healthy,
+        'last_heartbeat_seconds_ago': round(time_since_heartbeat, 2),
+        'heartbeat_timeout': HEARTBEAT_TIMEOUT,
+        'failsafe_mode': 'ACTIVE' if not application_healthy else 'STANDBY',
+        'relay_states': relay_states,
+        'relays_initialized': relays.is_initialized,
+        'message': 'Système opérationnel' if application_healthy else '⚠️  MODE FAIL-SAFE ACTIF - Alertes maintenues ON'
+    })
+
+
 @app.route('/quit', methods=['POST'])
 def quit_server():
     manager.release()
@@ -834,6 +920,114 @@ def set_zones():
         logger.debug("🗑️ Cache des overlays de zones vidé suite à modification des zones")
     
     return jsonify({'status': 'ok'})
+
+
+# ===== ÉDITEUR DE ZONES =====
+
+ZONES_INI_PATH = 'config/zones.ini'
+
+# Palette de couleurs automatiques pour les zones
+ZONE_COLORS_PALETTE = [
+    (128, 255, 0),    # Vert clair
+    (255, 128, 0),    # Orange
+    (255, 255, 0),    # Jaune
+    (0, 255, 255),    # Cyan
+    (255, 0, 255),    # Magenta
+    (0, 128, 255),    # Bleu clair
+    (255, 64, 64),    # Rouge clair
+    (128, 0, 255),    # Violet
+]
+
+
+@app.route('/snapshot/<int:cid>')
+def snapshot(cid):
+    """Retourne un snapshot JPEG de la caméra spécifiée."""
+    if cid < 0 or cid >= len(CAM_IDS):
+        return jsonify({'error': 'Caméra inconnue'}), 404
+    frame_bytes = manager.get_frame(CAM_IDS[cid])
+    if frame_bytes is None:
+        return jsonify({'error': 'Caméra hors ligne'}), 503
+    return Response(frame_bytes, mimetype='image/jpeg')
+
+
+@app.route('/api/zones/<int:cid>', methods=['GET'])
+def get_zones(cid):
+    """Retourne les zones polygones de la caméra spécifiée en JSON."""
+    zones = zones_by_camera.get(cid, [])
+    result = []
+    for zone in zones:
+        if 'polygon' not in zone:
+            continue  # Ignorer les zones rect
+        result.append({
+            'name': zone['name'],
+            'polygon': [list(pt) for pt in zone['polygon']],
+            'color': list(zone.get('color', (255, 0, 0))),
+            'relays': zone.get('relays', []),
+        })
+    return jsonify(result)
+
+
+@app.route('/api/zones/<int:cid>', methods=['POST'])
+def save_zones(cid):
+    """Sauvegarde les zones d'une caméra dans zones.ini et recharge."""
+    global zones_by_camera
+    data = request.get_json()
+    zones_data = data.get('zones', [])
+
+    # Attribuer les couleurs automatiquement si absentes
+    for i, zone in enumerate(zones_data):
+        if 'color' not in zone or not zone['color']:
+            zone['color'] = list(ZONE_COLORS_PALETTE[i % len(ZONE_COLORS_PALETTE)])
+        # S'assurer du nommage correct
+        if 'name' not in zone or not zone['name']:
+            zone['name'] = f'zone{i + 1}_cam{cid}'
+
+    try:
+        # Sauvegarder dans le fichier INI
+        save_zones_to_ini(ZONES_INI_PATH, cid, zones_data)
+
+        # Recharger toutes les zones depuis le fichier
+        zones_by_camera = load_zones_by_camera_from_ini(ZONES_INI_PATH)
+
+        # Vider tous les caches
+        with zone_overlay_lock:
+            zone_overlay_cache.clear()
+        with frame_cache_lock:
+            frame_cache.clear()
+            frame_cache_timestamp.clear()
+        zone_color_cache.clear()
+
+        # Mettre à jour l'alert manager avec toutes les zones (toutes caméras)
+        alert_manager.set_zones(zones_by_camera)
+
+        logger.info(f"✅ Zones cam{cid} sauvegardées et rechargées ({len(zones_data)} zones)")
+        return jsonify({'status': 'ok', 'zones_count': len(zones_data)})
+
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde zones cam{cid}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/relay-count')
+def relay_count():
+    """Retourne le nombre de relais physiques disponibles."""
+    return jsonify({'count': len(relays.relays) or NUM_RELAYS})
+
+
+@app.route('/zone_editor/<int:cid>')
+def zone_editor(cid):
+    """Page d'édition visuelle des zones pour une caméra."""
+    if cid < 0 or cid >= len(CAM_IDS):
+        return "Caméra inconnue", 404
+    cam_name = f"Camera {cid + 1}"
+    return render_template(
+        'zone_editor.html',
+        cid=cid,
+        cam_name=cam_name,
+        app_name=APP_NAME,
+        app_version=APP_VERSION,
+        num_relays=len(relays.relays) or NUM_RELAYS,
+    )
 
 
 @app.route('/clear_frame_cache', methods=['POST'])
