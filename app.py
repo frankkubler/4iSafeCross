@@ -305,11 +305,12 @@ def detection_callback_factory(cid, main_loop=None):
                 if zone_name not in previous_detection:
                     previous_detection[zone_name] = False
             # Marquer les zones détectées dans cette frame
-            zones_detected = set()
+            zones_detected = set()  # uniquement les personnes (pour le tracking previous_detection)
             for det in detections:
                 zone_names = get_zone_for_detection(det, zones)
-                for zn in zone_names:
-                    zones_detected.add(zn)
+                if det.get("label") == "person":  # Ne tracker que les personnes pour déclencher/effacer les alertes
+                    for zn in zone_names:
+                        zones_detected.add(zn)
                 det_with_zone = det.copy()  # Copie le dictionnaire
                 det_with_zone["zones"] = zone_names  # Ajoute les zones
                 detections_with_zone.append(det_with_zone)
@@ -367,12 +368,12 @@ def detection_callback_factory(cid, main_loop=None):
                 previous_detection[zone_name] = False
                 logger.info(f"Plus de détection sur la caméra {cid} dans la zone {zone_name}")
                 asyncio.run_coroutine_threadsafe(
-                    alert_manager.on_no_more_detection(current_timestamp),
+                    alert_manager.on_no_more_detection(current_timestamp, zone_names=[zone_name]),
                     loop
                 )
 
-            # Filtrer pour l'alerte uniquement label == "person" ET personne_type == "pieton"
-            detections_person = [det for det in detections if det.get("label") == "person" and det.get("personne_type") == "pieton"]
+            # Filtrer pour l'alerte uniquement label == "person" (personne_type/posture non utilisé)
+            detections_person = [det for det in detections if det.get("label") == "person"]
             
             # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
             detections_person_with_zone = []
