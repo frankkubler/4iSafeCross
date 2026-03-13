@@ -1,0 +1,31 @@
+# dataset.yaml — Configuration YOLO pour le dataset 4iSafeCross
+#
+# Structure attendue :
+#   dataset/
+#     images/
+#       train/   val/   test/
+#     labels/
+#       train/   val/   test/
+#
+# Pour générer les splits depuis les images brutes :
+#   uv run scripts/collect_dataset.py --split
+
+path: .            # répertoire racine du dataset (relatif à ce fichier)
+train: images/train
+val:   images/val
+test:  images/test
+
+# Nombre de classes
+nc: 3
+
+# Noms des classes (index 0, 1, 2)
+names:
+  0: forklift   # chariot à fourche
+  1: driver     # conducteur sur chariot
+  2: person     # piéton
+
+# Informations sur les classes
+# - forklift (0) : engin de manutention, grandes fourches visibles,
+#                  souvent vu de face ou de côté dans les allées
+# - driver   (1) : personne assise/debout à bord du chariot (conducteur)
+# - person   (2) : piéton circulant à pied dans la zone surveillée
