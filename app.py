@@ -6,6 +6,7 @@ from utils.utils import get_non_local_ips, get_docker_info, get_service_status
 from utils.zone_writer import save_zones_to_ini
 from src.relay_pilot import YoctoMultiRelay
 from src.bot_aiogram import BotThread
+from scripts.collect_dataset import DatasetCollectionThread
 import threading
 import cv2
 import logging
@@ -16,7 +17,13 @@ from datetime import datetime
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS,
-                             load_zones_by_camera_from_ini, NUM_RELAYS, STARTUP_GRACE_PERIOD)
+                             load_zones_by_camera_from_ini, NUM_RELAYS, STARTUP_GRACE_PERIOD,
+                             DATASET_COLLECTION, DATASET_COLLECTION_INTERVAL,
+                             DATASET_COLLECTION_START_HOUR, DATASET_COLLECTION_END_HOUR,
+                             DATASET_COLLECTION_MAX_PER_CLASS, DATASET_OUTPUT_DIR,
+                             DATASET_BG_INTERVAL, DATASET_BG_ENABLED,
+                             DATASET_HARD_NEG_CONFIDENCE, DATASET_HARD_NEG_ENABLED,
+                             URL_YOLO, FONCTION_YOLO)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -490,6 +497,39 @@ for i in range(len(CAM_IDS)):
     )
     thread.start()
     inference_threads[i] = thread
+
+# Démarrage optionnel de la collecte dataset (mode intégré — zéro surcharge IA/GStreamer)
+dataset_threads = {}
+if DATASET_COLLECTION:
+    logger.info(
+        f"📸 Collecte dataset activée : intervalle={DATASET_COLLECTION_INTERVAL}min "
+        f"plage={DATASET_COLLECTION_START_HOUR:02d}h–{DATASET_COLLECTION_END_HOUR:02d}h "
+        f"→ {DATASET_OUTPUT_DIR}/"
+    )
+    for i in range(len(CAM_IDS)):
+        ds_thread = DatasetCollectionThread(
+            cam_idx=i,
+            get_frame_func=get_frame_func_factory(i),
+            shared_detections=shared_detections,
+            shared_detections_lock=shared_detections_lock,
+            shared_motion_roi=shared_motion_roi,
+            shared_motion_roi_lock=shared_motion_roi_lock,
+            output_dir=DATASET_OUTPUT_DIR,
+            interval_minutes=DATASET_COLLECTION_INTERVAL,
+            start_hour=DATASET_COLLECTION_START_HOUR,
+            end_hour=DATASET_COLLECTION_END_HOUR,
+            max_per_class_per_hour=DATASET_COLLECTION_MAX_PER_CLASS,
+            background_interval_minutes=DATASET_BG_INTERVAL,
+            bg_enabled=DATASET_BG_ENABLED,
+            hard_neg_confidence=DATASET_HARD_NEG_CONFIDENCE,
+            hard_neg_enabled=DATASET_HARD_NEG_ENABLED,
+            inf_url=f"{URL_YOLO}{FONCTION_YOLO}",
+            stop_event=inference_stop_events[i],
+        )
+        ds_thread.start()
+        dataset_threads[i] = ds_thread
+else:
+    logger.info("📸 Collecte dataset désactivée (DATASET_COLLECTION = false dans config.ini)")
 
 
 def startup_relay_off():

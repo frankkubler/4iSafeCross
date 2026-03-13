@@ -79,6 +79,18 @@ EXTENDED_CLASSES = ast.literal_eval(config.get('APP', 'EXTENDED_CLASSES', fallba
 TRANSFERT_CLASSES = ast.literal_eval(config.get('APP', 'TRANSFERT_CLASSES', fallback='[0, 1, 2, 3, 4, 5]'))
 SIMPLE_CLASSES = ast.literal_eval(config.get('APP', 'SIMPLE_CLASSES', fallback='[1, 2]'))
 
+# Collecte automatique du dataset
+DATASET_COLLECTION = config.getboolean('APP', 'DATASET_COLLECTION', fallback=False)
+DATASET_COLLECTION_INTERVAL = config.getint('APP', 'DATASET_COLLECTION_INTERVAL', fallback=10)
+DATASET_COLLECTION_START_HOUR = config.getint('APP', 'DATASET_COLLECTION_START_HOUR', fallback=7)
+DATASET_COLLECTION_END_HOUR = config.getint('APP', 'DATASET_COLLECTION_END_HOUR', fallback=19)
+DATASET_COLLECTION_MAX_PER_CLASS = config.getint('APP', 'DATASET_COLLECTION_MAX_PER_CLASS_PER_HOUR', fallback=30)
+DATASET_OUTPUT_DIR = config.get('APP', 'DATASET_OUTPUT_DIR', fallback='dataset')
+DATASET_BG_INTERVAL = config.getint('APP', 'DATASET_BG_INTERVAL', fallback=30)
+DATASET_BG_ENABLED = config.getboolean('APP', 'DATASET_BG_ENABLED', fallback=True)
+DATASET_HARD_NEG_CONFIDENCE = config.getfloat('APP', 'DATASET_HARD_NEG_CONFIDENCE', fallback=0.35)
+DATASET_HARD_NEG_ENABLED = config.getboolean('APP', 'DATASET_HARD_NEG_ENABLED', fallback=True)
+
 # Nouvelle constante pour le temps d'attente avant test RTSP
 WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=10)
 
