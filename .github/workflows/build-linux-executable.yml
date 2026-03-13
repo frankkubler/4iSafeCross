@@ -51,7 +51,10 @@ jobs:
               libxext6 \
               libgl1-mesa-glx \
               curl \
-              git
+              git \
+              pkg-config \
+              libcairo2-dev \
+              libgirepository1.0-dev
             
             # Installation de uv (gestionnaire de dépendances)
             curl -LsSf https://astral.sh/uv/install.sh | sh
