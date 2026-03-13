@@ -129,7 +129,7 @@ class AlerteManager:
         if detections:
             for det in detections:
                 if isinstance(det, dict) and "zones" in det:
-                    if det.get("label") == "person":
+                    if self.should_trigger_alert_for_detection(det):
                         zone_names_detected.update(det["zones"])
         # Activation des relais pour chaque zone détectée
         for zone_name in zone_names_detected:
