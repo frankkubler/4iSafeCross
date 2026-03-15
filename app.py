@@ -3,7 +3,7 @@ from src.camera_manager import CameraManager
 from src.inference import InferenceServerThread
 from src.alert_manager import AlerteManager
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
-from utils.zone_writer import save_zones_to_ini, save_masks_to_ini
+from utils.zone_writer import save_zones_to_ini, save_masks_to_ini, save_relay_positions_to_ini
 from src.relay_pilot import YoctoMultiRelay
 from src.bot_aiogram import BotThread
 from scripts.collect_dataset import DatasetCollectionThread
@@ -24,7 +24,8 @@ from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
                              DATASET_BG_INTERVAL, DATASET_BG_ENABLED,
                              DATASET_HARD_NEG_CONFIDENCE, DATASET_HARD_NEG_ENABLED,
                              URL_YOLO, FONCTION_YOLO,
-                             MASKS_BY_CAMERA, load_masks_by_camera_from_ini)
+                             MASKS_BY_CAMERA, load_masks_by_camera_from_ini,
+                             RELAY_POSITIONS_BY_CAMERA, load_relay_positions_from_ini)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -82,6 +83,9 @@ zones_by_camera = ZONES_BY_CAMERA
 
 # Masques polygonaux appliqués en amont de la détection (noircissent les zones non surveillées)
 masks_by_camera = MASKS_BY_CAMERA
+
+# Positions des icônes de projecteurs sur le canvas de l'éditeur de zones
+relay_positions_by_camera = RELAY_POSITIONS_BY_CAMERA
 
 # Cache et lock pour les overlays de masques (affichage GUI uniquement)
 mask_overlay_cache = {}
@@ -1038,6 +1042,7 @@ def set_zones():
 
 ZONES_INI_PATH = 'config/zones.ini'
 MASKS_INI_PATH = 'config/masks.ini'
+RELAY_POSITIONS_INI_PATH = 'config/relay_positions.ini'
 
 # Palette de couleurs automatiques pour les zones
 ZONE_COLORS_PALETTE = [
@@ -1165,6 +1170,30 @@ def save_masks_route(cid):
 
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde masques cam{cid}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/relay_positions/<int:cid>', methods=['GET'])
+def get_relay_positions(cid):
+    """Retourne les positions des icônes de projecteurs pour la caméra spécifiée."""
+    positions = relay_positions_by_camera.get(cid, {})
+    result = {str(relay_id): list(coords) for relay_id, coords in positions.items()}
+    return jsonify(result)
+
+
+@app.route('/api/relay_positions/<int:cid>', methods=['POST'])
+def save_relay_positions_route(cid):
+    """Sauvegarde les positions des icônes de projecteurs dans relay_positions.ini."""
+    global relay_positions_by_camera
+    data = request.get_json()
+    positions_data = data.get('positions', {})
+    try:
+        save_relay_positions_to_ini(RELAY_POSITIONS_INI_PATH, cid, positions_data)
+        relay_positions_by_camera = load_relay_positions_from_ini(RELAY_POSITIONS_INI_PATH)
+        logger.info(f"✅ Positions relais cam{cid} sauvegardées ({len(positions_data)} entrée(s))")
+        return jsonify({'status': 'ok', 'count': len(positions_data)})
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde positions relais cam{cid}: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

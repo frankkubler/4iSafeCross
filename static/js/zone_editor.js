@@ -22,6 +22,7 @@
     const FILL_OPACITY = 0.25;
     const MAX_CANVAS_WIDTH = 1400;
     const HANDLE_RADIUS = 7;   // Rayon des poignées de sommet
+    const PROJ_RADIUS = 18;    // Rayon des icônes de projecteur relais
 
     // Palette de couleurs automatiques (RGB)
     const COLOR_PALETTE = [
@@ -60,6 +61,10 @@
     let editingType = null;  // 'zone' | 'mask'
     let editHandles = [];    // Poignées fabric.Circle
     let editEdges = [];      // Arêtes fabric.Line temporaires
+
+    // Projecteurs relais — icônes draggables sur canvas
+    let projectorIcons = {};   // {relayId: fabric.Group}
+    let relayPositions = {};   // {relayId: {x, y}} — coordonnées canvas
 
     // État du dessin en cours
     let isDrawing = false;
@@ -135,6 +140,8 @@
             initCanvas(img);
             loadExistingZones();
             loadExistingMasks();
+            projectorIcons = {};
+            loadRelayPositions();
         };
 
         img.onerror = function () {
@@ -273,12 +280,162 @@
         return polygon;
     }
 
+    // === Projecteurs relais ===
+
+    /**
+     * Charge les positions des projecteurs depuis le backend et les dessine.
+     */
+    function loadRelayPositions() {
+        if (!camId) return;
+        fetch(`/api/relay_positions/${camId}`)
+            .then((r) => r.json())
+            .then((data) => {
+                relayPositions = {};
+                Object.entries(data).forEach(([rid, coords]) => {
+                    const realId = parseInt(rid, 10);
+                    relayPositions[realId] = {
+                        x: coords[0] / scaleFactor,
+                        y: coords[1] / scaleFactor,
+                    };
+                });
+                refreshProjectorIcons();
+            })
+            .catch((err) => console.warn("Impossible de charger les positions relais :", err));
+    }
+
+    /**
+     * Dessine une icône de projecteur (⊙) pour le relais donné.
+     */
+    function drawProjectorIcon(relayId, cx, cy) {
+        const bg = new fabric.Circle({
+            radius: PROJ_RADIUS,
+            fill: '#333333',
+            stroke: '#888888',
+            strokeWidth: 2,
+            originX: 'center',
+            originY: 'center',
+        });
+        const lens = new fabric.Text('⊙', {
+            fontSize: PROJ_RADIUS + 4,
+            fill: '#aaaaaa',
+            originX: 'center',
+            originY: 'center',
+            top: -2,
+        });
+        const lbl = new fabric.Text(`R${relayId}`, {
+            fontSize: 11,
+            fill: '#cccccc',
+            fontWeight: 'bold',
+            originX: 'center',
+            originY: 'center',
+            top: PROJ_RADIUS + 8,
+        });
+        const group = new fabric.Group([bg, lens, lbl], {
+            left: cx,
+            top: cy,
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            hasControls: false,
+            hasBorders: false,
+            evented: true,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+        });
+        group._relayId = relayId;
+        fabricCanvas.add(group);
+        return group;
+    }
+
+    /**
+     * Supprime toutes les icônes de projecteur du canvas.
+     */
+    function clearProjectorIcons() {
+        Object.values(projectorIcons).forEach((g) => fabricCanvas.remove(g));
+        projectorIcons = {};
+    }
+
+    /**
+     * Recrée les icônes de projecteur à partir de relayPositions.
+     * Crée des icônes par défaut (R0–R4) si non encore positionnées.
+     */
+    function refreshProjectorIcons() {
+        clearProjectorIcons();
+        Object.entries(relayPositions).forEach(([rid, pos]) => {
+            const relayId = parseInt(rid, 10);
+            projectorIcons[relayId] = drawProjectorIcon(relayId, pos.x, pos.y);
+        });
+        const relayCount = 5;
+        for (let i = 0; i < relayCount; i++) {
+            if (!projectorIcons[i]) {
+                const defaultX = (canvasWidth / (relayCount + 1)) * (i + 1);
+                const defaultY = canvasHeight - PROJ_RADIUS - 15;
+                relayPositions[i] = { x: defaultX, y: defaultY };
+                projectorIcons[i] = drawProjectorIcon(i, defaultX, defaultY);
+            }
+        }
+        updateProjectorHighlights();
+        fabricCanvas.renderAll();
+    }
+
+    /**
+     * Cherche un projecteur aux coordonnées données (retourne relayId ou -1).
+     */
+    function findProjectorAtPoint(x, y) {
+        for (const [rid, group] of Object.entries(projectorIcons)) {
+            const cx = group.left;
+            const cy = group.top;
+            const dx = x - cx;
+            const dy = y - cy;
+            if (Math.sqrt(dx * dx + dy * dy) <= PROJ_RADIUS + 4) {
+                return parseInt(rid, 10);
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Met à jour la surbrillance des projecteurs selon la zone sélectionnée.
+     */
+    function updateProjectorHighlights() {
+        if (!fabricCanvas) return;
+        const activeRelays = new Set();
+        if (selectedZoneIndex >= 0 && selectedZoneIndex < completedZones.length) {
+            (completedZones[selectedZoneIndex].relays || []).forEach((r) => activeRelays.add(r));
+        }
+        Object.entries(projectorIcons).forEach(([rid]) => {
+            highlightProjector(parseInt(rid, 10), activeRelays.has(parseInt(rid, 10)));
+        });
+        fabricCanvas.renderAll();
+    }
+
+    /**
+     * Allume (lit=true) ou éteint un projecteur relais.
+     */
+    function highlightProjector(relayId, lit) {
+        const group = projectorIcons[relayId];
+        if (!group) return;
+        const bg = group._objects[0];
+        const lens = group._objects[1];
+        if (lit) {
+            bg.set({ fill: '#8a6a00', stroke: '#ffcc00' });
+            lens.set({ fill: '#ffe066' });
+        } else {
+            bg.set({ fill: '#333333', stroke: '#888888' });
+            lens.set({ fill: '#aaaaaa' });
+        }
+    }
+
     // === Événements canvas ===
     function setupCanvasEvents() {
         // Clic gauche : ajouter un point ou sélectionner une zone
         fabricCanvas.on("mouse:down", function (opt) {
             if (opt.e.button !== 0) return;
             const pointer = fabricCanvas.getPointer(opt.e);
+
+            // Ignorer les clics sur les icônes de projecteur
+            if (opt.target && opt.target._relayId !== undefined) return;
 
             // == Mode édition de sommets ==
             if (editingIndex >= 0) {
@@ -341,6 +498,7 @@
             e.preventDefault();
             if (isDrawing || editingIndex >= 0) return;
             const pointer = fabricCanvas.getPointer(e);
+            if (findProjectorAtPoint(pointer.x, pointer.y) >= 0) return;
             if (editorMode === 'mask') {
                 const idx = findMaskAtPoint(pointer.x, pointer.y);
                 if (idx >= 0) enterEditMode(idx, 'mask');
@@ -390,8 +548,12 @@
             }
         });
 
-        // Déplacement d'une poignée de sommet
+        // Déplacement d'une poignée de sommet ou d'un projecteur
         fabricCanvas.on("object:moving", function (opt) {
+            if (opt.target && opt.target._relayId !== undefined) {
+                relayPositions[opt.target._relayId] = { x: opt.target.left, y: opt.target.top };
+                return;
+            }
             if (editingIndex < 0 || !opt.target || opt.target._vertexIndex === undefined) return;
             const handle = opt.target;
             const i = handle._vertexIndex;
@@ -770,6 +932,7 @@
 
         updateZoneList();
         setStatus(`Zone "${zone.name}" sélectionnée — Suppr pour supprimer`);
+        updateProjectorHighlights();
     }
 
     /**
@@ -788,6 +951,7 @@
         selectedZoneIndex = -1;
         updateZoneList();
         fabricCanvas && fabricCanvas.renderAll();
+        updateProjectorHighlights();
     }
 
     /**
@@ -1027,7 +1191,20 @@
             body: JSON.stringify({ masks: masksData }),
         }).then((res) => res.json());
 
-        Promise.all([saveZonesReq, saveMasksReq])
+        const relayPosData = {};
+        Object.entries(relayPositions).forEach(([rid, pos]) => {
+            relayPosData[rid] = [
+                Math.round(pos.x * scaleFactor),
+                Math.round(pos.y * scaleFactor),
+            ];
+        });
+        const saveRelayPosReq = fetch(`/api/relay_positions/${camId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ positions: relayPosData }),
+        }).then((res) => res.json());
+
+        Promise.all([saveZonesReq, saveMasksReq, saveRelayPosReq])
             .then(([zData, mData]) => {
                 showLoading(false);
                 const zOk = zData.status === "ok";
@@ -1071,6 +1248,8 @@
 
         loadExistingZones();
         loadExistingMasks();
+        projectorIcons = {};
+        loadRelayPositions();
     }
 
     /**
@@ -1131,6 +1310,8 @@
                 completedMasks.push({ name: m.name, polygon: m.polygon, fabricObj });
             });
 
+            projectorIcons = {};
+            refreshProjectorIcons();
             updateZoneList();
             showLoading(false);
             setStatus(`Snapshot rafraîchi — ${completedZones.length} zone(s), ${completedMasks.length} masque(s)`);
@@ -1192,6 +1373,7 @@
             zone.relays.sort((a, b) => a - b);
         }
         updateZoneList();
+        updateProjectorHighlights();
     }
 
     // === API publique (pour les onclick du HTML) ===

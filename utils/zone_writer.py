@@ -142,6 +142,40 @@ def save_masks_to_ini(ini_path, cam_id, masks):
     )
 
 
+def save_relay_positions_to_ini(ini_path, cam_id, positions):
+    """Sauvegarde les positions des icônes de projecteurs relais pour une caméra.
+
+    Supprime toutes les sections *_cam{cam_id} existantes et les remplace par
+    les nouvelles positions. Les autres caméras sont conservées.
+
+    Args:
+        ini_path: Chemin vers relay_positions.ini.
+        cam_id: Identifiant numérique de la caméra.
+        positions: Dict {relay_id (int ou str): {'x': x, 'y': y}}.
+    """
+    cam_suffix = f"_cam{cam_id}"
+    existing_sections = _parse_ini_sections(ini_path)
+    other_sections = [
+        s for s in existing_sections
+        if not s["header"].endswith(cam_suffix)
+    ]
+    new_sections = []
+    for relay_id, pos in sorted(positions.items(), key=lambda kv: int(kv[0])):
+        section = {
+            "header": f"relay{int(relay_id)}_cam{cam_id}",
+            "entries": [
+                ("x", str(int(pos['x']))),
+                ("y", str(int(pos['y']))),
+            ],
+        }
+        new_sections.append(section)
+    _write_ini_sections(ini_path, other_sections + new_sections)
+    logger.info(
+        f"Positions relais sauvegardées pour cam{cam_id} : "
+        f"{len(new_sections)} entrée(s) dans {ini_path}"
+    )
+
+
 def _parse_ini_sections(ini_path):
     """Parse un fichier INI en préservant la structure par section.
 

@@ -90,6 +90,41 @@ def load_masks_by_camera_from_ini(ini_path):
 
 MASKS_BY_CAMERA = load_masks_by_camera_from_ini('config/masks.ini')
 
+
+def load_relay_positions_from_ini(ini_path):
+    """Charge les positions des icônes de projecteurs depuis un fichier INI.
+
+    Format des sections : relay{relay_id}_cam{cam_id}, clés 'x' et 'y'
+    (coordonnées réelles en pixels).
+
+    Returns:
+        Dict {cam_id (int): {relay_id (int): (x, y)}}.
+    """
+    positions = {}
+    if not os.path.exists(ini_path):
+        return positions
+    config_parser = configparser.ConfigParser()
+    config_parser.read(ini_path, encoding='utf-8')
+    for section in config_parser.sections():
+        if 'x' not in config_parser[section] or 'y' not in config_parser[section]:
+            continue
+        if '_cam' not in section:
+            continue
+        try:
+            cam_id = int(section.split('_cam')[-1])
+            relay_part = section.split('_cam')[0]
+            relay_id = int(relay_part.replace('relay', ''))
+            x = int(config_parser[section]['x'])
+            y = int(config_parser[section]['y'])
+            positions.setdefault(cam_id, {})[relay_id] = (x, y)
+        except (ValueError, AttributeError):
+            pass
+    return positions
+
+
+RELAY_POSITIONS_BY_CAMERA = load_relay_positions_from_ini('config/relay_positions.ini')
+
+
 # Chargement classique de config.ini (chemin relatif)
 config = configparser.ConfigParser()
 config.read('config/config.ini', encoding='utf-8')
