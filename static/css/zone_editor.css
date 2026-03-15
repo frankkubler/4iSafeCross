@@ -385,3 +385,64 @@ body {
         padding: 10px;
     }
 }
+
+/* === Bouton toggle mode zones / masques === */
+.btn-mode-zone {
+    background: #1565c0;
+    color: #fff;
+}
+
+.btn-mode-zone:hover {
+    background: #1976d2;
+}
+
+.btn-mode-mask {
+    background: #333;
+    color: #ff6666;
+    border: 1px solid #ff4444;
+}
+
+.btn-mode-mask:hover {
+    background: #444;
+    border-color: #ff6666;
+}
+
+/* === Section masques dans la liste === */
+.list-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #aaa;
+    padding: 10px 8px 4px;
+    border-top: 1px solid #2a2a4a;
+    margin-top: 6px;
+}
+
+.list-section-title:first-child {
+    margin-top: 0;
+    border-top: none;
+}
+
+.mask-section-title {
+    color: #ff8888;
+}
+
+.mask-item {
+    border-left: 3px solid #555;
+}
+
+.mask-item.selected {
+    border-left-color: #fff;
+    background: #2a2a2a;
+}
+
+.mask-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: #222;
+    border: 1px solid #888;
+    flex-shrink: 0;
+    display: inline-block;
+}

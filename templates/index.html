@@ -619,7 +619,7 @@
                     <button id="btn_tuning_{{ cam.idx }}" class="btn btn-tuning" onclick="toggleMotionPanel({{ cam.idx }})">⚙ Motion Tuning</button>
                     <button id="btn_switch_inference_{{ cam.idx }}" class="btn btn-green" onclick="switchInferenceMode({{ cam.idx }})">To RFDETR</button>
                     <button id="btn_res_switch_{{ cam.idx }}" class="btn btn-blue" onclick="switchResolution({{ cam.idx }})">720p</button>
-                    <button class="btn btn-purple" onclick="window.open('/zone_editor/{{ cam.idx }}', '_blank')">✏️ Zones</button>
+                    <button class="btn btn-purple" onclick="window.open('/zone_editor/{{ cam.idx }}', '_blank')">✏️ Zones&Mask</button>
                 </div>
                 <div id="motion-panel-{{ cam.idx }}" class="motion-panel">
                     <div class="motion-panel-header">⚙ Paramètres de détection de mouvement</div>

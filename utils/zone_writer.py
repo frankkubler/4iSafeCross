@@ -87,6 +87,61 @@ def save_zones_to_ini(ini_path, cam_id, zones):
     )
 
 
+def save_masks_to_ini(ini_path, cam_id, masks):
+    """Sauvegarde les masques polygonaux d'une caméra dans le fichier masks.ini.
+
+    Supprime toutes les sections *_cam{cam_id} existantes et les remplace
+    par les nouveaux masques fournis. Les sections des autres caméras sont
+    conservées intactes.
+
+    Args:
+        ini_path: Chemin vers le fichier masks.ini.
+        cam_id: Identifiant numérique de la caméra (ex: 0, 1).
+        masks: Liste de dictionnaires avec les clés :
+            - name (str): Nom du masque (ex: "mask1_cam0").
+            - polygon (list): Liste de [x, y] ou (x, y), ≥ 3 points.
+
+    Raises:
+        IOError: Si le fichier ne peut pas être écrit.
+        ValueError: Si les données de masques sont invalides.
+    """
+    cam_suffix = f"_cam{cam_id}"
+
+    existing_sections = _parse_ini_sections(ini_path)
+
+    other_sections = [
+        s for s in existing_sections
+        if not s["header"].endswith(cam_suffix)
+    ]
+
+    new_sections = []
+    for i, mask in enumerate(masks):
+        name = mask.get("name", f"mask{i + 1}_cam{cam_id}")
+        polygon = mask.get("polygon", [])
+
+        if len(polygon) < 3:
+            logger.warning(f"Masque '{name}' ignoré : polygone avec moins de 3 points")
+            continue
+
+        poly_str = ", ".join(
+            f"({int(pt[0])}, {int(pt[1])})" for pt in polygon
+        )
+
+        section = {
+            "header": name,
+            "entries": [("polygon", poly_str)],
+        }
+        new_sections.append(section)
+
+    all_sections = other_sections + new_sections
+    _write_ini_sections(ini_path, all_sections)
+
+    logger.info(
+        f"Masques sauvegardés pour cam{cam_id} : "
+        f"{len(new_sections)} masques écrits dans {ini_path}"
+    )
+
+
 def _parse_ini_sections(ini_path):
     """Parse un fichier INI en préservant la structure par section.
 

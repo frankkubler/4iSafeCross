@@ -52,6 +52,44 @@ def load_zones_by_camera_from_ini(ini_path):
 # ZONES_INI_PATH = get_config_path('zones.ini')
 ZONES_BY_CAMERA = load_zones_by_camera_from_ini('config/zones.ini')
 
+
+def load_masks_by_camera_from_ini(ini_path):
+    """Charge les masques polygonaux depuis un fichier INI.
+
+    Les sections sont au format 'mask{i}_cam{j}'. Seule la clé 'polygon' est lue.
+    Si le fichier n'existe pas, retourne un dictionnaire vide.
+
+    Args:
+        ini_path: Chemin vers le fichier masks.ini.
+
+    Returns:
+        Dict {cam_id (int): [{name, polygon (list of tuples)}]}.
+    """
+    masks_by_camera = {}
+    if not os.path.exists(ini_path):
+        return masks_by_camera
+    config_parser = configparser.ConfigParser()
+    config_parser.read(ini_path, encoding='utf-8')
+    for section in config_parser.sections():
+        if 'polygon' not in config_parser[section]:
+            continue
+        poly_str = config_parser[section]['polygon'].replace(' ', '')
+        pts = re.findall(r'\((\d+),(\d+)\)', poly_str)
+        polygon = [(int(x), int(y)) for x, y in pts]
+        if len(polygon) < 3:
+            continue
+        mask = {'name': section, 'polygon': polygon}
+        if '_cam' in section:
+            try:
+                cam_id = int(section.split('_cam')[-1])
+                masks_by_camera.setdefault(cam_id, []).append(mask)
+            except Exception:
+                pass
+    return masks_by_camera
+
+
+MASKS_BY_CAMERA = load_masks_by_camera_from_ini('config/masks.ini')
+
 # Chargement classique de config.ini (chemin relatif)
 config = configparser.ConfigParser()
 config.read('config/config.ini', encoding='utf-8')

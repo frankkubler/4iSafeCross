@@ -17,9 +17,10 @@
         </div>
         <div class="header-actions">
             <span id="image-info" style="font-size:0.8rem;color:#888;"></span>
+            <button id="btn-mode" class="btn btn-mode-zone" title="Basculer entre mode zones et mode masques">📌 Mode : Zones</button>
             <button id="btn-refresh" class="btn btn-secondary" title="Recharger le snapshot">⟳ Snapshot</button>
             <button id="btn-reset" class="btn btn-secondary" title="Réinitialiser les zones">↺ Réinitialiser</button>
-            <button id="btn-save" class="btn btn-primary" title="Sauvegarder les zones">💾 Sauvegarder</button>
+            <button id="btn-save" class="btn btn-primary" title="Sauvegarder les zones et masques">💾 Sauvegarder</button>
             <button class="btn btn-back" onclick="if(window.opener){window.close();}else{window.location.href='/';}">← Retour</button>
         </div>
     </div>
@@ -34,8 +35,8 @@
                 <div style="color:#888;font-size:0.85rem;padding:8px;">Chargement...</div>
             </div>
 
-            <div class="instructions">
-                <h3>Instructions</h3>
+            <div class="instructions" id="instructions-zone">
+                <h3>Instructions — Zones</h3>
                 <p><kbd>Clic gauche</kbd> — Ajouter un point</p>
                 <p><kbd>Clic droit</kbd> — Fermer le polygone (≥3 pts)</p>
                 <p><kbd>Clic</kbd> sur une zone — Sélectionner</p>
@@ -44,6 +45,15 @@
                 <p style="margin-top:8px;color:#888;">
                     Les points proches des bords (&lt;10px) sont alignés automatiquement.
                 </p>
+            </div>
+            <div class="instructions" id="instructions-mask" style="display:none;">
+                <h3>Instructions — Masques</h3>
+                <p><kbd>Clic gauche</kbd> — Ajouter un point</p>
+                <p><kbd>Clic droit</kbd> — Fermer le masque (≥3 pts)</p>
+                <p><kbd>Clic</kbd> sur un masque — Sélectionner</p>
+                <p><kbd>Suppr</kbd> — Supprimer le masque sélectionné</p>
+                <p><kbd>Échap</kbd> — Annuler le dessin en cours</p>
+                <p style="margin-top:8px;color:#e07;">Les masques noircissent la zone :<br>aucun mouvement ni détection IA<br>ne sera traité dans cette région.</p>
             </div>
         </div>
 

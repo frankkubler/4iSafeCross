@@ -47,6 +47,13 @@
     let completedZones = [];
     let selectedZoneIndex = -1;
 
+    // Masques terminés : [{name, polygon (coords canvas), fabricObj}]
+    let completedMasks = [];
+    let selectedMaskIndex = -1;
+
+    // Mode éditeur : 'zone' | 'mask'
+    let editorMode = 'zone';
+
     // État du dessin en cours
     let isDrawing = false;
     let currentPoints = [];
@@ -64,6 +71,32 @@
 
         setupButtons();
         loadSnapshot();
+    }
+
+    /**
+     * Bascule entre le mode zones et le mode masques.
+     */
+    function toggleEditorMode() {
+        editorMode = editorMode === 'zone' ? 'mask' : 'zone';
+        const btn = $("btn-mode");
+        if (editorMode === 'mask') {
+            btn.textContent = '\u2b1b Mode : Masques';
+            btn.classList.remove('btn-mode-zone');
+            btn.classList.add('btn-mode-mask');
+            $("instructions-zone").style.display = 'none';
+            $("instructions-mask").style.display = '';
+        } else {
+            btn.textContent = '\ud83d\udccc Mode : Zones';
+            btn.classList.remove('btn-mode-mask');
+            btn.classList.add('btn-mode-zone');
+            $("instructions-zone").style.display = '';
+            $("instructions-mask").style.display = 'none';
+        }
+        // Annuler tout dessin en cours lors du changement de mode
+        if (isDrawing) cancelDrawing();
+        deselectZone();
+        deselectMask();
+        setStatus(editorMode === 'mask' ? 'Mode masque actif — dessinez les zones exclues de la détection' : 'Mode zones actif');
     }
 
     /**
@@ -93,6 +126,7 @@
 
             initCanvas(img);
             loadExistingZones();
+            loadExistingMasks();
         };
 
         img.onerror = function () {
@@ -186,6 +220,51 @@
             });
     }
 
+    /**
+     * Charge les masques existants depuis l'API et les dessine sur le canvas.
+     */
+    function loadExistingMasks() {
+        fetch(`/api/masks/${camId}`)
+            .then((res) => res.json())
+            .then((masks) => {
+                completedMasks = [];
+                masks.forEach((mask) => {
+                    const canvasPolygon = mask.polygon.map((pt) => [
+                        pt[0] / scaleFactor,
+                        pt[1] / scaleFactor,
+                    ]);
+                    const fabricObj = drawMaskPolygon(canvasPolygon);
+                    completedMasks.push({
+                        name: mask.name,
+                        polygon: canvasPolygon,
+                        fabricObj: fabricObj,
+                    });
+                });
+                updateZoneList();
+            })
+            .catch(() => {
+                // Pas de masques définis — silencieux
+            });
+    }
+
+    /**
+     * Dessine un polygone masque sur le canvas (fond noir transparent, contour gris).
+     */
+    function drawMaskPolygon(canvasPolygon) {
+        const points = canvasPolygon.map((p) => ({ x: p[0], y: p[1] }));
+        const polygon = new fabric.Polygon(points, {
+            fill: 'rgba(0, 0, 0, 0.6)',
+            stroke: '#888888',
+            strokeWidth: 2,
+            strokeDashArray: [6, 3],
+            selectable: false,
+            evented: false,
+            objectCaching: false,
+        });
+        fabricCanvas.add(polygon);
+        return polygon;
+    }
+
     // === Événements canvas ===
     function setupCanvasEvents() {
         // Clic gauche : ajouter un point ou sélectionner une zone
@@ -196,13 +275,22 @@
             if (!isDrawing) {
                 // Vérifier si on clique sur une zone existante
                 const clickedZoneIdx = findZoneAtPoint(pointer.x, pointer.y);
-                if (clickedZoneIdx >= 0) {
-                    selectZone(clickedZoneIdx);
-                    return;
+                if (editorMode === 'mask') {
+                    // En mode masque, chercher d'abord un masque existant
+                    const clickedMaskIdx = findMaskAtPoint(pointer.x, pointer.y);
+                    if (clickedMaskIdx >= 0) {
+                        selectMask(clickedMaskIdx);
+                        return;
+                    }
+                } else {
+                    if (clickedZoneIdx >= 0) {
+                        selectZone(clickedZoneIdx);
+                        return;
+                    }
                 }
                 // Sinon démarrer un nouveau polygone
                 isDrawing = true;
-                deselectZone();
+                if (editorMode === 'mask') deselectMask(); else deselectZone();
             }
 
             // Snap aux bords
@@ -242,13 +330,17 @@
             $("status-coords").textContent = `${realX}, ${realY}`;
         });
 
-        // Touche Suppr : supprimer la zone sélectionnée
+        // Touche Suppr : supprimer la zone ou le masque sélectionné
         document.addEventListener("keydown", function (e) {
             if (e.key === "Shift") {
                 isShiftDown = true;
             }
-            if (e.key === "Delete" && selectedZoneIndex >= 0) {
-                deleteZone(selectedZoneIndex);
+            if (e.key === "Delete") {
+                if (editorMode === 'mask' && selectedMaskIndex >= 0) {
+                    deleteMask(selectedMaskIndex);
+                } else if (editorMode === 'zone' && selectedZoneIndex >= 0) {
+                    deleteZone(selectedZoneIndex);
+                }
             }
             // Échap : annuler le dessin en cours
             if (e.key === "Escape" && isDrawing) {
@@ -369,6 +461,18 @@
         tempCircles.forEach((c) => fabricCanvas.remove(c));
 
         const canvasPolygon = currentPoints.map((p) => [p.x, p.y]);
+
+        if (editorMode === 'mask') {
+            const name = getNextMaskName();
+            const fabricObj = drawMaskPolygon(canvasPolygon);
+            completedMasks.push({ name, polygon: canvasPolygon, fabricObj });
+            currentPoints = []; tempLines = []; tempCircles = []; isDrawing = false;
+            updateZoneList();
+            fabricCanvas.renderAll();
+            setStatus(`Masque "${name}" créé — ${completedMasks.length} masque(s) au total`);
+            return;
+        }
+
         const color = getNextColor();
         const name = getNextZoneName();
         const fabricObj = drawCompletedPolygon(canvasPolygon, color);
@@ -440,12 +544,19 @@
      * Retourne -1 si aucune zone n'est trouvée.
      */
     function findZoneAtPoint(x, y) {
-        // Parcourir les zones en ordre inverse (la dernière dessinée est au-dessus)
         for (let i = completedZones.length - 1; i >= 0; i--) {
-            const zone = completedZones[i];
-            if (isPointInPolygon(x, y, zone.polygon)) {
-                return i;
-            }
+            if (isPointInPolygon(x, y, completedZones[i].polygon)) return i;
+        }
+        return -1;
+    }
+
+    /**
+     * Trouve l'index du masque sous le point (x, y).
+     * Retourne -1 si aucun masque n'est trouvé.
+     */
+    function findMaskAtPoint(x, y) {
+        for (let i = completedMasks.length - 1; i >= 0; i--) {
+            if (isPointInPolygon(x, y, completedMasks[i].polygon)) return i;
         }
         return -1;
     }
@@ -470,6 +581,7 @@
      */
     function selectZone(idx) {
         deselectZone();
+        deselectMask();
         selectedZoneIndex = idx;
 
         // Épaissir le contour de la zone sélectionnée
@@ -502,6 +614,68 @@
         selectedZoneIndex = -1;
         updateZoneList();
         fabricCanvas && fabricCanvas.renderAll();
+    }
+
+    /**
+     * Sélectionne un masque par son index.
+     */
+    function selectMask(idx) {
+        deselectMask();
+        deselectZone();
+        selectedMaskIndex = idx;
+        const mask = completedMasks[idx];
+        if (mask && mask.fabricObj) {
+            mask.fabricObj.set({ strokeWidth: 3, stroke: '#fff' });
+            fabricCanvas.renderAll();
+        }
+        updateZoneList();
+        setStatus(`Masque "${mask.name}" sélectionné — Suppr pour supprimer`);
+    }
+
+    /**
+     * Désélectionne le masque courant.
+     */
+    function deselectMask() {
+        if (selectedMaskIndex >= 0 && selectedMaskIndex < completedMasks.length) {
+            const mask = completedMasks[selectedMaskIndex];
+            if (mask && mask.fabricObj) {
+                mask.fabricObj.set({ strokeWidth: 2, stroke: '#888888' });
+            }
+        }
+        selectedMaskIndex = -1;
+        updateZoneList();
+        fabricCanvas && fabricCanvas.renderAll();
+    }
+
+    /**
+     * Supprime un masque par son index.
+     */
+    function deleteMask(idx) {
+        if (idx < 0 || idx >= completedMasks.length) return;
+        const mask = completedMasks[idx];
+        if (mask.fabricObj) fabricCanvas.remove(mask.fabricObj);
+        completedMasks.splice(idx, 1);
+        selectedMaskIndex = -1;
+        renumberMasks();
+        updateZoneList();
+        fabricCanvas.renderAll();
+        setStatus(`Masque supprimé — ${completedMasks.length} masque(s) restant(s)`);
+    }
+
+    /**
+     * Renumérote les masques après suppression.
+     */
+    function renumberMasks() {
+        completedMasks.forEach((mask, i) => {
+            mask.name = `mask${i + 1}_cam${camId}`;
+        });
+    }
+
+    /**
+     * Retourne le prochain nom de masque.
+     */
+    function getNextMaskName() {
+        return `mask${completedMasks.length + 1}_cam${camId}`;
     }
 
     /**
@@ -558,42 +732,65 @@
         const container = $("zone-list");
         if (!container) return;
 
+        let html = "";
+
+        // ---- Section Zones ----
+        html += `<div class="list-section-title">Zones détection (${completedZones.length})</div>`;
         if (completedZones.length === 0) {
-            container.innerHTML =
-                '<div style="color:#888;font-size:0.85rem;padding:8px;">Aucune zone définie</div>';
-            return;
+            html += '<div style="color:#888;font-size:0.85rem;padding:4px 8px;">Aucune zone définie</div>';
+        } else {
+            completedZones.forEach((zone, i) => {
+                const [r, g, b] = zone.color;
+                const selected = i === selectedZoneIndex ? " selected" : "";
+                const pts = zone.polygon.length;
+                const numRelays = typeof NUM_RELAYS !== 'undefined' ? NUM_RELAYS : 0;
+                let relayCheckboxes = '';
+                if (numRelays > 0) {
+                    let checkboxHtml = '';
+                    for (let rn = 0; rn < numRelays; rn++) {
+                        const checked = (zone.relays || []).includes(rn) ? 'checked' : '';
+                        checkboxHtml += `<label class="relay-cb" title="Relais ${rn}">
+                            <input type="checkbox" ${checked} onchange="zoneEditor.toggleRelay(${i}, ${rn})">
+                            <span>${rn}</span>
+                        </label>`;
+                    }
+                    relayCheckboxes = `<div class="zone-relays" onclick="event.stopPropagation()"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
+                }
+                html += `
+                    <div class="zone-item${selected}" data-idx="${i}" onclick="zoneEditor.selectZone(${i})">
+                        <div class="zone-item-header">
+                            <span class="zone-color-dot" style="background:rgb(${r},${g},${b})"></span>
+                            <span class="zone-item-name">${zone.name}</span>
+                            <span class="zone-item-points">${pts}pts</span>
+                            <button class="zone-item-delete" onclick="event.stopPropagation();zoneEditor.deleteZone(${i})" title="Supprimer">✕</button>
+                        </div>
+                        ${relayCheckboxes}
+                    </div>
+                `;
+            });
         }
 
-        let html = "";
-        completedZones.forEach((zone, i) => {
-            const [r, g, b] = zone.color;
-            const selected = i === selectedZoneIndex ? " selected" : "";
-            const pts = zone.polygon.length;
-            const numRelays = typeof NUM_RELAYS !== 'undefined' ? NUM_RELAYS : 0;
-            let relayCheckboxes = '';
-            if (numRelays > 0) {
-                let checkboxHtml = '';
-                for (let rn = 0; rn < numRelays; rn++) {
-                    const checked = (zone.relays || []).includes(rn) ? 'checked' : '';
-                    checkboxHtml += `<label class="relay-cb" title="Relais ${rn}">
-                        <input type="checkbox" ${checked} onchange="zoneEditor.toggleRelay(${i}, ${rn})">
-                        <span>${rn}</span>
-                    </label>`;
-                }
-                relayCheckboxes = `<div class="zone-relays" onclick="event.stopPropagation()"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
-            }
-            html += `
-                <div class="zone-item${selected}" data-idx="${i}" onclick="zoneEditor.selectZone(${i})">
-                    <div class="zone-item-header">
-                        <span class="zone-color-dot" style="background:rgb(${r},${g},${b})"></span>
-                        <span class="zone-item-name">${zone.name}</span>
-                        <span class="zone-item-points">${pts}pts</span>
-                        <button class="zone-item-delete" onclick="event.stopPropagation();zoneEditor.deleteZone(${i})" title="Supprimer">✕</button>
+        // ---- Section Masques ----
+        html += `<div class="list-section-title mask-section-title">⬛ Masques (${completedMasks.length})</div>`;
+        if (completedMasks.length === 0) {
+            html += '<div style="color:#888;font-size:0.85rem;padding:4px 8px;">Aucun masque défini</div>';
+        } else {
+            completedMasks.forEach((mask, i) => {
+                const selected = i === selectedMaskIndex ? " selected" : "";
+                const pts = mask.polygon.length;
+                html += `
+                    <div class="zone-item mask-item${selected}" data-midx="${i}" onclick="zoneEditor.selectMask(${i})">
+                        <div class="zone-item-header">
+                            <span class="zone-color-dot mask-color-dot"></span>
+                            <span class="zone-item-name">${mask.name}</span>
+                            <span class="zone-item-points">${pts}pts</span>
+                            <button class="zone-item-delete" onclick="event.stopPropagation();zoneEditor.deleteMask(${i})" title="Supprimer">✕</button>
+                        </div>
                     </div>
-                    ${relayCheckboxes}
-                </div>
-            `;
-        });
+                `;
+            });
+        }
+
         container.innerHTML = html;
     }
 
@@ -603,14 +800,17 @@
         $("btn-save").addEventListener("click", saveZones);
         $("btn-reset").addEventListener("click", resetZones);
         $("btn-refresh").addEventListener("click", refreshSnapshot);
+        $("btn-mode").addEventListener("click", toggleEditorMode);
     }
 
     /**
-     * Sauvegarde les zones vers le backend.
+     * Sauvegarde les zones et les masques vers le backend.
      */
     function saveZones() {
-        if (completedZones.length === 0) {
-            if (!confirm("Aucune zone définie. Sauvegarder supprimera toutes les zones existantes. Continuer ?")) {
+        const hasZones = completedZones.length > 0;
+        const hasMasks = completedMasks.length > 0;
+        if (!hasZones && !hasMasks) {
+            if (!confirm("Aucune zone ni masque défini. Sauvegarder supprimera toutes les configurations existantes. Continuer ?")) {
                 return;
             }
         }
@@ -629,25 +829,40 @@
             relays: zone.relays || [],
         }));
 
-        fetch(`/api/zones/${camId}`, {
+        const masksData = completedMasks.map((mask) => ({
+            name: mask.name,
+            polygon: mask.polygon.map((pt) => [
+                Math.round(pt[0] * scaleFactor),
+                Math.round(pt[1] * scaleFactor),
+            ]),
+        }));
+
+        const saveZonesReq = fetch(`/api/zones/${camId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ zones: zonesData }),
-        })
-            .then((res) => res.json())
-            .then((data) => {
+        }).then((res) => res.json());
+
+        const saveMasksReq = fetch(`/api/masks/${camId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ masks: masksData }),
+        }).then((res) => res.json());
+
+        Promise.all([saveZonesReq, saveMasksReq])
+            .then(([zData, mData]) => {
                 showLoading(false);
-                if (data.status === "ok") {
+                const zOk = zData.status === "ok";
+                const mOk = mData.status === "ok";
+                if (zOk && mOk) {
                     showToast(
-                        `${data.zones_count} zone(s) sauvegardée(s) avec succès`,
+                        `${zData.zones_count} zone(s) et ${mData.masks_count} masque(s) sauvegardé(s)`,
                         "success"
                     );
-                    setStatus(
-                        `Sauvegardé — ${data.zones_count} zone(s) appliquées`,
-                        "success"
-                    );
+                    setStatus(`Sauvegardé — ${zData.zones_count} zone(s), ${mData.masks_count} masque(s)`, "success");
                 } else {
-                    showToast("Erreur : " + data.message, "error");
+                    const err = (!zOk ? zData.message : '') || (!mOk ? mData.message : '');
+                    showToast("Erreur : " + err, "error");
                     setStatus("Erreur de sauvegarde", "error");
                 }
             })
@@ -660,7 +875,7 @@
     }
 
     /**
-     * Réinitialise : recharge les zones depuis le backend.
+     * Réinitialise : recharge les zones et les masques depuis le backend.
      */
     function resetZones() {
         if (!confirm("Réinitialiser ? Les modifications non sauvegardées seront perdues.")) {
@@ -671,9 +886,12 @@
         fabricCanvas.getObjects().slice().forEach((obj) => fabricCanvas.remove(obj));
         cancelDrawing();
         completedZones = [];
+        completedMasks = [];
         selectedZoneIndex = -1;
+        selectedMaskIndex = -1;
 
         loadExistingZones();
+        loadExistingMasks();
     }
 
     /**
@@ -686,6 +904,10 @@
             polygon: z.polygon.map((pt) => [...pt]),
             color: [...z.color],
             relays: [...(z.relays || [])],
+        }));
+        const savedMasks = completedMasks.map((m) => ({
+            name: m.name,
+            polygon: m.polygon.map((pt) => [...pt]),
         }));
 
         showLoading(true);
@@ -723,9 +945,16 @@
                 });
             });
 
+            // Redessiner les masques sauvegardés
+            completedMasks = [];
+            savedMasks.forEach((m) => {
+                const fabricObj = drawMaskPolygon(m.polygon);
+                completedMasks.push({ name: m.name, polygon: m.polygon, fabricObj });
+            });
+
             updateZoneList();
             showLoading(false);
-            setStatus(`Snapshot rafraîchi — ${completedZones.length} zone(s)`);
+            setStatus(`Snapshot rafraîchi — ${completedZones.length} zone(s), ${completedMasks.length} masque(s)`);
         };
 
         img.onerror = function () {
@@ -791,6 +1020,8 @@
         selectZone: selectZone,
         deleteZone: deleteZone,
         toggleRelay: toggleRelay,
+        selectMask: selectMask,
+        deleteMask: deleteMask,
     };
 
     // Lancer au chargement
