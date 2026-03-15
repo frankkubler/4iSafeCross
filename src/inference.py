@@ -98,9 +98,10 @@ class InferenceServerThread(threading.Thread):
         """
         with self.masks_lock:
             current_masks = self.masks
-        if not current_masks:
-            return frame
+        # Toujours opérer sur une copie pour ne pas corrompre le buffer partagé de CameraManager
         masked = frame.copy()
+        if not current_masks:
+            return masked
         for mask in current_masks:
             polygon = mask.get('polygon')
             if not polygon or len(polygon) < 3:

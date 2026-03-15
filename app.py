@@ -439,6 +439,17 @@ def detection_callback_factory(cid, main_loop=None):
             if len(detections_person_with_zone) > 0:
                 current_day = now.strftime('%Y-%m-%d %H:%M:%S')
                 frame = manager.get_frame_array(CAM_IDS[cid])
+                # Appliquer les masques sur la frame d'alerte (sauvegarde/Telegram)
+                # pour ne pas exposer les zones masquées dans les captures
+                if frame is not None:
+                    cam_masks = masks_by_camera.get(cid, [])
+                    if cam_masks:
+                        frame = frame.copy()
+                        for _m in cam_masks:
+                            _poly = _m.get('polygon')
+                            if _poly and len(_poly) >= 3:
+                                _pts = np.array(_poly, dtype=np.int32)
+                                cv2.fillPoly(frame, [_pts], (0, 0, 0))
                 logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
                 asyncio.run_coroutine_threadsafe(
                     alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
@@ -886,7 +897,8 @@ def toggle_detection(cid):
                 home_dir=".",
                 get_frame_func=get_frame_func_factory(cid),
                 detection_callback=detection_callback_factory(cid, MAIN_LOOP),
-                stop_event=stop_event
+                stop_event=stop_event,
+                masks=masks_by_camera.get(cid, [])
             )
             thread.start()
             inference_threads[cid] = thread
