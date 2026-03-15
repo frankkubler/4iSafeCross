@@ -286,7 +286,7 @@
      * Charge les positions des projecteurs depuis le backend et les dessine.
      */
     function loadRelayPositions() {
-        if (!camId) return;
+        if (camId === null || camId === undefined) return;
         fetch(`/api/relay_positions/${camId}`)
             .then((r) => {
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
