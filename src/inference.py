@@ -171,7 +171,7 @@ class InferenceServerThread(threading.Thread):
             # 🚀 Log des statistiques d'optimisation toutes les 100 frames
             if self.total_frames_processed % 100 == 0:
                 skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100
-                self.logger.info(f"📊 Inférence optimisée: {skip_rate:.1f}% frames sautées ({self.inference_skip_count}/{self.total_frames_processed})")
+                self.logger.debug(f"📊 Inférence optimisée: {skip_rate:.1f}% frames sautées ({self.inference_skip_count}/{self.total_frames_processed})")
             
             if (not motion_bool) or (w_pad <= 0 or h_pad <= 0):
                 # Appeler le callback avec une détection vide pour effacer l'affichage côté client
