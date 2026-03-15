@@ -373,7 +373,7 @@
             const relayId = parseInt(rid, 10);
             projectorIcons[relayId] = drawProjectorIcon(relayId, pos.x, pos.y);
         });
-        const relayCount = 5;
+        const relayCount = (typeof NUM_RELAYS !== 'undefined' && NUM_RELAYS > 0) ? NUM_RELAYS : 5;
         for (let i = 0; i < relayCount; i++) {
             if (!projectorIcons[i]) {
                 const defaultX = (canvasWidth / (relayCount + 1)) * (i + 1);
