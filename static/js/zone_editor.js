@@ -319,8 +319,8 @@
             left: cx,
             top: cy,
             radius: PROJ_RADIUS,
-            fill: '#333333',
-            stroke: '#888888',
+            fill: '#1a1a2e',
+            stroke: '#ffcc00',
             strokeWidth: 2,
             originX: 'center',
             originY: 'center',
@@ -334,23 +334,25 @@
         });
         body._relayId = relayId;
 
-        const label = new fabric.Text(`\u2299 R${relayId}`, {
+        const label = new fabric.Text(`R${relayId}`, {
             left: cx,
-            top: cy + PROJ_RADIUS + 4,
+            top: cy + PROJ_RADIUS + 3,
             fontSize: 12,
-            fill: '#cccccc',
+            fill: '#ffffff',
             fontWeight: 'bold',
             originX: 'center',
             originY: 'top',
             selectable: false,
             evented: false,
-            shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.9)', blur: 5 }),
         });
 
         fabricCanvas.add(body);
         fabricCanvas.add(label);
+        body.setCoords();
+        label.setCoords();
         fabricCanvas.bringToFront(body);
         fabricCanvas.bringToFront(label);
+        console.log(`[Projecteur] R${relayId} ajouté à (${Math.round(cx)}, ${Math.round(cy)})`);
         return { body, label };
     }
 
@@ -371,6 +373,7 @@
      */
     function refreshProjectorIcons() {
         clearProjectorIcons();
+        console.log(`[Projecteur] refreshProjectorIcons — canvasWidth=${canvasWidth} canvasHeight=${canvasHeight}`);
         Object.entries(relayPositions).forEach(([rid, pos]) => {
             const relayId = parseInt(rid, 10);
             projectorIcons[relayId] = drawProjectorIcon(relayId, pos.x, pos.y);
@@ -379,13 +382,14 @@
         for (let i = 0; i < relayCount; i++) {
             if (!projectorIcons[i]) {
                 const defaultX = (canvasWidth / (relayCount + 1)) * (i + 1);
-                const defaultY = canvasHeight - PROJ_RADIUS - 15;
+                const defaultY = PROJ_RADIUS + 10;   // haut du canvas
                 relayPositions[i] = { x: defaultX, y: defaultY };
                 projectorIcons[i] = drawProjectorIcon(i, defaultX, defaultY);
             }
         }
         updateProjectorHighlights();
         fabricCanvas.renderAll();
+        console.log(`[Projecteur] ${Object.keys(projectorIcons).length} icônes dans fabricCanvas (${fabricCanvas.getObjects().length} objets total)`);
     }
 
     /**
