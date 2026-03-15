@@ -311,35 +311,17 @@
     }
 
     /**
-     * Dessine une icône de projecteur (⊙) pour le relais donné.
+     * Dessine une icône de projecteur pour le relais donné.
+     * Retourne { body, label } — deux objets Fabric indépendants.
      */
     function drawProjectorIcon(relayId, cx, cy) {
-        const bg = new fabric.Circle({
+        const body = new fabric.Circle({
+            left: cx,
+            top: cy,
             radius: PROJ_RADIUS,
             fill: '#333333',
             stroke: '#888888',
             strokeWidth: 2,
-            originX: 'center',
-            originY: 'center',
-        });
-        const lens = new fabric.Text('⊙', {
-            fontSize: PROJ_RADIUS + 4,
-            fill: '#aaaaaa',
-            originX: 'center',
-            originY: 'center',
-            top: -2,
-        });
-        const lbl = new fabric.Text(`R${relayId}`, {
-            fontSize: 11,
-            fill: '#cccccc',
-            fontWeight: 'bold',
-            originX: 'center',
-            originY: 'center',
-            top: PROJ_RADIUS + 8,
-        });
-        const group = new fabric.Group([bg, lens, lbl], {
-            left: cx,
-            top: cy,
             originX: 'center',
             originY: 'center',
             selectable: true,
@@ -350,17 +332,36 @@
             lockScalingX: true,
             lockScalingY: true,
         });
-        group._relayId = relayId;
-        fabricCanvas.add(group);
-        fabricCanvas.bringToFront(group);
-        return group;
+        body._relayId = relayId;
+
+        const label = new fabric.Text(`\u2299 R${relayId}`, {
+            left: cx,
+            top: cy + PROJ_RADIUS + 4,
+            fontSize: 12,
+            fill: '#cccccc',
+            fontWeight: 'bold',
+            originX: 'center',
+            originY: 'top',
+            selectable: false,
+            evented: false,
+            shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.9)', blur: 5 }),
+        });
+
+        fabricCanvas.add(body);
+        fabricCanvas.add(label);
+        fabricCanvas.bringToFront(body);
+        fabricCanvas.bringToFront(label);
+        return { body, label };
     }
 
     /**
      * Supprime toutes les icônes de projecteur du canvas.
      */
     function clearProjectorIcons() {
-        Object.values(projectorIcons).forEach((g) => fabricCanvas.remove(g));
+        Object.values(projectorIcons).forEach(({ body, label }) => {
+            fabricCanvas.remove(body);
+            fabricCanvas.remove(label);
+        });
         projectorIcons = {};
     }
 
@@ -391,9 +392,9 @@
      * Cherche un projecteur aux coordonnées données (retourne relayId ou -1).
      */
     function findProjectorAtPoint(x, y) {
-        for (const [rid, group] of Object.entries(projectorIcons)) {
-            const cx = group.left;
-            const cy = group.top;
+        for (const [rid, { body }] of Object.entries(projectorIcons)) {
+            const cx = body.left;
+            const cy = body.top;
             const dx = x - cx;
             const dy = y - cy;
             if (Math.sqrt(dx * dx + dy * dy) <= PROJ_RADIUS + 4) {
@@ -422,16 +423,14 @@
      * Allume (lit=true) ou éteint un projecteur relais.
      */
     function highlightProjector(relayId, lit) {
-        const group = projectorIcons[relayId];
-        if (!group) return;
-        const bg = group._objects[0];
-        const lens = group._objects[1];
+        const icon = projectorIcons[relayId];
+        if (!icon) return;
         if (lit) {
-            bg.set({ fill: '#8a6a00', stroke: '#ffcc00' });
-            lens.set({ fill: '#ffe066' });
+            icon.body.set({ fill: '#8a6a00', stroke: '#ffcc00' });
+            icon.label.set({ fill: '#ffe066' });
         } else {
-            bg.set({ fill: '#333333', stroke: '#888888' });
-            lens.set({ fill: '#aaaaaa' });
+            icon.body.set({ fill: '#333333', stroke: '#888888' });
+            icon.label.set({ fill: '#cccccc' });
         }
     }
 
@@ -559,7 +558,16 @@
         // Déplacement d'une poignée de sommet ou d'un projecteur
         fabricCanvas.on("object:moving", function (opt) {
             if (opt.target && opt.target._relayId !== undefined) {
-                relayPositions[opt.target._relayId] = { x: opt.target.left, y: opt.target.top };
+                const rid = opt.target._relayId;
+                relayPositions[rid] = { x: opt.target.left, y: opt.target.top };
+                const icon = projectorIcons[rid];
+                if (icon && icon.label) {
+                    icon.label.set({
+                        left: opt.target.left,
+                        top: opt.target.top + PROJ_RADIUS + 4,
+                    });
+                    icon.label.setCoords();
+                }
                 return;
             }
             if (editingIndex < 0 || !opt.target || opt.target._vertexIndex === undefined) return;
