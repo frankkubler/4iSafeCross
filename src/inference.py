@@ -18,12 +18,14 @@ from src.pose_analyser import PoseAnalyzer
 class InferenceServerThread(threading.Thread):
     def __init__(self, home_dir, get_frame_func,
                  white_pixels_threshold=MOTIONTHRESHOLD,
-                 detection_callback=None, stop_event=None):
+                 detection_callback=None, stop_event=None, masks=None):
         super().__init__()
         self.home_dir = home_dir
         self.get_frame_func = get_frame_func  # Fonction pour obtenir la frame courante
         self.detection_callback = detection_callback  # Callback pour envoyer les résultats
         self.stop_event = stop_event or threading.Event()
+        self.masks = masks or []
+        self.masks_lock = threading.Lock()
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         self.fonction = FONCTION_YOLO
         self.url = rf"{URL_YOLO}/{self.fonction}"
@@ -73,6 +75,40 @@ class InferenceServerThread(threading.Thread):
     def motion(self):
         return self._motion
 
+    def set_masks(self, masks):
+        """Met à jour les masques polygonaux de manière thread-safe.
+
+        Args:
+            masks: Liste de dicts {'name': str, 'polygon': list of (x, y)}.
+        """
+        with self.masks_lock:
+            self.masks = masks or []
+
+    def _apply_masks(self, frame):
+        """Applique les masques polygonaux sur une copie de la frame.
+
+        Les zones masquées sont noircies (pixels mis à 0) avant toute analyse.
+        Opère sur une copie pour ne pas corrompre le buffer partagé de CameraManager.
+
+        Args:
+            frame: Frame numpy BGR (H x W x 3).
+
+        Returns:
+            Copie de la frame avec les zones masquées en noir.
+        """
+        with self.masks_lock:
+            current_masks = self.masks
+        if not current_masks:
+            return frame
+        masked = frame.copy()
+        for mask in current_masks:
+            polygon = mask.get('polygon')
+            if not polygon or len(polygon) < 3:
+                continue
+            pts = np.array(polygon, dtype=np.int32)
+            cv2.fillPoly(masked, [pts], (0, 0, 0))
+        return masked
+
     def _should_run_inference(self, frame):
         """Détermine si une inférence doit être lancée pour économiser les ressources IA."""
         current_time = time.time()
@@ -118,6 +154,8 @@ class InferenceServerThread(threading.Thread):
             if frame is None:
                 time.sleep(0.1)
                 continue
+            # Appliquer les masques en amont de tout traitement (copie protégée)
+            frame = self._apply_masks(frame)
             # 🚀 Étape de détection de mouvement (10ms)
             # Ensuite, lancez la détection (sans paramètres redondants ici)
             roi, motion_bool, white_pixels, coords = self.motion_detector.get_mog2_motion_info(

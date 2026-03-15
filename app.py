@@ -3,7 +3,7 @@ from src.camera_manager import CameraManager
 from src.inference import InferenceServerThread
 from src.alert_manager import AlerteManager
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
-from utils.zone_writer import save_zones_to_ini
+from utils.zone_writer import save_zones_to_ini, save_masks_to_ini
 from src.relay_pilot import YoctoMultiRelay
 from src.bot_aiogram import BotThread
 from scripts.collect_dataset import DatasetCollectionThread
@@ -23,7 +23,8 @@ from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
                              DATASET_COLLECTION_MAX_PER_CLASS, DATASET_OUTPUT_DIR,
                              DATASET_BG_INTERVAL, DATASET_BG_ENABLED,
                              DATASET_HARD_NEG_CONFIDENCE, DATASET_HARD_NEG_ENABLED,
-                             URL_YOLO, FONCTION_YOLO)
+                             URL_YOLO, FONCTION_YOLO,
+                             MASKS_BY_CAMERA, load_masks_by_camera_from_ini)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -78,6 +79,14 @@ threading.Thread(target=telegram_bot.run, daemon=True).start()
 
 # Définir les zones pour chaque caméra
 zones_by_camera = ZONES_BY_CAMERA
+
+# Masques polygonaux appliqués en amont de la détection (noircissent les zones non surveillées)
+masks_by_camera = MASKS_BY_CAMERA
+
+# Cache et lock pour les overlays de masques (affichage GUI uniquement)
+mask_overlay_cache = {}
+mask_overlay_lock = threading.Lock()
+MAX_MASK_OVERLAY_CACHE_SIZE = 10
 
 # Passer toutes les zones (toutes caméras) à l'alert_manager
 alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones_by_camera=zones_by_camera, telegram_alert_enabled=False)
@@ -232,6 +241,45 @@ def create_zone_overlay(frame_shape, zones, cid):
             cv2.putText(overlay, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
     
     return overlay
+
+
+def create_mask_overlay(frame_shape, masks):
+    """Crée un masque booléen H×W pour les zones à noircir dans la GUI.
+
+    Args:
+        frame_shape: Tuple (H, W, ...) de la frame.
+        masks: Liste de dicts {'polygon': list of (x, y)}.
+
+    Returns:
+        Tableau numpy booléen (H, W) — True = pixel à noircir.
+    """
+    h, w = frame_shape[:2]
+    mask_img = np.zeros((h, w), dtype=np.uint8)
+    for mask in masks:
+        polygon = mask.get('polygon')
+        if not polygon or len(polygon) < 3:
+            continue
+        pts = [
+            (max(0, min(w - 1, int(xy[0]))), max(0, min(h - 1, int(xy[1]))))
+            for xy in polygon
+        ]
+        pts_np = np.array([pts], dtype=np.int32)
+        cv2.fillPoly(mask_img, pts_np, 255)
+    return mask_img > 0
+
+
+def get_mask_overlay(frame_shape, cid):
+    """Récupère le masque booléen depuis le cache ou le crée si nécessaire."""
+    with mask_overlay_lock:
+        cache_key = f"{cid}_{frame_shape[0]}_{frame_shape[1]}"
+        if cache_key not in mask_overlay_cache:
+            if len(mask_overlay_cache) >= MAX_MASK_OVERLAY_CACHE_SIZE:
+                oldest_key = next(iter(mask_overlay_cache))
+                del mask_overlay_cache[oldest_key]
+            masks = masks_by_camera.get(cid, [])
+            mask_overlay_cache[cache_key] = create_mask_overlay(frame_shape, masks)
+            logger.debug(f"⬛ Overlay masque créé pour caméra {cid} ({len(masks)} masque(s))")
+        return mask_overlay_cache[cache_key]
 
 
 def get_zone_overlay(frame_shape, cid):
@@ -483,12 +531,11 @@ for i in range(len(CAM_IDS)):
         white_pixels_threshold=MOTIONTHRESHOLD,
         get_frame_func=get_frame_func_factory(i),
         detection_callback=detection_callback_factory(i, MAIN_LOOP),
-        stop_event=stop_event
+        stop_event=stop_event,
+        masks=masks_by_camera.get(i, [])
     )
     thread.start()
     inference_threads[i] = thread
-
-# Démarrage optionnel de la collecte dataset (mode intégré — zéro surcharge IA/GStreamer)
 dataset_threads = {}
 if DATASET_COLLECTION:
     logger.info(
@@ -648,6 +695,9 @@ def gen_frames(cid):
             # Créer un masque pour ne dessiner que les pixels non-noirs de l'overlay
             mask = np.any(zone_overlay > 0, axis=2)
             frame[mask] = zone_overlay[mask]
+            # Appliquer les masques noirs sur la GUI (zones exclues de la détection)
+            mask_bool = get_mask_overlay(frame.shape, cid)
+            frame[mask_bool] = 0
             # Récupérer l'état du mouvement depuis le thread d'inférence
             motion = False
             if cid in inference_threads:
@@ -987,6 +1037,7 @@ def set_zones():
 # ===== ÉDITEUR DE ZONES =====
 
 ZONES_INI_PATH = 'config/zones.ini'
+MASKS_INI_PATH = 'config/masks.ini'
 
 # Palette de couleurs automatiques pour les zones
 ZONE_COLORS_PALETTE = [
@@ -1067,6 +1118,53 @@ def save_zones(cid):
 
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde zones cam{cid}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/masks/<int:cid>', methods=['GET'])
+def get_masks(cid):
+    """Retourne les masques polygonaux de la caméra spécifiée en JSON."""
+    masks = masks_by_camera.get(cid, [])
+    result = [
+        {'name': m['name'], 'polygon': [list(pt) for pt in m['polygon']]}
+        for m in masks
+        if 'polygon' in m
+    ]
+    return jsonify(result)
+
+
+@app.route('/api/masks/<int:cid>', methods=['POST'])
+def save_masks_route(cid):
+    """Sauvegarde les masques d'une caméra dans masks.ini et recharge à chaud."""
+    global masks_by_camera
+    data = request.get_json()
+    masks_data = data.get('masks', [])
+
+    # Normaliser les noms
+    for i, mask in enumerate(masks_data):
+        if 'name' not in mask or not mask['name']:
+            mask['name'] = f'mask{i + 1}_cam{cid}'
+
+    try:
+        save_masks_to_ini(MASKS_INI_PATH, cid, masks_data)
+        masks_by_camera = load_masks_by_camera_from_ini(MASKS_INI_PATH)
+
+        # Vider le cache masques et le cache frames (affichage + pipeline cohérents)
+        with mask_overlay_lock:
+            mask_overlay_cache.clear()
+        with frame_cache_lock:
+            frame_cache.clear()
+            frame_cache_timestamp.clear()
+
+        # Hot-reload thread-safe des masques dans chaque thread d'inférence
+        if cid in inference_threads:
+            inference_threads[cid].set_masks(masks_by_camera.get(cid, []))
+
+        logger.info(f"✅ Masques cam{cid} sauvegardés et rechargés ({len(masks_data)} masque(s))")
+        return jsonify({'status': 'ok', 'masks_count': len(masks_data)})
+
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde masques cam{cid}: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
