@@ -20,9 +20,13 @@ nc: 3
 
 # Noms des classes (index 0, 1, 2)
 names:
-  0: forklift   # chariot à fourche
-  1: driver     # conducteur sur chariot
-  2: person     # piéton
+    0: "Bus"
+    1: "Driver"
+    2: "Forklift"
+    3: "Person"
+    4: "Truck"
+    5: "Car"
+
 
 # Informations sur les classes
 # - forklift (0) : engin de manutention, grandes fourches visibles,
