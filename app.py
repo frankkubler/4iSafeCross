@@ -1188,7 +1188,18 @@ def save_relay_positions_route(cid):
     data = request.get_json()
     positions_data = data.get('positions', {})
     try:
-        save_relay_positions_to_ini(RELAY_POSITIONS_INI_PATH, cid, positions_data)
+        # Merger avec les positions existantes (on ne reçoit que les déplacés)
+        existing = relay_positions_by_camera.get(cid, {})
+        merged = {}
+        for k, v in existing.items():
+            # existing stocke (x, y) tuples — convertir en dict
+            if isinstance(v, (list, tuple)):
+                merged[str(k)] = {'x': v[0], 'y': v[1]}
+            else:
+                merged[str(k)] = v
+        for rid, pos in positions_data.items():
+            merged[str(rid)] = pos
+        save_relay_positions_to_ini(RELAY_POSITIONS_INI_PATH, cid, merged)
         relay_positions_by_camera = load_relay_positions_from_ini(RELAY_POSITIONS_INI_PATH)
         logger.info(f"✅ Positions relais cam{cid} sauvegardées ({len(positions_data)} entrée(s))")
         return jsonify({'status': 'ok', 'count': len(positions_data)})

@@ -63,8 +63,9 @@
     let editEdges = [];      // Arêtes fabric.Line temporaires
 
     // Projecteurs relais — icônes draggables sur canvas
-    let projectorIcons = {};   // {relayId: fabric.Group}
+    let projectorIcons = {};   // {relayId: {body, label}}
     let relayPositions = {};   // {relayId: {x, y}} — coordonnées canvas
+    let movedRelayIds = new Set();  // Relais déplacés depuis le chargement
 
     // État du dessin en cours
     let isDrawing = false;
@@ -306,6 +307,7 @@
             .catch((err) => {
                 console.warn("Impossible de charger les positions relais :", err);
                 relayPositions = {};
+                movedRelayIds.clear();
                 refreshProjectorIcons();  // Afficher les icônes aux positions par défaut
             });
     }
@@ -564,6 +566,7 @@
             if (opt.target && opt.target._relayId !== undefined) {
                 const rid = opt.target._relayId;
                 relayPositions[rid] = { x: opt.target.left, y: opt.target.top };
+                movedRelayIds.add(rid);
                 const icon = projectorIcons[rid];
                 if (icon && icon.label) {
                     icon.label.set({
@@ -1212,17 +1215,22 @@
         }).then((res) => res.json());
 
         const relayPosData = {};
-        Object.entries(relayPositions).forEach(([rid, pos]) => {
-            relayPosData[rid] = [
-                Math.round(pos.x * scaleFactor),
-                Math.round(pos.y * scaleFactor),
-            ];
+        movedRelayIds.forEach((rid) => {
+            const pos = relayPositions[rid];
+            if (pos) {
+                relayPosData[rid] = {
+                    x: Math.round(pos.x * scaleFactor),
+                    y: Math.round(pos.y * scaleFactor),
+                };
+            }
         });
-        const saveRelayPosReq = fetch(`/api/relay_positions/${camId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ positions: relayPosData }),
-        }).then((res) => res.json());
+        const saveRelayPosReq = movedRelayIds.size > 0
+            ? fetch(`/api/relay_positions/${camId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ positions: relayPosData }),
+            }).then((res) => res.json())
+            : Promise.resolve({ status: 'ok', count: 0 });
 
         Promise.all([saveZonesReq, saveMasksReq, saveRelayPosReq])
             .then(([zData, mData]) => {
@@ -1230,6 +1238,7 @@
                 const zOk = zData.status === "ok";
                 const mOk = mData.status === "ok";
                 if (zOk && mOk) {
+                    movedRelayIds.clear();
                     showToast(
                         `${zData.zones_count} zone(s) et ${mData.masks_count} masque(s) sauvegardé(s)`,
                         "success"
