@@ -21,6 +21,7 @@
     const LINE_WIDTH = 2;
     const FILL_OPACITY = 0.25;
     const MAX_CANVAS_WIDTH = 1400;
+    const HANDLE_RADIUS = 7;   // Rayon des poignées de sommet
 
     // Palette de couleurs automatiques (RGB)
     const COLOR_PALETTE = [
@@ -53,6 +54,12 @@
 
     // Mode éditeur : 'zone' | 'mask'
     let editorMode = 'zone';
+
+    // État de l'édition de sommets (poignées draggables)
+    let editingIndex = -1;   // Index du polygone en édition (-1 = aucun)
+    let editingType = null;  // 'zone' | 'mask'
+    let editHandles = [];    // Poignées fabric.Circle
+    let editEdges = [];      // Arêtes fabric.Line temporaires
 
     // État du dessin en cours
     let isDrawing = false;
@@ -94,6 +101,7 @@
         }
         // Annuler tout dessin en cours lors du changement de mode
         if (isDrawing) cancelDrawing();
+        if (editingIndex >= 0) exitEditMode();
         deselectZone();
         deselectMask();
         setStatus(editorMode === 'mask' ? 'Mode masque actif — dessinez les zones exclues de la détection' : 'Mode zones actif');
@@ -272,6 +280,15 @@
             if (opt.e.button !== 0) return;
             const pointer = fabricCanvas.getPointer(opt.e);
 
+            // == Mode édition de sommets ==
+            if (editingIndex >= 0) {
+                // Clic sur une poignée → Fabric gère le drag automatiquement
+                if (opt.target && opt.target._vertexIndex !== undefined) return;
+                // Clic ailleurs → sortir du mode édition
+                exitEditMode();
+                return;
+            }
+
             if (!isDrawing) {
                 // Vérifier si on clique sur une zone existante
                 const clickedZoneIdx = findZoneAtPoint(pointer.x, pointer.y);
@@ -342,9 +359,13 @@
                     deleteZone(selectedZoneIndex);
                 }
             }
-            // Échap : annuler le dessin en cours
-            if (e.key === "Escape" && isDrawing) {
-                cancelDrawing();
+            // Échap : annuler le dessin ou sortir du mode édition
+            if (e.key === "Escape") {
+                if (editingIndex >= 0) {
+                    exitEditMode();
+                } else if (isDrawing) {
+                    cancelDrawing();
+                }
             }
         });
 
@@ -352,6 +373,21 @@
             if (e.key === "Shift") {
                 isShiftDown = false;
             }
+        });
+
+        // Déplacement d'une poignée de sommet
+        fabricCanvas.on("object:moving", function (opt) {
+            if (editingIndex < 0 || !opt.target || opt.target._vertexIndex === undefined) return;
+            const handle = opt.target;
+            const i = handle._vertexIndex;
+            // La position left/top est le coin supérieur gauche du cercle
+            const x = handle.left + HANDLE_RADIUS;
+            const y = handle.top + HANDLE_RADIUS;
+            const item = editingType === 'zone'
+                ? completedZones[editingIndex]
+                : completedMasks[editingIndex];
+            item.polygon[i] = [x, y];
+            updateEditEdges();
         });
     }
 
@@ -537,6 +573,129 @@
         return polygon;
     }
 
+    // === Édition de sommets (poignées draggables) ===
+
+    /**
+     * Entre en mode édition de sommets pour un polygone (zone ou masque).
+     * Affiche des poignées circulaires draggables sur chaque sommet.
+     * Déclenché par un deuxième clic sur un polygone déjà sélectionné.
+     */
+    function enterEditMode(idx, type) {
+        exitEditMode();  // Sortir d'un éventuel mode édition précédent
+        editingIndex = idx;
+        editingType = type;
+        const item = type === 'zone' ? completedZones[idx] : completedMasks[idx];
+        const poly = item.polygon;
+
+        // Réduire l'opacité du polygone d'origine pour laisser les poignées visibles
+        if (item.fabricObj) item.fabricObj.set({ opacity: 0.25 });
+
+        // Couleurs selon le type
+        const edgeColor = type === 'zone'
+            ? `rgb(${item.color[0]},${item.color[1]},${item.color[2]})`
+            : '#aaaaaa';
+        const handleFill = type === 'zone'
+            ? `rgba(${item.color[0]},${item.color[1]},${item.color[2]},0.9)`
+            : 'rgba(220,220,220,0.9)';
+
+        // Dessiner les arêtes temporaires (sous les poignées)
+        for (let i = 0; i < poly.length; i++) {
+            const j = (i + 1) % poly.length;
+            const line = new fabric.Line(
+                [poly[i][0], poly[i][1], poly[j][0], poly[j][1]],
+                {
+                    stroke: edgeColor,
+                    strokeWidth: 2,
+                    strokeDashArray: [5, 3],
+                    selectable: false,
+                    evented: false,
+                    objectCaching: false,
+                }
+            );
+            fabricCanvas.add(line);
+            editEdges.push(line);
+        }
+
+        // Dessiner les poignées (une par sommet)
+        for (let i = 0; i < poly.length; i++) {
+            const handle = new fabric.Circle({
+                left: poly[i][0] - HANDLE_RADIUS,
+                top: poly[i][1] - HANDLE_RADIUS,
+                radius: HANDLE_RADIUS,
+                fill: handleFill,
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                selectable: true,
+                evented: true,
+                hasBorders: false,
+                hasControls: false,
+                originX: 'left',
+                originY: 'top',
+                objectCaching: false,
+            });
+            handle._vertexIndex = i;
+            fabricCanvas.add(handle);
+            editHandles.push(handle);
+        }
+
+        fabricCanvas.hoverCursor = 'default';
+        fabricCanvas.defaultCursor = 'default';
+        fabricCanvas.renderAll();
+        setStatus(
+            `Édition de "${item.name}" — glissez les poignées · Échap pour terminer`
+        );
+    }
+
+    /**
+     * Nettoie les poignées et arêtes temporaires sans redessiner le polygone.
+     * Utilisé en interne avant une suppression ou un reset.
+     */
+    function _cleanEditState() {
+        editHandles.forEach((h) => fabricCanvas.remove(h));
+        editEdges.forEach((e) => fabricCanvas.remove(e));
+        editHandles = [];
+        editEdges = [];
+        editingIndex = -1;
+        editingType = null;
+        fabricCanvas.hoverCursor = 'crosshair';
+        fabricCanvas.defaultCursor = 'crosshair';
+    }
+
+    /**
+     * Quitte le mode édition : redessine le polygone avec les coordonnées mises à jour.
+     */
+    function exitEditMode() {
+        if (editingIndex < 0) return;
+        const idx = editingIndex;
+        const type = editingType;
+        const item = type === 'zone' ? completedZones[idx] : completedMasks[idx];
+        _cleanEditState();
+
+        // Supprimer l'ancien objet fantôme et redessiner avec les coords mises à jour
+        if (item.fabricObj) fabricCanvas.remove(item.fabricObj);
+        item.fabricObj = type === 'zone'
+            ? drawCompletedPolygon(item.polygon, item.color)
+            : drawMaskPolygon(item.polygon);
+
+        fabricCanvas.renderAll();
+        setStatus('Édition terminée');
+    }
+
+    /**
+     * Redessine les arêtes temporaires en temps réel pendant le déplacement des poignées.
+     */
+    function updateEditEdges() {
+        const item = editingType === 'zone'
+            ? completedZones[editingIndex]
+            : completedMasks[editingIndex];
+        const poly = item.polygon;
+        editEdges.forEach((line, i) => {
+            const j = (i + 1) % poly.length;
+            line.set({ x1: poly[i][0], y1: poly[i][1], x2: poly[j][0], y2: poly[j][1] });
+        });
+        fabricCanvas.renderAll();
+    }
+
     // === Gestion des zones ===
 
     /**
@@ -580,6 +739,11 @@
      * Sélectionne une zone par son index.
      */
     function selectZone(idx) {
+        if (selectedZoneIndex === idx) {
+            // Deuxième clic sur la même zone → édition des sommets
+            enterEditMode(idx, 'zone');
+            return;
+        }
         deselectZone();
         deselectMask();
         selectedZoneIndex = idx;
@@ -620,6 +784,11 @@
      * Sélectionne un masque par son index.
      */
     function selectMask(idx) {
+        if (selectedMaskIndex === idx) {
+            // Deuxième clic sur le même masque → édition des sommets
+            enterEditMode(idx, 'mask');
+            return;
+        }
         deselectMask();
         deselectZone();
         selectedMaskIndex = idx;
@@ -652,6 +821,8 @@
      */
     function deleteMask(idx) {
         if (idx < 0 || idx >= completedMasks.length) return;
+        // Si ce masque est en cours d'édition, nettoyer sans redessiner
+        if (editingIndex === idx && editingType === 'mask') _cleanEditState();
         const mask = completedMasks[idx];
         if (mask.fabricObj) fabricCanvas.remove(mask.fabricObj);
         completedMasks.splice(idx, 1);
@@ -683,6 +854,8 @@
      */
     function deleteZone(idx) {
         if (idx < 0 || idx >= completedZones.length) return;
+        // Si cette zone est en cours d'édition, nettoyer sans redessiner
+        if (editingIndex === idx && editingType === 'zone') _cleanEditState();
         const zone = completedZones[idx];
 
         // Supprimer l'objet Fabric du canvas
@@ -885,6 +1058,7 @@
         // Supprimer tous les objets du canvas sauf le fond
         fabricCanvas.getObjects().slice().forEach((obj) => fabricCanvas.remove(obj));
         cancelDrawing();
+        editingIndex = -1; editingType = null; editHandles = []; editEdges = [];
         completedZones = [];
         completedMasks = [];
         selectedZoneIndex = -1;

@@ -24,7 +24,8 @@
 ├── README.md             # Documentation
 ├── config/
 │   ├── config.ini        # Configuration principale
-│   └── zones.ini         # Définition des zones de détection
+│   ├── zones.ini         # Définition des zones de détection
+│   └── masks.ini         # Définition des masques (zones exclues du traitement)
 ├── db/
 │   └── detections.db     # Base de données des détections
 ├── detections/           # Captures d'images des détections
@@ -232,9 +233,33 @@ Pour éviter que les fichiers de logs ne saturent le disque, un fichier de confi
 
 > Adaptez les chemins et droits selon votre environnement. Cette configuration garde 5 archives compressées de 10 Mo maximum chacune.
 
-## Définition et schéma des zones de détection
+## Zones de détection et masques
 
-Les zones de détection pour chaque caméra sont configurables dans le fichier [`config/zones.ini`](config/zones.ini). Chaque zone peut être définie comme un rectangle (rect) ou un polygone (polygon), selon la forme souhaitée et la résolution de chaque caméra, sans toucher au code Python.
+### Éditeur graphique
+
+L'interface `/zone_editor/<cam_id>` permet de dessiner et modifier les zones et les masques directement sur un snapshot de la caméra, sans éditer manuellement les fichiers INI.
+
+- **Mode Zones** (bouton "📌 Mode : Zones") : dessin de polygones de détection colorés. Chaque zone peut avoir des relais associés déclenchés lors d'une détection.
+- **Mode Masques** (bouton "⬛ Mode : Masques") : dessin de polygones de masquage noir. Les zones masquées sont exclues **en amont du pipeline complet** — ni la détection de mouvement (MOG2), ni l'inférence IA ne traitent les pixels masqués.
+
+**Contrôles de dessin (identiques pour les deux modes) :**
+
+| Action | Résultat |
+|---|---|
+| Clic gauche | Ajouter un point au polygone en cours |
+| Clic droit | Fermer le polygone (minimum 3 points) |
+| Clic sur un polygone existant | Sélectionner (surligne en jaune/rouge) |
+| Touche `Delete` | Supprimer le polygone sélectionné |
+| Bouton "Sauvegarder" | Enregistre zones **et** masques simultanément |
+| Bouton "Réinitialiser" | Recharge l'état depuis les fichiers INI |
+
+Les modifications sont persistées immédiatement dans `config/zones.ini` et `config/masks.ini` et prennent effet sans redémarrage de l'application.
+
+---
+
+### Définition manuelle des zones de détection
+
+Les zones de détection sont stockées dans [`config/zones.ini`](config/zones.ini). Chaque zone peut être définie comme un rectangle (`rect`) ou un polygone (`polygon`), selon la forme souhaitée et la résolution de chaque caméra, sans toucher au code Python.
 
 **Exemple de format dans zones.ini** :
 
@@ -248,7 +273,7 @@ polygon = (x1,y1)(x2,y2)(x3,y3)...
 color = 0,255,255
 ```
 
-### Exemple de schéma de zones
+#### Exemple de schéma de zones
 
 **Caméra 0 (1920x1080)**
 ```
@@ -268,6 +293,44 @@ color = 0,255,255
     - `(x1, y1)` = coin supérieur gauche
     - `(x2, y2)` = coin inférieur droit
 - Les flèches (→, ↓) indiquent le sens croissant des axes X et Y.
+
+---
+
+### Définition manuelle des masques
+
+Les masques sont stockés dans [`config/masks.ini`](config/masks.ini). Un masque est un polygone qui rend une zone de l'image **totalement invisible** pour l'application : les pixels couverts sont mis à zéro (noir) avant tout traitement.
+
+**Exemple de format dans masks.ini** :
+
+```ini
+[mask1_cam0]
+polygon = (x1,y1)(x2,y2)(x3,y3)(x4,y4)
+
+[mask2_cam0]
+polygon = (x1,y1)(x2,y2)(x3,y3)
+```
+
+> Les masques n'ont ni couleur ni relais associés — seul le champ `polygon` est utilisé.
+
+**Comportement en pipeline :**
+
+```
+frame brute (caméra)
+        │
+        ▼
+  _apply_masks()          ← pixels masqués = 0 (noir) sur une copie de la frame
+        │
+        ▼
+  get_mog2_motion_info()  ← MOG2 ne voit pas les zones masquées
+        │
+        ▼
+  POST /infer (YOLO)      ← l'IA ne voit pas les zones masquées
+        │
+        ▼
+  gen_frames() overlay    ← affichage web : zones noires sur le flux vidéo
+```
+
+Les masques sont rechargés à chaud sans redémarrage lorsqu'ils sont sauvegardés via l'éditeur graphique ou l'API REST (`POST /api/masks/<cam_id>`).
 
 ## Configuration du niveau de log
 
