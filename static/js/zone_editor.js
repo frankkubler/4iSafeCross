@@ -335,6 +335,21 @@
             }
         });
 
+        // Double-clic : entrer en mode édition des sommets
+        // (dblclick se déclenche après les deux mousedown, sans conflit de garde)
+        fabricCanvas.upperCanvasEl.addEventListener("dblclick", function (e) {
+            e.preventDefault();
+            if (isDrawing || editingIndex >= 0) return;
+            const pointer = fabricCanvas.getPointer(e);
+            if (editorMode === 'mask') {
+                const idx = findMaskAtPoint(pointer.x, pointer.y);
+                if (idx >= 0) enterEditMode(idx, 'mask');
+            } else {
+                const idx = findZoneAtPoint(pointer.x, pointer.y);
+                if (idx >= 0) enterEditMode(idx, 'zone');
+            }
+        });
+
         // Preview line en mouvement
         fabricCanvas.on("mouse:move", function (opt) {
             if (isDrawing && currentPoints.length > 0) {
@@ -739,11 +754,6 @@
      * Sélectionne une zone par son index.
      */
     function selectZone(idx) {
-        if (selectedZoneIndex === idx) {
-            // Deuxième clic sur la même zone → édition des sommets
-            enterEditMode(idx, 'zone');
-            return;
-        }
         deselectZone();
         deselectMask();
         selectedZoneIndex = idx;
@@ -784,11 +794,6 @@
      * Sélectionne un masque par son index.
      */
     function selectMask(idx) {
-        if (selectedMaskIndex === idx) {
-            // Deuxième clic sur le même masque → édition des sommets
-            enterEditMode(idx, 'mask');
-            return;
-        }
         deselectMask();
         deselectZone();
         selectedMaskIndex = idx;
