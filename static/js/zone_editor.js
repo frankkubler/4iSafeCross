@@ -288,7 +288,10 @@
     function loadRelayPositions() {
         if (!camId) return;
         fetch(`/api/relay_positions/${camId}`)
-            .then((r) => r.json())
+            .then((r) => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
             .then((data) => {
                 relayPositions = {};
                 Object.entries(data).forEach(([rid, coords]) => {
@@ -300,7 +303,11 @@
                 });
                 refreshProjectorIcons();
             })
-            .catch((err) => console.warn("Impossible de charger les positions relais :", err));
+            .catch((err) => {
+                console.warn("Impossible de charger les positions relais :", err);
+                relayPositions = {};
+                refreshProjectorIcons();  // Afficher les icônes aux positions par défaut
+            });
     }
 
     /**
