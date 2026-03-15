@@ -55,13 +55,13 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Configuration des classes cibles (remapping depuis le modèle courant)
 # ---------------------------------------------------------------------------
 # Le modèle en mode "transfert" renvoie des class_id 0–5 correspondant à :
-#   0=person, 1=forklift, 2=driver  (les 3 premières sont celles qui nous intéressent)
+#   0=Bus, 1=Driver, 2=Forklift, 3=Person, 4=Truck, 5=Car
 # Remapping vers notre dataset custom avec 3 classes :
 TRANSFERT_TO_DATASET = {
-    0: 2,   # person  → classe 2 "person"
-    1: 0,   # forklift → classe 0 "forklift"
-    2: 1,   # driver  → classe 1 "driver"
-    # Les class_id 3-5 sont ignorés (non pertinents pour ce dataset)
+    1: 1,   # Driver   → classe 1 "driver"
+    2: 0,   # Forklift → classe 0 "forklift"
+    3: 2,   # Person   → classe 2 "person"
+    # 0=Bus, 4=Truck, 5=Car ignorés (non pertinents pour ce dataset)
 }
 DATASET_CLASSES = {
     0: "forklift",

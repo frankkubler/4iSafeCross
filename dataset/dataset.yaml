@@ -18,14 +18,13 @@ test:  images/test
 # Nombre de classes
 nc: 3
 
-# Noms des classes (index 0, 1, 2)
+# Noms des classes du dataset (index 0, 1, 2)
+# Ces classes correspondent au remapping depuis le modèle de transfert :
+#   modèle class 2 (Forklift) → 0, modèle class 1 (Driver) → 1, modèle class 3 (Person) → 2
 names:
-    0: "Bus"
+    0: "Forklift"
     1: "Driver"
-    2: "Forklift"
-    3: "Person"
-    4: "Truck"
-    5: "Car"
+    2: "Person"
 
 
 # Informations sur les classes
