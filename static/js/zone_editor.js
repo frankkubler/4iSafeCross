@@ -352,6 +352,7 @@
         });
         group._relayId = relayId;
         fabricCanvas.add(group);
+        fabricCanvas.bringToFront(group);
         return group;
     }
 
