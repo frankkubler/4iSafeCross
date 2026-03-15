@@ -242,16 +242,33 @@ L'interface `/zone_editor/<cam_id>` permet de dessiner et modifier les zones et 
 - **Mode Zones** (bouton "📌 Mode : Zones") : dessin de polygones de détection colorés. Chaque zone peut avoir des relais associés déclenchés lors d'une détection.
 - **Mode Masques** (bouton "⬛ Mode : Masques") : dessin de polygones de masquage noir. Les zones masquées sont exclues **en amont du pipeline complet** — ni la détection de mouvement (MOG2), ni l'inférence IA ne traitent les pixels masqués.
 
-**Contrôles de dessin (identiques pour les deux modes) :**
+**Dessin d'un nouveau polygone :**
 
 | Action | Résultat |
 |---|---|
 | Clic gauche | Ajouter un point au polygone en cours |
 | Clic droit | Fermer le polygone (minimum 3 points) |
-| Clic sur un polygone existant | Sélectionner (surligne en jaune/rouge) |
-| Touche `Delete` | Supprimer le polygone sélectionné |
-| Bouton "Sauvegarder" | Enregistre zones **et** masques simultanément |
-| Bouton "Réinitialiser" | Recharge l'état depuis les fichiers INI |
+| `Shift` + clic gauche | Contraindre le segment à l'horizontale ou la verticale |
+| `Échap` | Annuler le dessin en cours |
+
+**Sélection et édition d'un polygone existant :**
+
+| Action | Résultat |
+|---|---|
+| Clic sur un polygone | Sélectionner (contour épaissi) |
+| 2e clic sur le polygone sélectionné | Entrer en mode édition des sommets — des poignées circulaires apparaissent sur chaque sommet |
+| Glisser une poignée | Déplacer le sommet en temps réel (les arêtes suivent) |
+| Clic en dehors du polygone | Terminer l'édition, polygone redessiné avec les nouvelles coordonnées |
+| `Échap` | Terminer l'édition des sommets |
+| `Delete` | Supprimer le polygone sélectionné (désactivé pendant l'édition des sommets) |
+
+**Boutons :**
+
+| Bouton | Résultat |
+|---|---|
+| "Sauvegarder" | Enregistre zones **et** masques simultanément |
+| "Réinitialiser" | Recharge l'état depuis les fichiers INI |
+| "Rafraîchir snapshot" | Capture une nouvelle image de la caméra |
 
 Les modifications sont persistées immédiatement dans `config/zones.ini` et `config/masks.ini` et prennent effet sans redémarrage de l'application.
 
