@@ -6,7 +6,7 @@ from utils.utils import get_non_local_ips, get_docker_info, get_service_status
 from utils.zone_writer import save_zones_to_ini, save_masks_to_ini, save_relay_positions_to_ini
 from src.relay_pilot import YoctoMultiRelay
 from src.bot_aiogram import BotThread
-from scripts.collect_dataset import DatasetCollectionThread
+from src.collect_dataset import DatasetCollectionThread
 import threading
 import cv2
 import logging
