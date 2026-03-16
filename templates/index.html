@@ -509,24 +509,26 @@
                 });
         }
         function switchResolution(idx) {
-            const box  = document.getElementById('cam_box_' + idx);
             const btn  = document.getElementById('btn_res_switch_' + idx);
-            const card = box.closest('.cam-card');
-            if (!box.dataset.res || box.dataset.res === '600') {
-                // Mode 720p : carte pleine largeur, vidéo sans contrainte
-                card.style.maxWidth = '100%';
-                card.style.flex    = '1 1 100%';
-                box.dataset.res    = '720';
-                btn.textContent    = '600p';
-                btn.className      = 'btn btn-orange';
-            } else {
-                // Mode 600p : dimensions par défaut
-                card.style.maxWidth = '860px';
-                card.style.flex     = '';
-                box.dataset.res     = '600';
-                btn.textContent     = '720p';
-                btn.className       = 'btn btn-blue';
-            }
+            const card = document.getElementById('cam_box_' + idx).closest('.cam-card');
+            const is720 = btn.dataset.res === '720';
+            fetch('/switch_resolution/' + idx, {method: 'POST'})
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        if (data.mode === '720p') {
+                            card.style.maxWidth = '1300px';
+                            btn.dataset.res     = '720';
+                            btn.textContent     = '480p';
+                            btn.className       = 'btn btn-orange';
+                        } else {
+                            card.style.maxWidth = '';
+                            btn.dataset.res     = '480';
+                            btn.textContent     = '720p';
+                            btn.className       = 'btn btn-blue';
+                        }
+                    }
+                });
         }
         function onCamImgError(idx) {
             const img = document.getElementById('cam_img_' + idx);
@@ -706,7 +708,7 @@
         if(ok) alert('Paramètres sauvegardés !');
     }
     </script>
-                <div class="cam-video-box" id="cam_box_{{ cam.idx }}" data-res="600" style="max-width:800px;max-height:600px;">
+                <div class="cam-video-box" id="cam_box_{{ cam.idx }}">
                     <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
                     <span id="placeholder_{{ cam.idx }}">Vidéo masquée</span>
                 </div>

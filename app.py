@@ -534,10 +534,13 @@ stream_enabled = {}
 detection_enabled = {}
 # Dictionnaire pour activer/désactiver l'affichage des ROI de chaque caméra
 roi_display_enabled = {}
+# Résolution d'affichage du stream (largeur en pixels) : 854 (480p) ou 1280 (720p)
+stream_display_width = {}
 for i in range(len(CAM_IDS)):
     stream_enabled[i] = False  # vidéo masquée par défaut
     detection_enabled[i] = True  # détection active par défaut
     roi_display_enabled[i] = False  # affichage ROI désactivé par défaut
+    stream_display_width[i] = 854  # 480p par défaut (854x480)
     # Démarrage automatique de la détection
     stop_event = threading.Event()
     inference_stop_events[i] = stop_event
@@ -755,6 +758,11 @@ def gen_frames(cid):
                 # En haut à droite
                 cv2.circle(frame, (w - 20, 20), 15, (0, 0, 255), -1)
             # Encodage JPEG optimisé pour réduire la latence
+            target_w = stream_display_width.get(cid, 854)
+            h_frame, w_frame = frame.shape[:2]
+            if w_frame != target_w:
+                target_h = int(h_frame * target_w / w_frame)
+                frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, FRAME_QUALITY_OPTIMIZED])
             if ret:
                 frame_bytes = buffer.tobytes()
@@ -1035,6 +1043,20 @@ def switch_inference_mode(cid):
         inference_threads[cid].switch_inference_mode()
         return jsonify({'status': 'ok', 'mode': inference_threads[cid].inference_mode})
     return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
+
+
+@app.route('/switch_resolution/<int:cid>', methods=['POST'])
+def switch_resolution(cid):
+    current = stream_display_width.get(cid, 854)
+    new_width = 1280 if current == 854 else 854
+    stream_display_width[cid] = new_width
+    # Invalider le cache de frame pour forcer la régénération à la nouvelle taille
+    with frame_cache_lock:
+        frame_cache.pop(cid, None)
+        frame_cache_timestamp.pop(cid, None)
+    mode = '720p' if new_width == 1280 else '480p'
+    logger.info(f"🖥️ Résolution stream caméra {cid} → {new_width}px ({mode})")
+    return jsonify({'status': 'ok', 'mode': mode, 'width': new_width})
 
 
 @app.route('/set_zones', methods=['POST'])
