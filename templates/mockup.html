@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4iSafeCross — Maquette v3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base:        #080d1a;
+      --bg-surface:     #0f1a2e;
+      --bg-elevated:    #162035;
+      --border:         #1e3050;
+      --accent:         #0077ff;
+      --accent-hover:   #0066dd;
+      --text-primary:   #f0f4ff;
+      --text-secondary: #7d94b5;
+      --status-ok:      #22c55e;
+      --status-ko:      #ef4444;
+      --status-idle:    #6b7280;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ═══ HEADER ═══ */
+    .site-header {
+      position: sticky; top: 0; z-index: 100;
+      height: 56px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.4);
+    }
+    .header-brand { display: flex; align-items: center; gap: 14px; }
+    .header-logo {
+      width: 40px; height: 40px;
+      background: #e11d48;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; letter-spacing: -0.5px;
+      color: #fff; flex-shrink: 0;
+    }
+    .header-divider { width: 1px; height: 28px; background: var(--border); }
+    .header-title   { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
+    .header-subtitle{ font-size: 0.75rem; color: var(--text-secondary); margin-top: 1px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ═══ BOUTONS ═══ */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; height: 34px; padding: 0 14px;
+      border: none; border-radius: 6px;
+      font-family: 'Inter', Arial, sans-serif;
+      font-size: 0.85rem; font-weight: 500; cursor: pointer;
+      color: #fff; white-space: nowrap;
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .btn:hover  { filter: brightness(1.15); }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); }
+    .btn-success { background: #16a34a; }
+    .btn-danger  { background: #dc2626; }
+    .btn-warning { background: #d97706; }
+    .btn-neutral {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-neutral:hover { color: var(--text-primary); border-color: var(--accent); }
+    .btn-sm { height: 28px; padding: 0 10px; font-size: 0.78rem; }
+    .btn-tuning        { background: #334e68; color: #fff; }
+    .btn-tuning.active { background: var(--accent); }
+
+    /* ═══ PANELS FLOTTANTS (Debug / Stats) — cachés par défaut ═══ */
+    .floating-panel {
+      position: fixed; top: 68px; left: 16px;
+      min-width: 320px; max-width: 460px;
+      background: rgba(15, 26, 46, 0.97);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      z-index: 500;
+      display: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .floating-panel.visible { display: block; }
+    #stats-panel { left: 360px; }
+
+    .panel-close {
+      position: absolute; top: 8px; right: 12px;
+      background: none; border: none;
+      color: var(--text-secondary); font-size: 18px; cursor: pointer;
+    }
+    .panel-close:hover { color: var(--text-primary); }
+
+    .panel-title {
+      font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--accent); margin-bottom: 10px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+      padding-right: 20px;
+    }
+
+    /* Debug panel : rendu monospace identique au panel actuel */
+    .debug-content {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--text-primary);
+      white-space: pre-line;
+      line-height: 1.7;
+    }
+    .debug-section {
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .debug-section:last-child { border-bottom: none; margin-bottom: 0; }
+    .debug-label { color: var(--text-secondary); }
+
+    /* Stats panel */
+    .stats-section {
+      margin-bottom: 10px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-section:last-child { border-bottom: none; margin-bottom: 0; }
+    .stats-title {
+      font-size: 0.72rem; font-weight: 700; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .info-stat-row {
+      display: flex; justify-content: space-between;
+      font-size: 0.8rem; padding: 2px 0; font-family: monospace;
+    }
+    .info-stat-row span:first-child { color: var(--text-secondary); }
+    .info-stat-row span:last-child  { color: var(--text-primary); font-weight: 500; }
+
+    /* ═══ MAIN ═══ */
+    .main {
+      padding: 24px;
+      padding-bottom: 160px;
+      max-width: 1600px; margin: 0 auto;
+    }
+    .section-title {
+      font-size: 0.7rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-secondary); margin-bottom: 16px;
+    }
+
+    /* ═══ LÉGENDE ═══ */
+    .legend-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 5px 12px; font-size: 0.8rem;
+    }
+    .legend-dot { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ═══ GRILLE CAMÉRAS ═══ */
+    .cam-grid { display: flex; flex-wrap: wrap; gap: 20px; }
+    .cam-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+      flex: 1 1 420px; min-width: 320px; max-width: 720px;
+      transition: border-color 0.2s;
+    }
+    .cam-card:hover { border-color: var(--accent); }
+
+    .cam-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .cam-card-title { display: flex; align-items: center; gap: 10px; }
+    .cam-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .status-online  { background: var(--status-ok);  box-shadow: 0 0 6px var(--status-ok); }
+    .status-offline { background: var(--status-ko);  box-shadow: 0 0 6px var(--status-ko); }
+    .cam-name   { font-weight: 600; font-size: 0.95rem; }
+    .cam-badge  {
+      font-size: 0.7rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 100px;
+      background: rgba(0,119,255,0.15); color: var(--accent);
+      border: 1px solid rgba(0,119,255,0.3);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .cam-badge.badge-rfdetr {
+      background: rgba(217,119,6,0.15); color: #f59e0b;
+      border-color: rgba(217,119,6,0.3);
+    }
+
+    .cam-toolbar {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 10px 16px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cam-video {
+      width: 100%; aspect-ratio: 16/9;
+      background: #050a14;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-secondary); font-size: 0.85rem;
+      position: relative;
+    }
+    .cam-video-grid {
+      position: absolute; inset: 0; opacity: 0.04;
+      background-image:
+        linear-gradient(var(--accent) 1px, transparent 1px),
+        linear-gradient(90deg, var(--accent) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .cam-video-overlay {
+      position: absolute; bottom: 8px; left: 8px;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+      border-radius: 4px; padding: 3px 8px;
+      font-size: 0.7rem; color: var(--status-ok); font-weight: 500;
+    }
+
+    /* Motion Tuning — caché par défaut */
+    .motion-panel {
+      display: none;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+    }
+    .motion-panel.open { display: block; }
+    .motion-panel-title {
+      font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-secondary); margin-bottom: 12px; text-align: center;
+    }
+    .motion-fields { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; }
+    .motion-field label {
+      display: block; font-size: 0.72rem;
+      color: var(--text-secondary); font-weight: 500; margin-bottom: 4px;
+    }
+    .motion-field input[type="number"] {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border); border-radius: 5px;
+      color: var(--text-primary);
+      font-family: 'Inter', Arial, sans-serif; font-size: 0.85rem;
+      padding: 4px 8px; width: 80px; text-align: right;
+    }
+    .motion-field input[type="number"]:focus { outline: none; border-color: var(--accent); }
+
+    /* ═══ GALERIE DÉTECTIONS ═══ */
+    .detection-bar {
+      position: fixed; bottom: 48px; left: 0; right: 0;
+      background: rgba(8, 13, 26, 0.92);
+      backdrop-filter: blur(6px);
+      border-top: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex; align-items: center; gap: 8px;
+      z-index: 50;
+    }
+    .detection-bar-label {
+      font-size: 0.72rem; font-weight: 600;
+      color: var(--text-secondary); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-right: 4px; white-space: nowrap;
+    }
+    .detection-thumb {
+      width: 64px; height: 36px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--bg-surface);
+      cursor: pointer; transition: border-color 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; color: var(--text-secondary);
+      text-align: center; line-height: 1.3;
+    }
+    .detection-thumb:hover { border-color: var(--accent); }
+
+    /* ═══ BANDEAU BAS — juste le texte version, comme aujourd'hui ═══ */
+    .footer-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 48px;
+      /* En prod : remplacé par <img src="bottom1080.png"> */
+      background: linear-gradient(90deg, #060c18 0%, #0a1628 60%, #100820 100%);
+      border-top: 1px solid rgba(0,119,255,0.15);
+      display: flex; align-items: center;
+      padding: 0 24px;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .footer-version {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.85em;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════ PANEL DEBUG (flottant, caché) ══════════ -->
+  <div class="floating-panel" id="debug-panel">
+    <button class="panel-close" onclick="document.getElementById('debug-panel').classList.remove('visible')">×</button>
+    <div class="panel-title">🔧 Debug système</div>
+    <div class="debug-content">
+      <div class="debug-section">
+        <span class="debug-label">RAM utilisée :</span> 1 240 / 7 872 MB
+<span class="debug-label">CPU utilisé :</span> 34 %
+<span class="debug-label">Disque utilisé :</span> 42.1 / 118.3 GB (35 %)
+<span class="debug-label">Adresse(s) IP :</span> 192.168.1.10, 10.0.0.5
+<span class="debug-label">Load average :</span> 0.42, 0.38, 0.31
+      </div>
+      <div class="debug-section">
+        <span class="debug-label">Docker :</span> Running (3 containers)
+      </div>
+      <div class="debug-section">
+        <span class="debug-label">Service 4isafecross :</span>
+● 4isafecross.service - 4iSafeCross
+   Loaded: loaded (/etc/systemd/system/4isafecross.service)
+   Active: <span style="color:var(--status-ok);">active (running)</span> since Sun 2026-03-15 09:12:04 CET
+  Main PID: 1247 (python)
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ PANEL STATS (flottant, caché) ══════════ -->
+  <div class="floating-panel" id="stats-panel">
+    <button class="panel-close" onclick="document.getElementById('stats-panel').classList.remove('visible')">×</button>
+    <div class="panel-title">📊 Cache & Inférence</div>
+    <div class="stats-section">
+      <div class="stats-title">📊 Cache de frames</div>
+      <div class="info-stat-row"><span>Durée cache</span><span>120 ms  |  Qualité 85 %</span></div>
+      <div class="info-stat-row"><span>Entrées actives</span><span>2  |  48 KB total</span></div>
+      <div class="info-stat-row"><span>Cam 0</span><span>✅ 98 ms  /  22 KB</span></div>
+      <div class="info-stat-row"><span>Cam 1</span><span>⏰ 430 ms  /  18 KB</span></div>
+    </div>
+    <div class="stats-section">
+      <div class="stats-title">🎯 Optimisation inférence</div>
+      <div class="info-stat-row"><span>Frames totales</span><span>12 450</span></div>
+      <div class="info-stat-row"><span>Frames sautées</span><span>3 210 (26 %)</span></div>
+      <div class="info-stat-row"><span>Temps économisé</span><span>48.3 s</span></div>
+      <div class="info-stat-row"><span>Cam 0 — YOLO</span><span>Skip 24 %  |  sleep 12 ms</span></div>
+      <div class="info-stat-row"><span>Cam 1 — RFDETR</span><span>Skip 29 %  |  sleep 15 ms</span></div>
+    </div>
+  </div>
+
+  <!-- ══════════ HEADER ══════════ -->
+  <header class="site-header">
+    <div class="header-brand">
+      <div class="header-logo">4i</div>
+      <div class="header-divider"></div>
+      <div>
+        <div class="header-title">4iSafeCross</div>
+        <div class="header-subtitle">Control Center</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-neutral"
+        onclick="document.getElementById('stats-panel').classList.toggle('visible')">
+        📊 Stats
+      </button>
+      <button class="btn btn-neutral"
+        onclick="document.getElementById('debug-panel').classList.toggle('visible')">
+        🔧 Debug
+      </button>
+      <button class="btn btn-warning">🔔 Désactiver Telegram</button>
+      <button class="btn btn-danger">⏻ Quitter</button>
+    </div>
+  </header>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <main class="main">
+
+    <!-- Légende postures -->
+    <div class="legend-bar">
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div>Debout</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div>Accroupi</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#22c55e;"></div>Allongé</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#0077ff;"></div>Vélo</div>
+    </div>
+
+    <div class="section-title">Caméras actives — 2 / 2</div>
+    <div class="cam-grid">
+
+      <!-- CAM 1 — en ligne, YOLO -->
+      <div class="cam-card">
+        <div class="cam-card-header">
+          <div class="cam-card-title">
+            <div class="cam-status-dot status-online"></div>
+            <span class="cam-name">Camera 1</span>
+            <span class="cam-badge">YOLO</span>
+          </div>
+          <span style="font-size:0.75rem;color:var(--text-secondary);">192.168.1.41</span>
+        </div>
+        <div class="cam-toolbar">
+          <button class="btn btn-neutral btn-sm">▶ Vidéo</button>
+          <button class="btn btn-success btn-sm">⛔ Stop détection</button>
+          <button class="btn btn-primary btn-sm">ROI : ON</button>
+          <button class="btn btn-tuning btn-sm" id="btn-tuning-0"
+            onclick="toggleMotion(0, this)">⚙ Motion Tuning</button>
+          <button class="btn btn-neutral btn-sm">To RFDETR</button>
+          <button class="btn btn-neutral btn-sm">720p</button>
+          <button class="btn btn-primary btn-sm">✏️ Zones & Masques</button>
+        </div>
+        <div class="motion-panel" id="motion-panel-0">
+          <div class="motion-panel-title">⚙ Paramètres de détection de mouvement</div>
+          <div class="motion-fields">
+            <div class="motion-field"><label>White Pixels</label><input type="number" value="3500"></div>
+            <div class="motion-field"><label>Padding</label><input type="number" value="40"></div>
+            <div class="motion-field"><label>Min Area</label><input type="number" value="30"></div>
+            <div class="motion-field"><label>Var Threshold</label><input type="number" value="7"></div>
+            <div class="motion-field"><label>History</label><input type="number" value="250"></div>
+            <div style="align-self:flex-end;"><button class="btn btn-primary btn-sm">✓ Appliquer</button></div>
+          </div>
+        </div>
+        <div class="cam-video">
+          <div class="cam-video-grid"></div>
+          <span style="z-index:2;">Flux vidéo désactivé — cliquer ▶ Vidéo</span>
+          <div class="cam-video-overlay">● REC  00:03:42</div>
+        </div>
+      </div>
+
+      <!-- CAM 2 — hors ligne, RF-DETR -->
+      <div class="cam-card">
+        <div class="cam-card-header">
+          <div class="cam-card-title">
+            <div class="cam-status-dot status-offline"></div>
+            <span class="cam-name">Camera 2</span>
+            <span class="cam-badge badge-rfdetr">RF-DETR</span>
+          </div>
+          <span style="font-size:0.75rem;color:var(--status-ko);">Hors ligne</span>
+        </div>
+        <div class="cam-toolbar">
+          <button class="btn btn-neutral btn-sm">▶ Vidéo</button>
+          <button class="btn btn-neutral btn-sm">▶ Détection</button>
+          <button class="btn btn-neutral btn-sm">ROI : OFF</button>
+          <button class="btn btn-tuning btn-sm" id="btn-tuning-1"
+            onclick="toggleMotion(1, this)">⚙ Motion Tuning</button>
+          <button class="btn btn-warning btn-sm">To YOLO</button>
+          <button class="btn btn-neutral btn-sm">600p</button>
+          <button class="btn btn-primary btn-sm">✏️ Zones & Masques</button>
+        </div>
+        <div class="motion-panel" id="motion-panel-1">
+          <div class="motion-panel-title">⚙ Paramètres de détection de mouvement</div>
+          <div class="motion-fields">
+            <div class="motion-field"><label>White Pixels</label><input type="number" value="3000"></div>
+            <div class="motion-field"><label>Padding</label><input type="number" value="40"></div>
+            <div class="motion-field"><label>Min Area</label><input type="number" value="30"></div>
+            <div class="motion-field"><label>Var Threshold</label><input type="number" value="7"></div>
+            <div class="motion-field"><label>History</label><input type="number" value="250"></div>
+            <div style="align-self:flex-end;"><button class="btn btn-primary btn-sm">✓ Appliquer</button></div>
+          </div>
+        </div>
+        <div class="cam-video" style="opacity:0.5;">
+          <div class="cam-video-grid"></div>
+          <span style="z-index:2;color:var(--status-ko);">⚠ Caméra déconnectée</span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ══════════ GALERIE DÉTECTIONS ══════════ -->
+  <div class="detection-bar">
+    <span class="detection-bar-label">Détections</span>
+    <div class="detection-thumb">cam_1<br>10:42</div>
+    <div class="detection-thumb">cam_1<br>10:39</div>
+    <div class="detection-thumb">cam_2<br>10:31</div>
+    <div class="detection-thumb">cam_1<br>10:28</div>
+    <div class="detection-thumb">cam_1<br>10:15</div>
+    <div class="detection-thumb">+ 12</div>
+  </div>
+
+  <!-- ══════════ BANDEAU BAS ══════════ -->
+  <!-- En production : <img src="/static/res/bottom1080.png" class="footer-banner"> -->
+  <div class="footer-bar">
+    <span class="footer-version">4iSafeCross v2.1.0</span>
+  </div>
+
+  <script>
+    function toggleMotion(idx, btn) {
+      const panel = document.getElementById('motion-panel-' + idx);
+      const isOpen = panel.classList.toggle('open');
+      btn.classList.toggle('active', isOpen);
+    }
+  </script>
+</body>
+</html>

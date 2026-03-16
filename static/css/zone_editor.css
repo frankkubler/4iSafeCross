@@ -7,15 +7,15 @@
 }
 
 body {
-    font-family: Arial, Helvetica, sans-serif;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
     min-height: 100vh;
 }
 
 /* === Barre supérieure === */
 .editor-header {
-    background: #16213e;
+    background: var(--bg-elevated);
     padding: 12px 24px;
     display: flex;
     align-items: center;
@@ -34,7 +34,7 @@ body {
 
 .editor-header .subtitle {
     font-size: 0.9rem;
-    color: #aaa;
+    color: var(--text-secondary);
     margin-left: 12px;
 }
 
@@ -52,7 +52,7 @@ body {
     font-size: 0.9rem;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    font-family: inherit;
+    font-family: 'Inter', inherit;
 }
 
 .btn:hover {
@@ -64,12 +64,12 @@ body {
 }
 
 .btn-primary {
-    background: #4caf50;
+    background: var(--accent);
     color: #fff;
 }
 
 .btn-primary:hover {
-    background: #43a047;
+    background: var(--accent-hover);
 }
 
 .btn-secondary {
@@ -91,7 +91,7 @@ body {
 }
 
 .btn-back {
-    background: #0074d9;
+    background: var(--accent);
     color: #fff;
     text-decoration: none;
     display: inline-flex;
@@ -100,7 +100,7 @@ body {
 }
 
 .btn-back:hover {
-    background: #0063b8;
+    background: var(--accent-hover);
 }
 
 /* === Layout principal === */
@@ -114,17 +114,17 @@ body {
 .side-panel {
     width: 280px;
     min-width: 280px;
-    background: #16213e;
+    background: var(--bg-elevated);
     padding: 16px;
     overflow-y: auto;
-    border-right: 1px solid #2a2a4a;
+    border-right: 1px solid var(--border);
 }
 
 .side-panel h2 {
     font-size: 1rem;
     margin-bottom: 12px;
-    color: #4caf50;
-    border-bottom: 1px solid #2a2a4a;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
 }
 
@@ -140,7 +140,7 @@ body {
     flex-direction: column;
     gap: 4px;
     padding: 8px 10px;
-    background: #1a1a2e;
+    background: var(--bg-base);
     border-radius: 6px;
     cursor: pointer;
     transition: background 0.2s;
@@ -148,12 +148,12 @@ body {
 }
 
 .zone-item:hover {
-    background: #2a2a4a;
+    background: var(--bg-surface);
 }
 
 .zone-item.selected {
-    border-color: #4caf50;
-    background: #1e3a2e;
+    border-color: var(--accent);
+    background: rgba(0, 119, 255, 0.12);
 }
 
 .zone-color-dot {
@@ -174,7 +174,7 @@ body {
 
 .zone-item-points {
     font-size: 0.75rem;
-    color: #888;
+    color: var(--text-secondary);
 }
 
 .zone-item-delete {
@@ -220,21 +220,21 @@ body {
     align-items: center;
     gap: 3px;
     font-size: 0.75rem;
-    color: #ccc;
+    color: var(--text-primary);
     cursor: pointer;
     user-select: none;
-    background: #2a2a4a;
+    background: var(--bg-surface);
     border-radius: 4px;
     padding: 2px 6px;
     transition: background 0.2s;
 }
 
 .relay-cb:hover {
-    background: #3a3a6a;
+    background: var(--bg-elevated);
 }
 
 .relay-cb input[type="checkbox"] {
-    accent-color: #4caf50;
+    accent-color: var(--accent);
     width: 13px;
     height: 13px;
     cursor: pointer;
@@ -244,12 +244,12 @@ body {
 .relay-cb span {
     font-family: monospace;
     font-weight: 600;
-    color: #4caf50;
+    color: var(--accent);
 }
 
 /* Instructions */
 .instructions {
-    background: #1a1a2e;
+    background: var(--bg-base);
     padding: 12px;
     border-radius: 8px;
     font-size: 0.8rem;
@@ -258,16 +258,16 @@ body {
 
 .instructions h3 {
     font-size: 0.9rem;
-    color: #4caf50;
+    color: var(--accent);
     margin-bottom: 8px;
 }
 
 .instructions kbd {
-    background: #333;
+    background: var(--bg-elevated);
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 0.75rem;
-    border: 1px solid #555;
+    border: 1px solid var(--border);
 }
 
 /* === Zone canvas === */
@@ -295,14 +295,14 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    background: #16213e;
+    background: var(--bg-elevated);
     padding: 6px 24px;
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-secondary);
     display: flex;
     justify-content: space-between;
     z-index: 100;
-    border-top: 1px solid #2a2a4a;
+    border-top: 1px solid var(--border);
 }
 
 .status-message {
@@ -310,7 +310,7 @@ body {
 }
 
 .status-message.success {
-    color: #4caf50;
+    color: var(--status-ok);
 }
 
 .status-message.error {
@@ -377,7 +377,7 @@ body {
         width: 100%;
         min-width: 0;
         border-right: none;
-        border-bottom: 1px solid #2a2a4a;
+        border-bottom: 1px solid var(--border);
         max-height: 200px;
     }
 
@@ -388,12 +388,12 @@ body {
 
 /* === Bouton toggle mode zones / masques === */
 .btn-mode-zone {
-    background: #1565c0;
+    background: var(--accent);
     color: #fff;
 }
 
 .btn-mode-zone:hover {
-    background: #1976d2;
+    background: var(--accent-hover);
 }
 
 .btn-mode-mask {
@@ -413,9 +413,9 @@ body {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #aaa;
+    color: var(--text-secondary);
     padding: 10px 8px 4px;
-    border-top: 1px solid #2a2a4a;
+    border-top: 1px solid var(--border);
     margin-top: 6px;
 }
 
@@ -434,7 +434,7 @@ body {
 
 .mask-item.selected {
     border-left-color: #fff;
-    background: #2a2a2a;
+    background: var(--bg-surface);
 }
 
 .mask-color-dot {

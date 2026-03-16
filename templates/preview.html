@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ app_name }} — Control Center</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/design_system.css') }}">
+    <title>4iSafeCross — Control Center</title>
+    <link rel="stylesheet" href="../static/css/design_system.css">
     <style>
         /* ── Styles spécifiques à la page Control Center ── */
 
@@ -484,7 +484,7 @@
                 document.getElementById('stats-panel-content').innerHTML = 'Erreur lors de la r\u00e9cup\u00e9ration des statistiques.';
             });
         }
-        let telegramAlertEnabled = {{ 'true' if telegram_alert_enabled else 'false' }};
+        let telegramAlertEnabled = true;
         function toggleTelegramAlert() {
             telegramAlertEnabled = !telegramAlertEnabled;
             fetch('/toggle_telegram_alert', {
@@ -568,13 +568,157 @@
                 });
         }
         function startCamStatusPolling() {
-            {% for cam in cam_infos %}
-            updateCamStatus({{ cam.idx }});
-            setInterval(() => updateCamStatus({{ cam.idx }}), 3000);
-            {% endfor %}
+            
+            updateCamStatus(0);
+            setInterval(() => updateCamStatus(0), 3000);
+            
+            updateCamStatus(1);
+            setInterval(() => updateCamStatus(1), 3000);
+            
         }
         document.addEventListener('DOMContentLoaded', startCamStatusPolling);
     </script>
+<style>/* design_system.css injecté pour preview standalone */
+/* ═══════════════════════════════════════════════════════════
+   4iSafeCross — Design System
+   Charte graphique inspirée de 4itec.fr
+   Police : Inter (Google Fonts CDN)
+   Accent  : #0077ff (bleu électrique)
+═══════════════════════════════════════════════════════════ */
+
+/* Import Inter depuis Google Fonts (fallback aria si CDN indisponible) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Variables globales ── */
+:root {
+    --bg-base:        #080d1a;
+    --bg-surface:     #0f1a2e;
+    --bg-elevated:    #162035;
+    --border:         #1e3050;
+    --accent:         #0077ff;
+    --accent-hover:   #0066dd;
+    --text-primary:   #f0f4ff;
+    --text-secondary: #7d94b5;
+    --status-ok:      #22c55e;
+    --status-ko:      #ef4444;
+    --status-idle:    #6b7280;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
+}
+
+/* ═══ HEADER ═══ */
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: 56px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* Logo rouge 4itec */
+.header-logo {
+    width: 44px;
+    height: 44px;
+    background: #e11d48;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.header-logo img {
+    height: 34px;
+    width: auto;
+    object-fit: contain;
+}
+
+.header-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border);
+}
+
+.header-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+.header-subtitle {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-top: 1px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ═══ BOUTONS (noms maintenus pour compatibilité JS) ═══ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 0.85rem;
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #fff;
+    white-space: nowrap;
+    transition: filter 0.15s, transform 0.1s;
+    vertical-align: middle;
+}
+
+.btn:hover  { filter: brightness(1.14); }
+.btn:active { transform: scale(0.97); filter: brightness(0.9); }
+
+/* Classes nommées maintenues pour compatibilité avec les assignations JS
+   (btn.className = 'btn ' + (enabled ? 'btn-green' : 'btn-gray')) */
+.btn-green  { background: #16a34a; }
+.btn-blue   { background: var(--accent); }
+.btn-orange { background: #d97706; }
+.btn-red    { background: #dc2626; }
+.btn-purple { background: #7c3aed; }
+.btn-gray   { background: #475569; }
+.btn-slate  { background: #334e68; }
+.btn-teal   { background: #0d9488; }
+
+</style>
 </head>
 <body>
     <!-- ── Panels Debug et Stats (flottants, cach\u00e9s par d\u00e9faut) ── -->
@@ -591,7 +735,7 @@
     <header class="site-header">
         <div class="header-brand">
             <div class="header-logo">
-                <img src="{{ url_for('static', filename='res/4itec-logo.png') }}" alt="Logo 4itec">
+                <img src="../static/res/4itec-logo.png" alt="Logo 4itec">
             </div>
             <div class="header-divider"></div>
             <div>
@@ -603,8 +747,8 @@
             <button class="btn btn-gray" onclick="showStatsPanel()">\ud83d\udcca Stats</button>
             <button class="btn btn-gray" onclick="showDebugPanel()">\ud83d\udd27 Debug</button>
             <button id="btn_telegram_alert" class="btn" onclick="toggleTelegramAlert()"
-                style="{{ 'background:#d97706;' if telegram_alert_enabled else 'background:#475569;' }}">
-                {{ '\ud83d\udd14 D\u00e9sactiver Telegram' if telegram_alert_enabled else '\ud83d\udd15 Activer Telegram' }}
+                style="background:#d97706;">
+                🔔 Désactiver Telegram
             </button>
             <button class="btn btn-red" onclick="quitServer()">\u23fb Quitter</button>
         </div>
@@ -620,62 +764,77 @@
     <!-- ── L\u00e9gende postures (dynamique depuis stature_colors) ── -->
     <div class="legend-bar">
         <span class="legend-bar-title">L\u00e9gende</span>
-        {% for posture, color in stature_colors.items() %}
+        
         <div class="legend-item">
-            <div class="legend-color" style="background-color: rgb{{ color }};"></div>
-            <span>{{ posture }}</span>
+            <div class="legend-color" style="background-color: rgb(34,197,94);"></div>
+            <span>Debout</span>
         </div>
-        {% endfor %}
+        
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: rgb(59,130,246);"></div>
+            <span>Assis</span>
+        </div>
+        
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: rgb(239,68,68);"></div>
+            <span>Couché</span>
+        </div>
+        
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: rgb(107,114,128);"></div>
+            <span>Inconnu</span>
+        </div>
+        
     </div>
 
     <!-- ── Cam\u00e9ras ── -->
     <div class="main-content">
         <div class="cam-container">
-            {% for cam in cam_infos %}
+            
             <div class="cam-card">
                 <div class="cam-card-header">
                     <div class="cam-title">
-                        <span class="cam-status" id="cam_status_{{ cam.idx }}"></span>
-                        Camera {{ cam.idx + 1 }}
+                        <span class="cam-status" id="cam_status_0"></span>
+                        Camera 1
                     </div>
                 </div>
                 <div class="cam-controls">
-                    <button id="btn_stream_{{ cam.idx }}" data-enabled="false" class="btn btn-slate" onclick="toggleStream({{ cam.idx }}, this)">\u25b6 Vid\u00e9o</button>
-                    <button id="btn_detect_{{ cam.idx }}" data-enabled="true" class="btn btn-green" onclick="toggleDetection({{ cam.idx }}, this)">\u26d4 Stop d\u00e9tection</button>
-                    <button id="btn_roi_{{ cam.idx }}" data-enabled="{{ 'true' if cam.roi_display_enabled else 'false' }}" class="btn {{ 'btn-blue' if cam.roi_display_enabled else 'btn-slate' }}" onclick="toggleROIDisplay({{ cam.idx }}, this)">{{ 'ROI : ON' if cam.roi_display_enabled else 'ROI : OFF' }}</button>
-                    <button id="btn_tuning_{{ cam.idx }}" class="btn btn-tuning" onclick="toggleMotionPanel({{ cam.idx }})">\u2699 Motion Tuning</button>
-                    <button id="btn_switch_inference_{{ cam.idx }}" class="btn btn-green" onclick="switchInferenceMode({{ cam.idx }})">To RFDETR</button>
-                    <button id="btn_res_switch_{{ cam.idx }}" class="btn btn-blue" onclick="switchResolution({{ cam.idx }})">720p</button>
-                    <button class="btn btn-purple" onclick="window.open('/zone_editor/{{ cam.idx }}', '_blank')">\u270f\ufe0f Zones&amp;Mask</button>
+                    <button id="btn_stream_0" data-enabled="false" class="btn btn-slate" onclick="toggleStream(0, this)">\u25b6 Vid\u00e9o</button>
+                    <button id="btn_detect_0" data-enabled="true" class="btn btn-green" onclick="toggleDetection(0, this)">\u26d4 Stop d\u00e9tection</button>
+                    <button id="btn_roi_0" data-enabled="true" class="btn btn-blue" onclick="toggleROIDisplay(0, this)">ROI : ON</button>
+                    <button id="btn_tuning_0" class="btn btn-tuning" onclick="toggleMotionPanel(0)">\u2699 Motion Tuning</button>
+                    <button id="btn_switch_inference_0" class="btn btn-green" onclick="switchInferenceMode(0)">To RFDETR</button>
+                    <button id="btn_res_switch_0" class="btn btn-blue" onclick="switchResolution(0)">720p</button>
+                    <button class="btn btn-purple" onclick="window.open('/zone_editor/0', '_blank')">\u270f\ufe0f Zones&amp;Mask</button>
                 </div>
-                <div id="motion-panel-{{ cam.idx }}" class="motion-panel">
+                <div id="motion-panel-0" class="motion-panel">
                     <div class="motion-panel-header">\u2699 Param\u00e8tres de d\u00e9tection de mouvement</div>
                     <div class="motion-panel-fields">
                         <div class="motion-field">
                             <span title="Nombre minimal de pixels blancs pour d\u00e9tecter un mouvement. R\u00e9duire pour plus de sensibilit\u00e9.">White Pixels</span>
-                            <input type="number" id="threshold-{{ cam.idx }}" name="threshold" min="0" step="100" value="{{ cam.white_pixels_threshold }}" />
+                            <input type="number" id="threshold-0" name="threshold" min="0" step="100" value="1500" />
                         </div>
                         <div class="motion-field">
                             <span title="Marge ajout\u00e9e autour de la zone de mouvement d\u00e9tect\u00e9e (px).">Padding</span>
-                            <input type="number" id="padding-{{ cam.idx }}" value="{{ cam.padding if cam.padding is defined else 40 }}" min="0" max="500" step="1" />
+                            <input type="number" id="padding-0" value="40" min="0" max="500" step="1" />
                         </div>
                         <div class="motion-field">
                             <span title="Surface minimale d'un contour pour \u00eatre consid\u00e9r\u00e9 comme mouvement (px\u00b2).">Min Area</span>
-                            <input type="number" id="min_area-{{ cam.idx }}" value="{{ cam.min_area if cam.min_area is defined else 30 }}" min="0" max="10000" step="1" />
+                            <input type="number" id="min_area-0" value="30" min="0" max="10000" step="1" />
                         </div>
                         <div class="motion-field">
                             <span title="Seuil de variance MOG2 \u2014 plus bas = plus sensible.">Var Threshold</span>
-                            <input type="number" id="varThreshold-{{ cam.idx }}" value="{{ cam.varThreshold if cam.varThreshold is defined else 7 }}" min="1" max="255" step="1" />
+                            <input type="number" id="varThreshold-0" value="7" min="1" max="255" step="1" />
                         </div>
                         <div class="motion-field">
                             <span title="Nombre de frames pour mod\u00e9liser l'arri\u00e8re-plan (MOG2).">History</span>
-                            <input type="number" id="history-{{ cam.idx }}" value="{{ cam.history if cam.history is defined else 250 }}" min="1" max="5000" step="1" />
+                            <input type="number" id="history-0" value="250" min="1" max="5000" step="1" />
                         </div>
                         <div class="motion-field">
                             <span title="D\u00e9tection des ombres dans l'algorithme MOG2.">Shadows</span>
-                            <input type="checkbox" id="detectShadows-{{ cam.idx }}" {% if cam.detectShadows is defined and cam.detectShadows %}checked{% endif %} />
+                            <input type="checkbox" id="detectShadows-0"  />
                         </div>
-                        <button class="btn btn-teal" style="align-self:flex-end;" onclick="saveMotionParams({{ cam.idx }})">\u2713 Appliquer</button>
+                        <button class="btn btn-teal" style="align-self:flex-end;" onclick="saveMotionParams(0)">\u2713 Appliquer</button>
                     </div>
                 </div>
     <script>
@@ -706,31 +865,123 @@
         if(ok) alert('Param\u00e8tres sauvegard\u00e9s !');
     }
     </script>
-                <div class="cam-video-box" id="cam_box_{{ cam.idx }}" data-res="600" style="max-width:800px;max-height:600px;">
-                    <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
-                    <span id="placeholder_{{ cam.idx }}">Vid\u00e9o masqu\u00e9e</span>
+                <div class="cam-video-box" id="cam_box_0" data-res="600" style="max-width:800px;max-height:600px;">
+                    <img id="cam_img_0" data-src="#" src="" style="display:block;opacity:0.3;" onerror="onCamImgError(0)" onload="onCamImgLoad(0)" />
+                    <span id="placeholder_0">Vid\u00e9o masqu\u00e9e</span>
                 </div>
-                {# Les contr\u00f4les luminosit\u00e9/exposition sont masqu\u00e9s #}
+                
                 <!--
                 <div class="controls">
                     <label>Brightness</label>
                     <input type="range" min="0" max="255" value="128"
-                           onchange="fetch('/set_control/{{ idx }}', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({control: 'brightness', value: this.value})});">
+                           onchange="fetch('/set_control/', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({control: 'brightness', value: this.value})});">
                     <br>
                     <label>Exposure</label>
                     <input type="range" min="-8" max="8" value="0"
-                           onchange="fetch('/set_control/{{ idx }}', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({control: 'exposure', value: this.value})});">
+                           onchange="fetch('/set_control/', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({control: 'exposure', value: this.value})});">
                 </div>
                 -->
             </div>
-            {% endfor %}
+            
+            <div class="cam-card">
+                <div class="cam-card-header">
+                    <div class="cam-title">
+                        <span class="cam-status" id="cam_status_1"></span>
+                        Camera 2
+                    </div>
+                </div>
+                <div class="cam-controls">
+                    <button id="btn_stream_1" data-enabled="false" class="btn btn-slate" onclick="toggleStream(1, this)">\u25b6 Vid\u00e9o</button>
+                    <button id="btn_detect_1" data-enabled="true" class="btn btn-green" onclick="toggleDetection(1, this)">\u26d4 Stop d\u00e9tection</button>
+                    <button id="btn_roi_1" data-enabled="true" class="btn btn-blue" onclick="toggleROIDisplay(1, this)">ROI : ON</button>
+                    <button id="btn_tuning_1" class="btn btn-tuning" onclick="toggleMotionPanel(1)">\u2699 Motion Tuning</button>
+                    <button id="btn_switch_inference_1" class="btn btn-green" onclick="switchInferenceMode(1)">To RFDETR</button>
+                    <button id="btn_res_switch_1" class="btn btn-blue" onclick="switchResolution(1)">720p</button>
+                    <button class="btn btn-purple" onclick="window.open('/zone_editor/1', '_blank')">\u270f\ufe0f Zones&amp;Mask</button>
+                </div>
+                <div id="motion-panel-1" class="motion-panel">
+                    <div class="motion-panel-header">\u2699 Param\u00e8tres de d\u00e9tection de mouvement</div>
+                    <div class="motion-panel-fields">
+                        <div class="motion-field">
+                            <span title="Nombre minimal de pixels blancs pour d\u00e9tecter un mouvement. R\u00e9duire pour plus de sensibilit\u00e9.">White Pixels</span>
+                            <input type="number" id="threshold-1" name="threshold" min="0" step="100" value="1500" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Marge ajout\u00e9e autour de la zone de mouvement d\u00e9tect\u00e9e (px).">Padding</span>
+                            <input type="number" id="padding-1" value="40" min="0" max="500" step="1" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Surface minimale d'un contour pour \u00eatre consid\u00e9r\u00e9 comme mouvement (px\u00b2).">Min Area</span>
+                            <input type="number" id="min_area-1" value="30" min="0" max="10000" step="1" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Seuil de variance MOG2 \u2014 plus bas = plus sensible.">Var Threshold</span>
+                            <input type="number" id="varThreshold-1" value="7" min="1" max="255" step="1" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Nombre de frames pour mod\u00e9liser l'arri\u00e8re-plan (MOG2).">History</span>
+                            <input type="number" id="history-1" value="250" min="1" max="5000" step="1" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="D\u00e9tection des ombres dans l'algorithme MOG2.">Shadows</span>
+                            <input type="checkbox" id="detectShadows-1"  />
+                        </div>
+                        <button class="btn btn-teal" style="align-self:flex-end;" onclick="saveMotionParams(1)">\u2713 Appliquer</button>
+                    </div>
+                </div>
+    <script>
+    function saveMotionParams(idx) {
+        const params = {
+            white_pixels_threshold: document.getElementById('threshold-' + idx).value,
+            padding: document.getElementById('padding-' + idx).value,
+            min_area: document.getElementById('min_area-' + idx).value,
+            varThreshold: document.getElementById('varThreshold-' + idx).value,
+            history: document.getElementById('history-' + idx).value,
+            detectShadows: document.getElementById('detectShadows-' + idx).checked
+        };
+        let ok = true;
+        for (const [param, value] of Object.entries(params)) {
+            fetch('/set_motion_param/' + idx, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({param: param === 'white_pixels_threshold' ? 'white_pixels_threshold' : param, value: value})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.status !== 'ok') {
+                    ok = false;
+                    alert('Erreur lors de la mise \u00e0 jour du param\u00e8tre ' + param + ' : ' + data.message);
+                }
+            });
+        }
+        if(ok) alert('Param\u00e8tres sauvegard\u00e9s !');
+    }
+    </script>
+                <div class="cam-video-box" id="cam_box_1" data-res="600" style="max-width:800px;max-height:600px;">
+                    <img id="cam_img_1" data-src="#" src="" style="display:block;opacity:0.3;" onerror="onCamImgError(1)" onload="onCamImgLoad(1)" />
+                    <span id="placeholder_1">Vid\u00e9o masqu\u00e9e</span>
+                </div>
+                
+                <!--
+                <div class="controls">
+                    <label>Brightness</label>
+                    <input type="range" min="0" max="255" value="128"
+                           onchange="fetch('/set_control/', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({control: 'brightness', value: this.value})});">
+                    <br>
+                    <label>Exposure</label>
+                    <input type="range" min="-8" max="8" value="0"
+                           onchange="fetch('/set_control/', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({control: 'exposure', value: this.value})});">
+                </div>
+                -->
+            </div>
+            
         </div>
     </div>
 
     <!-- ── Bandeau bas (conserv\u00e9 tel quel) ── -->
-    <img src="{{ url_for('static', filename='res/bottom1080.png') }}" class="footer-banner" alt="Bandeau bas">
+    <div class="footer-banner" style="height:64px;background:linear-gradient(90deg,#0d1b2a,#0077ff22,#0d1b2a);border-top:1px solid #1e3050;"></div>
     <div style="position:fixed;left:0;bottom:0;width:100vw;height:48px;display:flex;align-items:center;text-align:left;font-size:0.85em;color:#fff;background:transparent;z-index:101;padding-left:24px;pointer-events:none;font-family:'Inter',Arial,Helvetica,sans-serif;">
-        {{ app_name }} v{{ app_version }}
+        4iSafeCross v2.4.1
     </div>
 
     <!-- ── Galerie des derni\u00e8res d\u00e9tections ── -->
