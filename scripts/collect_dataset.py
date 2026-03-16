@@ -114,6 +114,8 @@ class DatasetCollectionThread(threading.Thread):
         hard_neg_enabled: Active/désactive la stratégie hard negative (stratégie 4).
         inf_url: URL du serveur IA (nécessaire uniquement pour hard_neg).
         stop_event: threading.Event pour arrêter proprement le thread.
+        masks: Liste de dicts {'name': str, 'polygon': list of (x, y)} — masques
+            polygonaux à noircir avant toute sauvegarde (cohérence avec l'inférence).
     """
 
     def __init__(
@@ -135,6 +137,7 @@ class DatasetCollectionThread(threading.Thread):
         hard_neg_enabled: bool = True,
         inf_url: str = "http://127.0.0.1:8004/predict_frame/",
         stop_event: threading.Event | None = None,
+        masks: list | None = None,
     ):
         super().__init__(daemon=True, name=f"DatasetCollector-cam{cam_idx}")
         self.cam_idx = cam_idx
@@ -143,6 +146,8 @@ class DatasetCollectionThread(threading.Thread):
         self.shared_detections_lock = shared_detections_lock
         self.shared_motion_roi = shared_motion_roi
         self.shared_motion_roi_lock = shared_motion_roi_lock
+        self.masks = masks or []
+        self.masks_lock = threading.Lock()
         self.output_dir = Path(output_dir)
         self.interval_minutes = interval_minutes
         self.start_hour = start_hour
@@ -175,6 +180,41 @@ class DatasetCollectionThread(threading.Thread):
             f"| hard_neg {'✓' if hard_neg_enabled else '✗'} conf={hard_neg_confidence} "
             f"| {start_hour:02d}h–{end_hour:02d}h"
         )
+
+    # ------------------------------------------------------------------
+    # Gestion des masques
+    # ------------------------------------------------------------------
+
+    def set_masks(self, masks: list) -> None:
+        """Met à jour les masques polygonaux de manière thread-safe.
+
+        Args:
+            masks: Liste de dicts {'name': str, 'polygon': list of (x, y)}.
+        """
+        with self.masks_lock:
+            self.masks = masks or []
+
+    def _apply_masks(self, frame: np.ndarray) -> np.ndarray:
+        """Retourne une copie de la frame avec les zones masquées noircies (pixels à 0).
+
+        Opère sur une copie pour ne pas corrompre le buffer partagé de CameraManager.
+
+        Args:
+            frame: Frame numpy BGR (H x W x 3).
+
+        Returns:
+            Copie de la frame avec les zones masquées en noir.
+        """
+        with self.masks_lock:
+            current_masks = list(self.masks)
+        masked = frame.copy()
+        for mask in current_masks:
+            polygon = mask.get('polygon')
+            if not polygon or len(polygon) < 3:
+                continue
+            pts = np.array(polygon, dtype=np.int32)
+            cv2.fillPoly(masked, [pts], (0, 0, 0))
+        return masked
 
     # ------------------------------------------------------------------
     # Helpers partagés avec le mode standalone
@@ -331,6 +371,9 @@ class DatasetCollectionThread(threading.Thread):
             if frame is None:
                 self.stop_event.wait(1.0)
                 continue
+
+            # Appliquer les masques AVANT toute sauvegarde (cohérence avec l'inférence)
+            frame = self._apply_masks(frame)
 
             # Lire les détections déjà calculées par le thread d'inférence (sans coût IA)
             with self.shared_detections_lock:

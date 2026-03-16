@@ -577,6 +577,7 @@ if DATASET_COLLECTION:
             hard_neg_enabled=DATASET_HARD_NEG_ENABLED,
             inf_url=f"{URL_YOLO}{FONCTION_YOLO}",
             stop_event=inference_stop_events[i],
+            masks=masks_by_camera.get(i, []),
         )
         ds_thread.start()
         dataset_threads[i] = ds_thread
