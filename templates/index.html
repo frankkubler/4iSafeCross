@@ -308,6 +308,73 @@
             border-radius: 4px;
             color: var(--text-primary);
         }
+
+        /* ── Galerie des détections ── */
+        #detections-gallery {
+            justify-content: flex-start;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            gap: 6px;
+            padding: 6px 12px;
+        }
+        #detections-gallery::-webkit-scrollbar { display: none; }
+        .gallery-label {
+            flex-shrink: 0;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+            padding-right: 8px;
+            border-right: 1px solid var(--border);
+            align-self: center;
+        }
+        .detection-thumb-wrapper {
+            position: relative;
+            flex-shrink: 0;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.18);
+            transition: border-color 0.2s, transform 0.2s;
+            cursor: pointer;
+        }
+        .detection-thumb-wrapper:hover {
+            border-color: var(--accent);
+            transform: scale(1.08);
+        }
+        .detection-thumb {
+            display: block;
+            width: 80px;
+            height: 45px;
+            object-fit: cover;
+        }
+        .detection-badge {
+            position: absolute;
+            bottom: 2px;
+            left: 3px;
+            background: rgba(0,0,0,0.62);
+            color: #fff;
+            font-size: 0.60rem;
+            font-weight: 600;
+            padding: 1px 4px;
+            border-radius: 3px;
+            line-height: 1.5;
+            pointer-events: none;
+        }
+        /* ── Boutons navigation modal ── */
+        .modal-nav-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 48px;
+            cursor: pointer;
+            pointer-events: auto;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .modal-nav-btn:hover { opacity: 1; }
     </style>
     <script>
         function toggleDetection(idx, btn) {
@@ -755,22 +822,23 @@
     </div>
 
     <!-- ── Galerie des dernières détections ── -->
-    <div id="detections-gallery" style="position:fixed;left:0;bottom:56px;width:100vw;z-index:200;display:flex;justify-content:center;gap:8px;background:rgba(8,13,26,0.88);backdrop-filter:blur(4px);border-top:1px solid rgba(30,48,80,0.8);padding:8px 0;">
-        <!-- Les miniatures seront injectées ici -->
+    <div id="detections-gallery" style="position:fixed;left:0;bottom:56px;width:100vw;z-index:200;display:flex;align-items:center;background:rgba(8,13,26,0.92);backdrop-filter:blur(4px);border-top:1px solid var(--border);">
+        <!-- Les miniatures seront injectées dynamiquement -->
     </div>
 
     <!-- ── Modal pour agrandir l'image ── -->
     <div id="modal-detection" style="display:none;position:fixed;z-index:300;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;flex-direction:column;">
         <div style="width:100vw;display:flex;justify-content:space-between;align-items:center;position:absolute;top:50%;transform:translateY(-50%);pointer-events:none;">
-            <button id="modal-prev" style="background:none;border:none;color:#fff;font-size:48px;cursor:pointer;pointer-events:auto;opacity:0.7;margin-left:24px;">&#8592;</button>
-            <button id="modal-next" style="background:none;border:none;color:#fff;font-size:48px;cursor:pointer;pointer-events:auto;opacity:0.7;margin-right:24px;">&#8594;</button>
+            <button id="modal-prev" class="modal-nav-btn" style="margin-left:24px;">&#8592;</button>
+            <button id="modal-next" class="modal-nav-btn" style="margin-right:24px;">&#8594;</button>
         </div>
-        <img id="modal-img" src="" style="max-width:90vw;max-height:80vh;border:6px solid #fff;border-radius:10px;box-shadow:0 4px 32px #000;" />
-        <div id="modal-caption" style="color:#fff;font-size:1.2em;margin-top:18px;text-align:center;"></div>
+        <img id="modal-img" src="" style="max-width:90vw;max-height:80vh;border:3px solid var(--accent);border-radius:10px;box-shadow:0 4px 32px #000;" />
+        <div id="modal-caption" style="color:var(--text-secondary);font-size:1em;margin-top:14px;text-align:center;font-family:'Inter',Arial,sans-serif;"></div>
     </div>
     <script>
     let detectionsList = [];
     let currentDetectionIdx = 0;
+
     function fetchDetectionsGallery() {
         fetch('/detections_thumbs')
             .then(r => r.json())
@@ -779,61 +847,88 @@
                 const gallery = document.getElementById('detections-gallery');
                 gallery.innerHTML = '';
                 if (detectionsList.length > 0) {
-                    detectionsList.forEach((filename, idx) => {
+                    // Label + compteur à gauche
+                    const label = document.createElement('span');
+                    label.className = 'gallery-label';
+                    label.textContent = `Captures (${detectionsList.length})`;
+                    gallery.appendChild(label);
+                    detectionsList.forEach((det, idx) => {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'detection-thumb-wrapper';
+                        wrapper.title = det.display_date
+                            ? `Caméra ${det.cam_id} — ${det.display_date}`
+                            : det.filename;
+                        wrapper.onclick = () => showModalDetection(idx);
                         const img = document.createElement('img');
-                        img.src = '/detections/' + filename;
-                        img.alt = filename;
-                        img.style = 'width:64px;height:36px;object-fit:cover;cursor:pointer;border:2px solid rgba(255,255,255,0.3);border-radius:4px;transition:transform 0.2s;';
-                        img.onclick = () => showModalDetection(idx);
-                        gallery.appendChild(img);
+                        img.src = '/detections/' + det.filename;
+                        img.alt = det.filename;
+                        img.className = 'detection-thumb';
+                        wrapper.appendChild(img);
+                        if (det.cam_id !== null) {
+                            const badge = document.createElement('span');
+                            badge.className = 'detection-badge';
+                            badge.textContent = `cam ${det.cam_id}`;
+                            wrapper.appendChild(badge);
+                        }
+                        gallery.appendChild(wrapper);
                     });
                 } else {
-                    gallery.innerHTML = '<span style="color:#7d94b5;font-size:0.9em;">Aucune détection récente</span>';
+                    gallery.innerHTML = '<span style="color:var(--text-secondary);font-size:0.85em;padding:0 16px;">Aucune détection récente</span>';
                 }
             });
     }
+
     function showModalDetection(idx) {
         currentDetectionIdx = idx;
         updateModalDetection();
         const modal = document.getElementById('modal-detection');
         modal.style.display = 'flex';
     }
+
     function updateModalDetection() {
         if (!detectionsList.length) return;
-        const filename = detectionsList[currentDetectionIdx];
+        const det = detectionsList[currentDetectionIdx];
         const modalImg = document.getElementById('modal-img');
         const modalCaption = document.getElementById('modal-caption');
-        modalImg.src = '/detections/' + filename;
-        // Extraire la date/heure du nom du fichier (format cam_X_YYYYMMDD_HHMMSS.jpg)
-        const match = filename.match(/_(\d{8})_(\d{6})/);
-        let dateStr = '';
-        if (match) {
-            const d = match[1];
-            const t = match[2];
-            dateStr = `${d.slice(6,8)}/${d.slice(4,6)}/${d.slice(0,4)} à ${t.slice(0,2)}:${t.slice(2,4)}:${t.slice(4,6)}`;
+        modalImg.src = '/detections/' + det.filename;
+        let caption = '';
+        if (det.cam_id !== null && det.display_date) {
+            caption = `Caméra ${det.cam_id} — ${det.display_date}`;
+        } else if (det.display_date) {
+            caption = det.display_date;
+        } else {
+            caption = det.filename;
         }
-        modalCaption.textContent = dateStr ? `Enregistrée le ${dateStr}` : filename;
-        // Gérer la visibilité des flèches
+        modalCaption.textContent = caption;
         document.getElementById('modal-prev').style.visibility = (currentDetectionIdx > 0) ? 'visible' : 'hidden';
         document.getElementById('modal-next').style.visibility = (currentDetectionIdx < detectionsList.length-1) ? 'visible' : 'hidden';
     }
+
     document.getElementById('modal-detection').onclick = function(e) {
         if (e.target === this) this.style.display = 'none';
     };
     document.getElementById('modal-prev').onclick = function(e) {
         e.stopPropagation();
-        if (currentDetectionIdx > 0) {
-            currentDetectionIdx--;
-            updateModalDetection();
-        }
+        if (currentDetectionIdx > 0) { currentDetectionIdx--; updateModalDetection(); }
     };
     document.getElementById('modal-next').onclick = function(e) {
         e.stopPropagation();
-        if (currentDetectionIdx < detectionsList.length-1) {
-            currentDetectionIdx++;
-            updateModalDetection();
-        }
+        if (currentDetectionIdx < detectionsList.length-1) { currentDetectionIdx++; updateModalDetection(); }
     };
+
+    // Navigation clavier dans la modal (Esc, ←, →)
+    document.addEventListener('keydown', function(e) {
+        const modal = document.getElementById('modal-detection');
+        if (modal.style.display === 'none') return;
+        if (e.key === 'Escape') {
+            modal.style.display = 'none';
+        } else if (e.key === 'ArrowLeft' && currentDetectionIdx > 0) {
+            currentDetectionIdx--; updateModalDetection();
+        } else if (e.key === 'ArrowRight' && currentDetectionIdx < detectionsList.length-1) {
+            currentDetectionIdx++; updateModalDetection();
+        }
+    });
+
     // Rafraîchir la galerie toutes les 10 secondes
     setInterval(fetchDetectionsGallery, 10000);
     // Premier chargement

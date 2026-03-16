@@ -29,6 +29,7 @@ from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
+import re
 import asyncio
 import copy
 import numpy as np
@@ -1019,14 +1020,22 @@ def debug_info():
 
 @app.route('/detections_thumbs')
 def detections_thumbs():
-    # Récupère les 10 dernières images du dossier detections
+    """Retourne les 10 dernières captures avec métadonnées (caméra, date/heure)."""
     try:
         files = glob.glob(os.path.join('detections', '*.jpg'))
         files.sort(key=os.path.getctime, reverse=True)
-        last_files = files[:10]
-        # On ne retourne que les noms de fichiers (pas le chemin complet)
-        last_files = [os.path.basename(f) for f in last_files]
-        return jsonify({'images': last_files})
+        result = []
+        for f in files[:10]:
+            filename = os.path.basename(f)
+            cam_id = None
+            display_date = None
+            m = re.match(r'cam_(\w+)_(\d{8})_(\d{6})', filename)
+            if m:
+                cam_id = m.group(1)
+                d, t = m.group(2), m.group(3)
+                display_date = f"{d[6:8]}/{d[4:6]}/{d[0:4]} à {t[0:2]}:{t[2:4]}:{t[4:6]}"
+            result.append({'filename': filename, 'cam_id': cam_id, 'display_date': display_date})
+        return jsonify({'images': result})
     except Exception as e:
         return jsonify({'images': [], 'error': str(e)})
 
