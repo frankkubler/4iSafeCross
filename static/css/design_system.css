@@ -59,21 +59,18 @@ body {
 
 /* Logo rouge 4itec */
 .header-logo {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     background: #e11d48;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    overflow: hidden;
-}
-
-.header-logo img {
-    height: 34px;
-    width: auto;
-    object-fit: contain;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: -0.5px;
+    color: #fff;
 }
 
 .header-divider {
