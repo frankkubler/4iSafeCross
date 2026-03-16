@@ -300,7 +300,7 @@
                 body: JSON.stringify({enabled: enabled})
             });
             btn.dataset.enabled = enabled;
-            btn.textContent = enabled ? '\u26d4 Stop d\u00e9tection' : '\u25b6 D\u00e9tection';
+            btn.textContent = enabled ? '⛔ Stop détection' : '▶ Détection';
             btn.className = 'btn ' + (enabled ? 'btn-green' : 'btn-gray');
         }
         function toggleStream(idx, btn) {
@@ -311,7 +311,7 @@
                 body: JSON.stringify({enabled: enabled})
             });
             btn.dataset.enabled = enabled;
-            btn.textContent = enabled ? '\u23f9 Vid\u00e9o' : '\u25b6 Vid\u00e9o';
+            btn.textContent = enabled ? '⏹ Vidéo' : '▶ Vidéo';
             btn.className = 'btn ' + (enabled ? 'btn-blue' : 'btn-slate');
             const img = document.getElementById('cam_img_' + idx);
             const placeholder = document.getElementById('placeholder_' + idx);
@@ -344,10 +344,10 @@
             btn.classList.toggle('active', !isOpen);
         }
         function quitServer() {
-            if(confirm('Voulez-vous vraiment quitter et arr\u00eater le serveur ?')) {
+            if(confirm('Voulez-vous vraiment quitter et arrêter le serveur ?')) {
                 fetch('/quit', {method: 'POST'})
                     .then(() => { window.close(); })
-                    .catch(() => { alert('Le serveur a \u00e9t\u00e9 arr\u00eat\u00e9.'); });
+                    .catch(() => { alert('Le serveur a été arrêté.'); });
             }
         }
         function adjustThresholdWidth(input) {
@@ -380,7 +380,7 @@
             })
             .then(r => r.json())
             .then(data => {
-                alert(data.status === 'ok' ? 'Seuil mis \u00e0 jour !' : 'Erreur : ' + data.message);
+                alert(data.status === 'ok' ? 'Seuil mis à jour !' : 'Erreur : ' + data.message);
                 const input = document.getElementById('threshold-' + idx);
                 adjustThresholdWidth(input);
             });
@@ -425,9 +425,9 @@
                 .then(r => r.json())
                 .then(data => {
                     let html = '';
-                    html += 'RAM utilis\u00e9e : ' + data.ram_used + ' / ' + data.ram_total + ' MB\n';
-                    html += 'CPU utilis\u00e9 : ' + data.cpu_percent + ' %\n';
-                    html += 'Disque utilis\u00e9 : ' + data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_percent + ' %)\n';
+                    html += 'RAM utilisée : ' + data.ram_used + ' / ' + data.ram_total + ' MB\n';
+                    html += 'CPU utilisé : ' + data.cpu_percent + ' %\n';
+                    html += 'Disque utilisé : ' + data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_percent + ' %)\n';
                     html += 'Adresse(s) IP : ' + data.ip + '\n';
                     html += 'Load average : ' + data.load_avg + '\n';
                     html += 'Docker : ' + data.docker_info + '\n';
@@ -435,7 +435,7 @@
                     document.getElementById('debug-panel-content').textContent = html;
                 })
                 .catch(() => {
-                    document.getElementById('debug-panel-content').textContent = 'Erreur lors de la r\u00e9cup\u00e9ration des infos debug.';
+                    document.getElementById('debug-panel-content').textContent = 'Erreur lors de la récupération des infos debug.';
                 });
         }
 
@@ -450,22 +450,22 @@
 
                 // Section Cache
                 html += '<div class="stats-section">';
-                html += '<div class="stats-title">\ud83d\udcca CACHE DE FRAMES</div>';
-                html += `Dur\u00e9e cache: ${cacheData.cache_duration_ms}ms | Qualit\u00e9: ${cacheData.frame_quality}%\n`;
-                html += `Entr\u00e9es actives: ${cacheData.total_entries} | Taille totale: ${cacheData.total_size_kb} KB\n`;
+                html += '<div class="stats-title">📊 CACHE DE FRAMES</div>';
+                html += `Durée cache: ${cacheData.cache_duration_ms}ms | Qualité: ${cacheData.frame_quality}%\n`;
+                html += `Entrées actives: ${cacheData.total_entries} | Taille totale: ${cacheData.total_size_kb} KB\n`;
 
                 for (const [camId, camCache] of Object.entries(cacheData.cameras || {})) {
-                    const status = camCache.is_fresh ? '\u2705' : '\u23f0';
+                    const status = camCache.is_fresh ? '✅' : '⏰';
                     html += `Cam ${camId}: ${status} ${camCache.age_ms}ms, ${camCache.size_kb} KB\n`;
                 }
                 html += '</div>';
 
-                // Section Inf\u00e9rence
+                // Section Inférence
                 html += '<div class="stats-section">';
-                html += '<div class="stats-title">\ud83c\udfaf OPTIMISATION INF\u00c9RENCE</div>';
+                html += '<div class="stats-title">🎯 OPTIMISATION INFÉRENCE</div>';
                 html += `Frames totales: ${inferenceData.total_frames_processed}\n`;
-                html += `Frames saut\u00e9es: ${inferenceData.total_frames_skipped} (${inferenceData.overall_skip_rate}%)\n`;
-                html += `Temps \u00e9conomis\u00e9: ${inferenceData.total_time_saved_seconds}s\n`;
+                html += `Frames sautées: ${inferenceData.total_frames_skipped} (${inferenceData.overall_skip_rate}%)\n`;
+                html += `Temps économisé: ${inferenceData.total_time_saved_seconds}s\n`;
 
                 for (const [camKey, camStats] of Object.entries(inferenceData.cameras || {})) {
                     const skipRate = camStats.skip_rate || 0;
@@ -473,15 +473,15 @@
                     const consecutiveSkips = camStats.consecutive_skips || 0;
                     const avgSleepMs = camStats.avg_sleep_ms || 10.0;
                     html += `\nCam ${camStats.camera_id}: ${camStats.inference_mode}\n`;
-                    html += `  Skip: ${skipRate}% | \u00c9conomie: ${timeSaved.toFixed(1)}s\n`;
-                    html += `  Sleep adaptatif: ${avgSleepMs}ms | Skips cons\u00e9cutifs: ${consecutiveSkips}\n`;
+                    html += `  Skip: ${skipRate}% | Économie: ${timeSaved.toFixed(1)}s\n`;
+                    html += `  Sleep adaptatif: ${avgSleepMs}ms | Skips consécutifs: ${consecutiveSkips}\n`;
                 }
                 html += '</div>';
 
                 content.innerHTML = html;
             })
             .catch(() => {
-                document.getElementById('stats-panel-content').innerHTML = 'Erreur lors de la r\u00e9cup\u00e9ration des statistiques.';
+                document.getElementById('stats-panel-content').innerHTML = 'Erreur lors de la récupération des statistiques.';
             });
         }
         let telegramAlertEnabled = {{ 'true' if telegram_alert_enabled else 'false' }};
@@ -492,7 +492,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({enabled: telegramAlertEnabled})
             });
-            document.getElementById('btn_telegram_alert').textContent = telegramAlertEnabled ? '\ud83d\udd14 D\u00e9sactiver Telegram' : '\ud83d\udd15 Activer Telegram';
+            document.getElementById('btn_telegram_alert').textContent = telegramAlertEnabled ? '🔔 Désactiver Telegram' : '🔕 Activer Telegram';
             document.getElementById('btn_telegram_alert').style.background = telegramAlertEnabled ? '#d97706' : '#475569';
         }
         function switchInferenceMode(idx) {
@@ -503,7 +503,7 @@
                     if (data.status === 'ok') {
                         btn.textContent = data.mode === 'RFDETR' ? 'To YOLO' : 'To RFDETR';
                         btn.className = 'btn ' + (data.mode === 'RFDETR' ? 'btn-orange' : 'btn-green');
-                        alert('Mode d\'inf\u00e9rence : ' + data.mode);
+                        alert('Mode d\'inférence : ' + data.mode);
                     } else {
                         alert('Erreur : ' + data.message);
                     }
@@ -530,13 +530,13 @@
             const img = document.getElementById('cam_img_' + idx);
             img.style.display = 'none';
             const placeholder = document.getElementById('placeholder_' + idx);
-            placeholder.textContent = 'Activer la vid\u00e9o';
+            placeholder.textContent = 'Activer la vidéo';
             placeholder.style.display = '';
-            console.warn('Erreur de chargement du flux vid\u00e9o pour cam\u00e9ra', idx);
+            console.warn('Erreur de chargement du flux vidéo pour caméra', idx);
         }
         function onCamImgLoad(idx) {
             const placeholder = document.getElementById('placeholder_' + idx);
-            placeholder.textContent = 'Vid\u00e9o masqu\u00e9e';
+            placeholder.textContent = 'Vidéo masquée';
         }
         function updateCamStatus(idx) {
             fetch(`/cam_status/${idx}`)
@@ -551,11 +551,11 @@
                     } else if (data.status === 'offline') {
                         status.style.background = '#ef4444';
                         status.style.boxShadow = '0 0 6px #ef4444';
-                        status.title = 'Cam\u00e9ra d\u00e9connect\u00e9e';
+                        status.title = 'Caméra déconnectée';
                     } else {
                         status.style.background = '#6b7280';
                         status.style.boxShadow = 'none';
-                        status.title = '\u00c9tat inconnu';
+                        status.title = 'État inconnu';
                     }
                 })
                 .catch(() => {
@@ -577,13 +577,13 @@
     </script>
 </head>
 <body>
-    <!-- ── Panels Debug et Stats (flottants, cach\u00e9s par d\u00e9faut) ── -->
+    <!-- ── Panels Debug et Stats (flottants, cachés par défaut) ── -->
     <div id="debug-panel">
-        <button class="close-btn" onclick="hideDebugPanel()">\u00d7</button>
+        <button class="close-btn" onclick="hideDebugPanel()">×</button>
         <div id="debug-panel-content">Chargement...</div>
     </div>
     <div id="stats-panel">
-        <button class="close-btn" onclick="hideStatsPanel()">\u00d7</button>
+        <button class="close-btn" onclick="hideStatsPanel()">×</button>
         <div id="stats-panel-content">Chargement...</div>
     </div>
 
@@ -600,26 +600,26 @@
             </div>
         </div>
         <div class="header-actions">
-            <button class="btn btn-gray" onclick="showStatsPanel()">\ud83d\udcca Stats</button>
-            <button class="btn btn-gray" onclick="showDebugPanel()">\ud83d\udd27 Debug</button>
+            <button class="btn btn-gray" onclick="showStatsPanel()">📊 Stats</button>
+            <button class="btn btn-gray" onclick="showDebugPanel()">🔧 Debug</button>
             <button id="btn_telegram_alert" class="btn" onclick="toggleTelegramAlert()"
                 style="{{ 'background:#d97706;' if telegram_alert_enabled else 'background:#475569;' }}">
-                {{ '\ud83d\udd14 D\u00e9sactiver Telegram' if telegram_alert_enabled else '\ud83d\udd15 Activer Telegram' }}
+                {{ '🔔 Désactiver Telegram' if telegram_alert_enabled else '🔕 Activer Telegram' }}
             </button>
-            <button class="btn btn-red" onclick="quitServer()">\u23fb Quitter</button>
+            <button class="btn btn-red" onclick="quitServer()">⏻ Quitter</button>
         </div>
     </header>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn_telegram_alert');
-        btn.textContent = telegramAlertEnabled ? '\ud83d\udd14 D\u00e9sactiver Telegram' : '\ud83d\udd15 Activer Telegram';
+        btn.textContent = telegramAlertEnabled ? '🔔 Désactiver Telegram' : '🔕 Activer Telegram';
         btn.style.background = telegramAlertEnabled ? '#d97706' : '#475569';
     });
     </script>
 
-    <!-- ── L\u00e9gende postures (dynamique depuis stature_colors) ── -->
+    <!-- ── Légende postures (dynamique depuis stature_colors) ── -->
     <div class="legend-bar">
-        <span class="legend-bar-title">L\u00e9gende</span>
+        <span class="legend-bar-title">Légende</span>
         {% for posture, color in stature_colors.items() %}
         <div class="legend-item">
             <div class="legend-color" style="background-color: rgb{{ color }};"></div>
@@ -628,7 +628,7 @@
         {% endfor %}
     </div>
 
-    <!-- ── Cam\u00e9ras ── -->
+    <!-- ── Caméras ── -->
     <div class="main-content">
         <div class="cam-container">
             {% for cam in cam_infos %}
@@ -640,42 +640,42 @@
                     </div>
                 </div>
                 <div class="cam-controls">
-                    <button id="btn_stream_{{ cam.idx }}" data-enabled="false" class="btn btn-slate" onclick="toggleStream({{ cam.idx }}, this)">\u25b6 Vid\u00e9o</button>
-                    <button id="btn_detect_{{ cam.idx }}" data-enabled="true" class="btn btn-green" onclick="toggleDetection({{ cam.idx }}, this)">\u26d4 Stop d\u00e9tection</button>
+                    <button id="btn_stream_{{ cam.idx }}" data-enabled="false" class="btn btn-slate" onclick="toggleStream({{ cam.idx }}, this)">▶ Vidéo</button>
+                    <button id="btn_detect_{{ cam.idx }}" data-enabled="true" class="btn btn-green" onclick="toggleDetection({{ cam.idx }}, this)">⛔ Stop détection</button>
                     <button id="btn_roi_{{ cam.idx }}" data-enabled="{{ 'true' if cam.roi_display_enabled else 'false' }}" class="btn {{ 'btn-blue' if cam.roi_display_enabled else 'btn-slate' }}" onclick="toggleROIDisplay({{ cam.idx }}, this)">{{ 'ROI : ON' if cam.roi_display_enabled else 'ROI : OFF' }}</button>
-                    <button id="btn_tuning_{{ cam.idx }}" class="btn btn-tuning" onclick="toggleMotionPanel({{ cam.idx }})">\u2699 Motion Tuning</button>
+                    <button id="btn_tuning_{{ cam.idx }}" class="btn btn-tuning" onclick="toggleMotionPanel({{ cam.idx }})">⚙ Motion Tuning</button>
                     <button id="btn_switch_inference_{{ cam.idx }}" class="btn btn-green" onclick="switchInferenceMode({{ cam.idx }})">To RFDETR</button>
                     <button id="btn_res_switch_{{ cam.idx }}" class="btn btn-blue" onclick="switchResolution({{ cam.idx }})">720p</button>
-                    <button class="btn btn-purple" onclick="window.open('/zone_editor/{{ cam.idx }}', '_blank')">\u270f\ufe0f Zones&amp;Mask</button>
+                    <button class="btn btn-purple" onclick="window.open('/zone_editor/{{ cam.idx }}', '_blank')">✏️ Zones&amp;Mask</button>
                 </div>
                 <div id="motion-panel-{{ cam.idx }}" class="motion-panel">
-                    <div class="motion-panel-header">\u2699 Param\u00e8tres de d\u00e9tection de mouvement</div>
+                    <div class="motion-panel-header">⚙ Paramètres de détection de mouvement</div>
                     <div class="motion-panel-fields">
                         <div class="motion-field">
-                            <span title="Nombre minimal de pixels blancs pour d\u00e9tecter un mouvement. R\u00e9duire pour plus de sensibilit\u00e9.">White Pixels</span>
+                            <span title="Nombre minimal de pixels blancs pour détecter un mouvement. Réduire pour plus de sensibilité.">White Pixels</span>
                             <input type="number" id="threshold-{{ cam.idx }}" name="threshold" min="0" step="100" value="{{ cam.white_pixels_threshold }}" />
                         </div>
                         <div class="motion-field">
-                            <span title="Marge ajout\u00e9e autour de la zone de mouvement d\u00e9tect\u00e9e (px).">Padding</span>
+                            <span title="Marge ajoutée autour de la zone de mouvement détectée (px).">Padding</span>
                             <input type="number" id="padding-{{ cam.idx }}" value="{{ cam.padding if cam.padding is defined else 40 }}" min="0" max="500" step="1" />
                         </div>
                         <div class="motion-field">
-                            <span title="Surface minimale d'un contour pour \u00eatre consid\u00e9r\u00e9 comme mouvement (px\u00b2).">Min Area</span>
+                            <span title="Surface minimale d'un contour pour être considéré comme mouvement (px²).">Min Area</span>
                             <input type="number" id="min_area-{{ cam.idx }}" value="{{ cam.min_area if cam.min_area is defined else 30 }}" min="0" max="10000" step="1" />
                         </div>
                         <div class="motion-field">
-                            <span title="Seuil de variance MOG2 \u2014 plus bas = plus sensible.">Var Threshold</span>
+                            <span title="Seuil de variance MOG2 — plus bas = plus sensible.">Var Threshold</span>
                             <input type="number" id="varThreshold-{{ cam.idx }}" value="{{ cam.varThreshold if cam.varThreshold is defined else 7 }}" min="1" max="255" step="1" />
                         </div>
                         <div class="motion-field">
-                            <span title="Nombre de frames pour mod\u00e9liser l'arri\u00e8re-plan (MOG2).">History</span>
+                            <span title="Nombre de frames pour modéliser l'arrière-plan (MOG2).">History</span>
                             <input type="number" id="history-{{ cam.idx }}" value="{{ cam.history if cam.history is defined else 250 }}" min="1" max="5000" step="1" />
                         </div>
                         <div class="motion-field">
-                            <span title="D\u00e9tection des ombres dans l'algorithme MOG2.">Shadows</span>
+                            <span title="Détection des ombres dans l'algorithme MOG2.">Shadows</span>
                             <input type="checkbox" id="detectShadows-{{ cam.idx }}" {% if cam.detectShadows is defined and cam.detectShadows %}checked{% endif %} />
                         </div>
-                        <button class="btn btn-teal" style="align-self:flex-end;" onclick="saveMotionParams({{ cam.idx }})">\u2713 Appliquer</button>
+                        <button class="btn btn-teal" style="align-self:flex-end;" onclick="saveMotionParams({{ cam.idx }})">✓ Appliquer</button>
                     </div>
                 </div>
     <script>
@@ -699,18 +699,18 @@
             .then(data => {
                 if(data.status !== 'ok') {
                     ok = false;
-                    alert('Erreur lors de la mise \u00e0 jour du param\u00e8tre ' + param + ' : ' + data.message);
+                    alert('Erreur lors de la mise à jour du paramètre ' + param + ' : ' + data.message);
                 }
             });
         }
-        if(ok) alert('Param\u00e8tres sauvegard\u00e9s !');
+        if(ok) alert('Paramètres sauvegardés !');
     }
     </script>
                 <div class="cam-video-box" id="cam_box_{{ cam.idx }}" data-res="600" style="max-width:800px;max-height:600px;">
                     <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
-                    <span id="placeholder_{{ cam.idx }}">Vid\u00e9o masqu\u00e9e</span>
+                    <span id="placeholder_{{ cam.idx }}">Vidéo masquée</span>
                 </div>
-                {# Les contr\u00f4les luminosit\u00e9/exposition sont masqu\u00e9s #}
+                {# Les contrôles luminosité/exposition sont masqués #}
                 <!--
                 <div class="controls">
                     <label>Brightness</label>
@@ -727,15 +727,15 @@
         </div>
     </div>
 
-    <!-- ── Bandeau bas (conserv\u00e9 tel quel) ── -->
+    <!-- ── Bandeau bas (conservé tel quel) ── -->
     <img src="{{ url_for('static', filename='res/bottom1080.png') }}" class="footer-banner" alt="Bandeau bas">
     <div style="position:fixed;left:0;bottom:0;width:100vw;height:48px;display:flex;align-items:center;text-align:left;font-size:0.85em;color:#fff;background:transparent;z-index:101;padding-left:24px;pointer-events:none;font-family:'Inter',Arial,Helvetica,sans-serif;">
         {{ app_name }} v{{ app_version }}
     </div>
 
-    <!-- ── Galerie des derni\u00e8res d\u00e9tections ── -->
+    <!-- ── Galerie des dernières détections ── -->
     <div id="detections-gallery" style="position:fixed;left:0;bottom:56px;width:100vw;z-index:200;display:flex;justify-content:center;gap:8px;background:rgba(8,13,26,0.88);backdrop-filter:blur(4px);border-top:1px solid rgba(30,48,80,0.8);padding:8px 0;">
-        <!-- Les miniatures seront inject\u00e9es ici -->
+        <!-- Les miniatures seront injectées ici -->
     </div>
 
     <!-- ── Modal pour agrandir l'image ── -->
@@ -767,7 +767,7 @@
                         gallery.appendChild(img);
                     });
                 } else {
-                    gallery.innerHTML = '<span style="color:#7d94b5;font-size:0.9em;">Aucune d\u00e9tection r\u00e9cente</span>';
+                    gallery.innerHTML = '<span style="color:#7d94b5;font-size:0.9em;">Aucune détection récente</span>';
                 }
             });
     }
@@ -789,10 +789,10 @@
         if (match) {
             const d = match[1];
             const t = match[2];
-            dateStr = `${d.slice(6,8)}/${d.slice(4,6)}/${d.slice(0,4)} \u00e0 ${t.slice(0,2)}:${t.slice(2,4)}:${t.slice(4,6)}`;
+            dateStr = `${d.slice(6,8)}/${d.slice(4,6)}/${d.slice(0,4)} à ${t.slice(0,2)}:${t.slice(2,4)}:${t.slice(4,6)}`;
         }
-        modalCaption.textContent = dateStr ? `Enregistr\u00e9e le ${dateStr}` : filename;
-        // G\u00e9rer la visibilit\u00e9 des fl\u00e8ches
+        modalCaption.textContent = dateStr ? `Enregistrée le ${dateStr}` : filename;
+        // Gérer la visibilité des flèches
         document.getElementById('modal-prev').style.visibility = (currentDetectionIdx > 0) ? 'visible' : 'hidden';
         document.getElementById('modal-next').style.visibility = (currentDetectionIdx < detectionsList.length-1) ? 'visible' : 'hidden';
     }
@@ -813,7 +813,7 @@
             updateModalDetection();
         }
     };
-    // Rafra\u00eechir la galerie toutes les 10 secondes
+    // Rafraîchir la galerie toutes les 10 secondes
     setInterval(fetchDetectionsGallery, 10000);
     // Premier chargement
     fetchDetectionsGallery();
