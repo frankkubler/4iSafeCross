@@ -135,7 +135,7 @@
             flex: 1 1 380px;
             min-width: 320px;
             max-width: 860px;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, max-width 0.3s ease;
         }
         .cam-card:hover {
             border-color: var(--accent);
@@ -244,8 +244,7 @@
         .cam-video-box {
             width: 100%;
             aspect-ratio: 16/9;
-            max-width: 800px;
-            max-height: 600px;
+            max-width: 100%;
             min-width: 320px;
             min-height: 180px;
             position: relative;
@@ -254,7 +253,7 @@
             justify-content: center;
             background: #050a14;
             margin: 0 auto;
-            transition: width 0.3s, height 0.3s;
+            transition: max-width 0.3s ease;
         }
         .cam-video-box img {
             width: 100%;
@@ -510,20 +509,23 @@
                 });
         }
         function switchResolution(idx) {
-            const box = document.getElementById('cam_box_' + idx);
-            const btn = document.getElementById('btn_res_switch_' + idx);
+            const box  = document.getElementById('cam_box_' + idx);
+            const btn  = document.getElementById('btn_res_switch_' + idx);
+            const card = box.closest('.cam-card');
             if (!box.dataset.res || box.dataset.res === '600') {
-                box.style.maxWidth = '1280px';
-                box.style.maxHeight = '720px';
-                box.dataset.res = '720';
-                btn.textContent = '600p';
-                btn.className = 'btn btn-orange';
+                // Mode 720p : carte pleine largeur, vidéo sans contrainte
+                card.style.maxWidth = '100%';
+                card.style.flex    = '1 1 100%';
+                box.dataset.res    = '720';
+                btn.textContent    = '600p';
+                btn.className      = 'btn btn-orange';
             } else {
-                box.style.maxWidth = '800px';
-                box.style.maxHeight = '600px';
-                box.dataset.res = '600';
-                btn.textContent = '720p';
-                btn.className = 'btn btn-blue';
+                // Mode 600p : dimensions par défaut
+                card.style.maxWidth = '860px';
+                card.style.flex     = '';
+                box.dataset.res     = '600';
+                btn.textContent     = '720p';
+                btn.className       = 'btn btn-blue';
             }
         }
         function onCamImgError(idx) {
