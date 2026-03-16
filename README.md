@@ -47,6 +47,8 @@ Le PC jetson doit être flashé avec la [méthode 1](https://wiki.seeedstudio.co
 
 Le serveur d'inférence doit être installé dans un docker [inf_jetson_rf-detr](https://github.com/4itec-org/inf_jetson_rf-detr)
 
+Le serveur d'inférence doit être installé dans un docker [inf_jetson_yolo] (https://github.com/4itec-org/inf_jetson_yolo)
+
 ### Environnement
 - Python 3.10.12
 - [uv](https://github.com/astral-sh/uv) (gestionnaire de dépendances ultra-rapide)
