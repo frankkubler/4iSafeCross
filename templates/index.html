@@ -8,16 +8,35 @@
     <style>
         /* ── Styles spécifiques à la page Control Center ── */
 
-        /* Bandeau bas image */
-        .footer-banner {
-            width: 100vw;
-            max-width: 100%;
-            display: block;
-            margin: 0 auto;
+        /* Bandeau bas CSS pur (remplace bottom1080.png) */
+        .footer-bar {
             position: fixed;
             left: 0;
             bottom: 0;
-            z-index: 100;
+            width: 100vw;
+            height: 48px;
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 101;
+            font-family: 'Inter', Arial, Helvetica, sans-serif;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            pointer-events: none;
+        }
+        .footer-bar .footer-driven {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .footer-bar .footer-driven .brand-name {
+            color: #e11d48;
+            font-weight: 700;
         }
 
         /* Espace pour le bandeau bas + galerie */
@@ -729,10 +748,10 @@
         </div>
     </div>
 
-    <!-- ── Bandeau bas (conservé tel quel) ── -->
-    <img src="{{ url_for('static', filename='res/bottom1080.png') }}" class="footer-banner" alt="Bandeau bas">
-    <div style="position:fixed;left:0;bottom:0;width:100vw;height:48px;display:flex;align-items:center;text-align:left;font-size:0.85em;color:#fff;background:transparent;z-index:101;padding-left:24px;pointer-events:none;font-family:'Inter',Arial,Helvetica,sans-serif;">
-        {{ app_name }} v{{ app_version }}
+    <!-- ── Bandeau bas CSS pur (remplace bottom1080.png) ── -->
+    <div class="footer-bar">
+        <span>{{ app_name }} v{{ app_version }}</span>
+        <span class="footer-driven">Driven by <span class="brand-name">4itec</span> 4.0</span>
     </div>
 
     <!-- ── Galerie des dernières détections ── -->
