@@ -109,8 +109,11 @@ class AlerteManager:
         if detection.get("label") != "person":
             return False
 
-        pose = detection.get("pose", [])
-        if pose:
+        # pose=None / absent → modèle non disponible ou crop trop petit → fail-safe, laisser passer
+        # pose=[]           → modèle a tourné, 0 personne détectée  → faux positif, rejeter
+        # pose=[[x,y,c]..] → keypoints trouvés                     → compter les visibles
+        pose = detection.get("pose")
+        if pose is not None:
             visible_kp = sum(
                 1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.25
             )
