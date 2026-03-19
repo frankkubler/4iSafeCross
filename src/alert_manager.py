@@ -96,8 +96,8 @@ class AlerteManager:
         Détermine si une détection doit déclencher une alerte.
 
         Filtre anti-faux positifs par keypoints : si le serveur a fourni la pose
-        et qu'aucun keypoint humain n'est visible (conf >= 0.25), la détection est
-        écartée (probable arrière de chariot élévateur).
+        et que moins de 4 keypoints humains ne sont visibles (conf >= 0.40), la
+        détection est écartée (probable arrière de chariot élévateur).
         Si pose est vide (fail-safe / serveur sans modèle pose), l'alerte passe.
 
         Args:
@@ -112,24 +112,32 @@ class AlerteManager:
         # pose=None / absent → modèle non disponible ou crop trop petit → fail-safe, laisser passer
         # pose=[]           → modèle a tourné, 0 personne détectée  → faux positif, rejeter
         # pose=[[x,y,c]..] → keypoints trouvés                     → compter les visibles
+        # Seuils calibrés sur observations réelles :
+        #   conf >= 0.40  : élimine les keypoints "hallusinés" sur structures non humaines
+        #   min 4 kp      : un chariot peut générer 2-3 kp parasites à > 0.40, pas 4+
+        KP_CONF_THRESHOLD = 0.40
+        KP_MIN_VISIBLE = 4
+
         pose = detection.get("pose")
         if pose is not None:
             visible_kp = sum(
-                1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.25
+                1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD
             )
-            if visible_kp < 1:
+            if visible_kp < KP_MIN_VISIBLE:
                 self.logger.debug(
-                    "Faux positif écarté — 0 keypoint humain visible"
-                    " (probable chariot élévateur)"
+                    f"Faux positif écarté — seulement {visible_kp} keypoint(s) humain(s)"
+                    f" visible(s) (seuil : {KP_MIN_VISIBLE}, conf >= {KP_CONF_THRESHOLD})"
+                    " — probable chariot élévateur"
                 )
                 return False
 
         if not detection.get("zones"):
             return False
 
+        visible_kp_log = sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD) if pose else 'N/A'
         self.logger.info(
             f"Alerte déclenchée — zones {detection['zones']}"
-            f" (keypoints visibles : {sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.25) if pose else 'N/A'})"
+            f" (keypoints visibles : {visible_kp_log})"
         )
         return True
 
