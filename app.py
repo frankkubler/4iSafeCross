@@ -355,15 +355,18 @@ def detection_callback_factory(cid, main_loop=None):
                 if zone_name not in previous_detection:
                     previous_detection[zone_name] = False
             # Marquer les zones détectées dans cette frame
-            zones_detected = set()  # uniquement les personnes (pour le tracking previous_detection)
+            zones_detected = set()  # uniquement les personnes valides (pour le tracking previous_detection)
             for det in detections:
                 zone_names = get_zone_for_detection(det, zones)
-                if det.get("label") == "person":  # Ne tracker que les personnes pour déclencher/effacer les alertes
-                    for zn in zone_names:
-                        zones_detected.add(zn)
                 det_with_zone = det.copy()  # Copie le dictionnaire
                 det_with_zone["zones"] = zone_names  # Ajoute les zones
                 detections_with_zone.append(det_with_zone)
+                # Ne compter la zone comme "détectée" que pour les personnes passant le filtre keypoints
+                # (même critère que pour déclencher l'alerte) — évite qu'un chariot à fourche
+                # détecté comme "person" avec peu de keypoints bloque l'extinction de l'alerte
+                if det.get("label") == "person" and alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                    for zn in zone_names:
+                        zones_detected.add(zn)
             shared_detections[cid] = detections_with_zone
 
         with shared_motion_roi_lock:
