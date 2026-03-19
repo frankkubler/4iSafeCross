@@ -124,12 +124,24 @@ class AlerteManager:
                 1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD
             )
             if visible_kp < KP_MIN_VISIBLE:
-                self.logger.debug(
-                    f"Faux positif écarté — seulement {visible_kp} keypoint(s) humain(s)"
-                    f" visible(s) (seuil : {KP_MIN_VISIBLE}, conf >= {KP_CONF_THRESHOLD})"
-                    " — probable chariot élévateur"
+                # Si l'une des zones de la détection désactive le filtre keypoints, laisser passer
+                detection_zones = detection.get("zones", [])
+                skip = any(
+                    self._zones_flat.get(zn, {}).get("skip_keypoint_filter", False)
+                    for zn in detection_zones
                 )
-                return False
+                if skip:
+                    self.logger.info(
+                        f"Filtre keypoints bypassé (skip_keypoint_filter=True) pour zone(s) {detection_zones}"
+                        f" — {visible_kp} keypoint(s) visible(s), seuil non appliqué"
+                    )
+                else:
+                    self.logger.debug(
+                        f"Faux positif écarté — seulement {visible_kp} keypoint(s) humain(s)"
+                        f" visible(s) (seuil : {KP_MIN_VISIBLE}, conf >= {KP_CONF_THRESHOLD})"
+                        " — probable chariot élévateur"
+                    )
+                    return False
 
         if not detection.get("zones"):
             return False

@@ -247,6 +247,40 @@ body {
     color: var(--accent);
 }
 
+/* Option "Piétons certains" — skip keypoint filter */
+.zone-skip-kp {
+    padding-left: 4px;
+    margin-top: 4px;
+}
+
+.skip-kp-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: #c8e6a0;
+    cursor: pointer;
+    user-select: none;
+    background: rgba(144, 238, 100, 0.08);
+    border: 1px solid rgba(144, 238, 100, 0.25);
+    border-radius: 4px;
+    padding: 3px 7px;
+    transition: background 0.2s;
+}
+
+.skip-kp-label:hover {
+    background: rgba(144, 238, 100, 0.16);
+}
+
+.skip-kp-label input[type="checkbox"] {
+    accent-color: #90ee64;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    margin: 0;
+    flex-shrink: 0;
+}
+
 /* Instructions */
 .instructions {
     background: var(--bg-base);

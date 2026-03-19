@@ -219,6 +219,7 @@
                         polygon: canvasPolygon,
                         color: color,
                         relays: zone.relays || [],
+                        skip_keypoint_filter: zone.skip_keypoint_filter || false,
                         fabricObj: fabricObj,
                     });
                 });
@@ -718,6 +719,7 @@
             polygon: canvasPolygon,
             color: color,
             relays: [],
+            skip_keypoint_filter: false,
             fabricObj: fabricObj,
         });
 
@@ -1121,6 +1123,13 @@
                     }
                     relayCheckboxes = `<div class="zone-relays" onclick="event.stopPropagation()"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
                 }
+                const skipChecked = zone.skip_keypoint_filter ? 'checked' : '';
+                const skipCheckbox = `<div class="zone-skip-kp" onclick="event.stopPropagation()">
+                    <label class="skip-kp-label" title="Désactive le filtre anti-chariot sur cette zone. À utiliser uniquement si vous êtes sûr que seuls des piétons y passent.">
+                        <input type="checkbox" ${skipChecked} onchange="zoneEditor.toggleSkipKeypointFilter(${i})">
+                        <span>🚶 Piétons certains (ignorer filtre pose)</span>
+                    </label>
+                </div>`;
                 html += `
                     <div class="zone-item${selected}" data-idx="${i}" onclick="zoneEditor.selectZone(${i})">
                         <div class="zone-item-header">
@@ -1130,6 +1139,7 @@
                             <button class="zone-item-delete" onclick="event.stopPropagation();zoneEditor.deleteZone(${i})" title="Supprimer">✕</button>
                         </div>
                         ${relayCheckboxes}
+                        ${skipCheckbox}
                     </div>
                 `;
             });
@@ -1192,6 +1202,7 @@
             ]),
             color: zone.color,
             relays: zone.relays || [],
+            skip_keypoint_filter: zone.skip_keypoint_filter || false,
         }));
 
         const masksData = completedMasks.map((mask) => ({
@@ -1291,6 +1302,7 @@
             polygon: z.polygon.map((pt) => [...pt]),
             color: [...z.color],
             relays: [...(z.relays || [])],
+            skip_keypoint_filter: z.skip_keypoint_filter || false,
         }));
         const savedMasks = completedMasks.map((m) => ({
             name: m.name,
@@ -1328,6 +1340,7 @@
                     polygon: z.polygon,
                     color: z.color,
                     relays: z.relays || [],
+                    skip_keypoint_filter: z.skip_keypoint_filter || false,
                     fabricObj: fabricObj,
                 });
             });
@@ -1389,6 +1402,16 @@
     }
 
     /**
+     * Bascule le flag skip_keypoint_filter pour une zone.
+     */
+    function toggleSkipKeypointFilter(zoneIdx) {
+        const zone = completedZones[zoneIdx];
+        if (!zone) return;
+        zone.skip_keypoint_filter = !zone.skip_keypoint_filter;
+        updateZoneList();
+    }
+
+    /**
      * Bascule l'activation d'un relais pour une zone.
      */
     function toggleRelay(zoneIdx, relayNum) {
@@ -1410,6 +1433,7 @@
         selectZone: selectZone,
         deleteZone: deleteZone,
         toggleRelay: toggleRelay,
+        toggleSkipKeypointFilter: toggleSkipKeypointFilter,
         selectMask: selectMask,
         deleteMask: deleteMask,
     };

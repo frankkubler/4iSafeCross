@@ -27,6 +27,8 @@ def load_zones_by_camera_from_ini(ini_path):
             zone["color"] = tuple(map(int, config[section]["color"].split(',')))
         relays_str = config[section].get("relays", "").strip()
         zone["relays"] = [int(r.strip()) for r in relays_str.split(',') if r.strip().isdigit()]
+        skip_str = config[section].get("skip_keypoint_filter", "false").strip().lower()
+        zone["skip_keypoint_filter"] = skip_str in ("true", "1", "yes")
         if "_cam" in section:
             try:
                 cam_id = int(section.split("_cam")[-1])

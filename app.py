@@ -1120,6 +1120,7 @@ def get_zones(cid):
             'polygon': [list(pt) for pt in zone['polygon']],
             'color': list(zone.get('color', (255, 0, 0))),
             'relays': zone.get('relays', []),
+            'skip_keypoint_filter': zone.get('skip_keypoint_filter', False),
         })
     return jsonify(result)
 
