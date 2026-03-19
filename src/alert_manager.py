@@ -93,48 +93,42 @@ class AlerteManager:
 
     def should_trigger_alert_for_detection(self, detection):
         """
-        Détermine si une détection doit déclencher une alerte selon les règles de stature par zone.
-        
-        Règles :
-        - Zones 1 et 3 : Seulement si stature est "debout" ou "marchant"
-        - Zones 2, 4 et 5 : Toutes les personnes (class_id == 1)
-        
+        Détermine si une détection doit déclencher une alerte.
+
+        Filtre anti-faux positifs par keypoints : si le serveur a fourni la pose
+        et qu'aucun keypoint humain n'est visible (conf >= 0.25), la détection est
+        écartée (probable arrière de chariot élévateur).
+        Si pose est vide (fail-safe / serveur sans modèle pose), l'alerte passe.
+
         Args:
-            detection (dict): Dictionnaire de détection contenant zones, stature, class_id, etc.
-            
+            detection (dict): Dictionnaire de détection (label, pose, zones, …).
+
         Returns:
-            bool: True si l'alerte doit être déclenchée, False sinon
+            bool: True si l'alerte doit être déclenchée, False sinon.
         """
-        # Vérifier que c'est bien une personne
         if detection.get("label") != "person":
             return False
-            
-        zone_names = detection.get("zones", [])
-        if not zone_names:
+
+        pose = detection.get("pose", [])
+        if pose:
+            visible_kp = sum(
+                1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.25
+            )
+            if visible_kp < 1:
+                self.logger.debug(
+                    "Faux positif écarté — 0 keypoint humain visible"
+                    " (probable chariot élévateur)"
+                )
+                return False
+
+        if not detection.get("zones"):
             return False
-            
-        # Extraire la stature (peut être un tuple (stature, debug_info))
-        stature = detection.get("stature")
-        if isinstance(stature, tuple) and len(stature) > 0:
-            stature = stature[0]
-        if not isinstance(stature, str):
-            stature = "inconnu"
-            
-        # Appliquer les règles par zone
-        for zone_name in zone_names:
-            if "zone1" in zone_name or "zone2" in zone_name or "zone3" in zone_name:
-                # Zones 1 et 2 : seulement debout ou marchant
-                if stature in ["debout", "marchant"]:
-                    self.logger.info(f"Alerte déclenchée pour zone {zone_name} avec stature '{stature}'")
-                    return True
-                else:
-                    self.logger.debug(f"Alerte ignorée pour zone {zone_name} avec stature '{stature}' (non autorisée)")
-            elif "zone4" in zone_name or "zone5" in zone_name:
-                # Zones 3, 4 et 5 : toutes les personnes
-                self.logger.info(f"Alerte déclenchée pour zone {zone_name} (toute personne autorisée)")
-                return True
-                
-        return False
+
+        self.logger.info(
+            f"Alerte déclenchée — zones {detection['zones']}"
+            f" (keypoints visibles : {sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.25) if pose else 'N/A'})"
+        )
+        return True
 
     async def on_detection(self, timestamp: float, frame=None, detections=None, cid=None):
         """

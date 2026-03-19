@@ -432,9 +432,9 @@ def detection_callback_factory(cid, main_loop=None):
                 det_with_zone = det.copy()  # Copie le dictionnaire
                 det_with_zone["zones"] = zone_names  # Ajoute les zones
                 
-                # Vérifier si cette détection doit déclencher une alerte selon les règles de stature/zone
-                # if alert_manager.should_trigger_alert_for_detection(det_with_zone):
-                detections_person_with_zone.append(det_with_zone)
+                # Vérifier si cette détection doit déclencher une alerte (filtre keypoints)
+                if alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                    detections_person_with_zone.append(det_with_zone)
             
             # Déclencher l'alerte seulement si il y a des détections valides après filtrage
             if len(detections_person_with_zone) > 0:
@@ -466,17 +466,8 @@ def get_frame_func_factory(cid):
         return manager.get_frame_array(cam_id)
     return get_frame
 
-
 app = Flask(__name__)
 
-# Liste des IDs caméras (0 et 1 pour deux webcams locales)
-# CAM_IDS = [0,
-#            "rtsp://192.168.1.160:8554/1080p?mp4"]
-# CAM_IDS = [#"https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1747948294/ei/pj4vaKWjCIG26dsPgZWMmQY/ip/2a01:e0a:98b:f390:d9e5:921:b8ec:2037/id/DLmn7f9SJ5A.1/itag/231/source/yt_live_broadcast/requiressl/yes/ratebypass/yes/live/1/sgovp/gir%3Dyes%3Bitag%3D135/rqh/1/hls_chunk_host/rr2---sn-f5f7lnld.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/playlist_duration/3600/manifest_duration/3600/bui/AecWEAYdo8jXUuiyYqwt9J7AuirB1kCVOuO6QiLXSKqD2dUz0FiVDAjZe_mDnJ92gesE_6JdYJIby9fp/spc/wk1kZpBdDiWh6r8S_J9vSTgJvnlqSuTWBQBgbDZOUyFHpGLbYyZC_LgliKtiaA/vprv/1/playlist_type/DVR/initcwndbps/2483750/met/1747926694,/mh/xY/mm/44/mn/sn-f5f7lnld/ms/lva/mv/m/mvi/2/pl/49/rms/lva,lva/dover/13/pacing/0/short_key/1/keepalive/yes/fexp/51466697/mt/1747926298/sparams/expire,ei,ip,id,itag,source,requiressl,ratebypass,live,sgovp,rqh,xpc,playlist_duration,manifest_duration,bui,spc,vprv,playlist_type/sig/AJfQdSswRQIgJUaw2bG2iWHQWe-HG71kb45QCqu5_6pBNWx72GgdImcCIQCACtsj3VrFouAQ4tG91btKkXP8eImokT9Yv-v5tHl1sg%3D%3D/lsparams/hls_chunk_host,initcwndbps,met,mh,mm,mn,ms,mv,mvi,pl,rms/lsig/ACuhMU0wRQIgOFZwgnNWyUvLT6-Uw7TArbPxuHWy5dtpn7uRaPsAkTsCIQCdd3pF_vY6gGQLhxIRb6oHgu_bKUAandUgJw_VZtzpxw%3D%3D/playlist/index.m3u8",
-#            #"https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1747948055/ei/tz0vaPm8HfPbp-oP7_rswQs/ip/2a01:e0a:98b:f390:d9e5:921:b8ec:2037/id/BxEmGNapmr4.1/itag/231/source/yt_live_broadcast/requiressl/yes/ratebypass/yes/live/1/sgovp/gir%3Dyes%3Bitag%3D135/rqh/1/hls_chunk_host/rr2---sn-f5f7lnl6.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/playlist_duration/3600/manifest_duration/3600/bui/AecWEAafHep9GERMJIvmdQEwNjbmPnxTllh1pgqqpD2_1w9L3vV7dl90wpjaB8eALAIbm7lXcj3TFsvs/spc/wk1kZsQEz-ZNU2FZZ7ys1TLImdDz96IC2NRXniNgdLmW-GdfEpE/vprv/1/playlist_type/DVR/initcwndbps/3122500/met/1747926455,/mh/_P/mm/44/mn/sn-f5f7lnl6/ms/lva/mv/m/mvi/2/pl/49/rms/lva,lva/dover/13/pacing/0/short_key/1/keepalive/yes/mt/1747926055/sparams/expire,ei,ip,id,itag,source,requiressl,ratebypass,live,sgovp,rqh,xpc,playlist_duration,manifest_duration,bui,spc,vprv,playlist_type/sig/AJfQdSswRQIge0HPNKKJhbewq55w1L9-2OEiQAFyTzH2vkYuqOiUuM4CIQCnQOJsBKH8twFrhGYVC-qerXrhSxgmra_XeH7rf0LSZA%3D%3D/lsparams/hls_chunk_host,initcwndbps,met,mh,mm,mn,ms,mv,mvi,pl,rms/lsig/ACuhMU0wRQIhANHYSy6fOYvTu0b-pVYCZlasl8ZC9Qt2_ICyr1wXi38oAiBEezZzs68ovRMGs722JIUQU5REHBpr7jdc8VZ0sG5sYg%3D%3D/playlist/index.m3u8"
-#            #"rtsp://kubikub:Gvgywse1@192.168.1.16/ch0_0.h264",
-#            #"rtsp://192.168.1.160:8554/1080p?mp4",
-#            0]
 CAM_IDS = []
 for host in RTSP_HOST:
     CAM_IDS.append(f"rtsp://{RTSP_LOGIN}:{RTSP_PASSWORD}@{host}:{RTSP_PORT}/{RTSP_STREAM}")
