@@ -61,22 +61,31 @@ légitimes. La valeur 0.05 + `iou=0.3` donne le meilleur rappel sur ce cas d'usa
 |---|---|---|
 | absent / `None` | Crop trop petit ou serveur sans modèle pose | **Laisser passer** (fail-safe) |
 | `[]` | Modèle a tourné, 0 personne détectée | **Bloquer** (faux positif) |
-| `[[x,y,c], ...]` | Keypoints trouvés | Compter les visibles (`conf ≥ 0.25`), bloquer si `< 1` |
+| `[[x,y,c], ...]` | Keypoints trouvés | Compter les visibles (`conf ≥ 0.40`), bloquer si `< 4` |
 
 ```python
+KP_CONF_THRESHOLD = 0.40
+KP_MIN_VISIBLE = 4
+
 pose = detection.get("pose")          # None si absent (pas get("pose", []))
 if pose is not None:
-    visible_kp = sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.25)
-    if visible_kp < 1:
-        self.logger.debug("Faux positif écarté — 0 keypoint humain visible")
+    visible_kp = sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD)
+    if visible_kp < KP_MIN_VISIBLE:
+        self.logger.debug(f"Faux positif écarté — {visible_kp} kp visible(s), seuil = {KP_MIN_VISIBLE}")
         return False
 if not detection.get("zones"):
     return False
 return True
 ```
 
-**Seuil de visibilité** : `conf ≥ 0.25` par keypoint, minimum 1 keypoint visible
-pour valider la détection comme humaine.
+**Seuils calibrés (v2) :**
+- `conf ≥ 0.40` : élimine les keypoints “hallucinés” sur des structures non humaines
+- Minimum **4 keypoints** visibles : un chariot peut générer 2-3 kp parasites à conf > 0.40, pas 4+
+
+**Pourquoi augmenter depuis 0.25 / min 1 ?** Cas réel observé (2026-03-19 15:52) :
+un chariot élévateur détecté comme `person` (face latérale rouge) générait
+6 keypoints visibles à conf ≥ 0.25 (kp5,6,8,11,12,14), dont seulement 3 à conf ≥ 0.40.
+Avec les nouveaux seuils : 3 < 4 → **bloqué** ✓
 
 ---
 
