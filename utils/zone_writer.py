@@ -68,6 +68,8 @@ def save_zones_to_ini(ini_path, cam_id, zones):
         ]
         if relays:
             entries.append(("relays", ",".join(str(r) for r in relays)))
+        if zone.get("skip_keypoint_filter"):
+            entries.append(("skip_keypoint_filter", "true"))
 
         section = {
             "header": name,
