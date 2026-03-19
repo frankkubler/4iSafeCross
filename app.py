@@ -422,40 +422,41 @@ def detection_callback_factory(cid, main_loop=None):
                     loop
                 )
 
-            # Filtrer pour l'alerte uniquement label == "person" (personne_type/posture non utilisé)
-            detections_person = [det for det in detections if det.get("label") == "person"]
-            
-            # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
-            detections_person_with_zone = []
-            for det in detections_person:
-                zone_names = get_zone_for_detection(det, zones)
-                det_with_zone = det.copy()  # Copie le dictionnaire
-                det_with_zone["zones"] = zone_names  # Ajoute les zones
-                
-                # Vérifier si cette détection doit déclencher une alerte (filtre keypoints)
-                if alert_manager.should_trigger_alert_for_detection(det_with_zone):
-                    detections_person_with_zone.append(det_with_zone)
-            
-            # Déclencher l'alerte seulement si il y a des détections valides après filtrage
-            if len(detections_person_with_zone) > 0:
-                current_day = now.strftime('%Y-%m-%d %H:%M:%S')
-                frame = manager.get_frame_array(CAM_IDS[cid])
-                # Appliquer les masques sur la frame d'alerte (sauvegarde/Telegram)
-                # pour ne pas exposer les zones masquées dans les captures
-                if frame is not None:
-                    cam_masks = masks_by_camera.get(cid, [])
-                    if cam_masks:
-                        frame = frame.copy()
-                        for _m in cam_masks:
-                            _poly = _m.get('polygon')
-                            if _poly and len(_poly) >= 3:
-                                _pts = np.array(_poly, dtype=np.int32)
-                                cv2.fillPoly(frame, [_pts], (0, 0, 0))
-                logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
-                asyncio.run_coroutine_threadsafe(
-                    alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
-                    loop
-                )
+        # Filtrer pour l'alerte uniquement label == "person" (personne_type/posture non utilisé)
+        # Ce bloc est HORS de la boucle zones pour n'appeler on_detection qu'une seule fois par frame
+        detections_person = [det for det in detections if det.get("label") == "person"]
+
+        # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
+        detections_person_with_zone = []
+        for det in detections_person:
+            zone_names = get_zone_for_detection(det, zones)
+            det_with_zone = det.copy()  # Copie le dictionnaire
+            det_with_zone["zones"] = zone_names  # Ajoute les zones
+
+            # Vérifier si cette détection doit déclencher une alerte (filtre keypoints)
+            if alert_manager.should_trigger_alert_for_detection(det_with_zone):
+                detections_person_with_zone.append(det_with_zone)
+
+        # Déclencher l'alerte seulement si il y a des détections valides après filtrage
+        if len(detections_person_with_zone) > 0:
+            current_day = now.strftime('%Y-%m-%d %H:%M:%S')
+            frame = manager.get_frame_array(CAM_IDS[cid])
+            # Appliquer les masques sur la frame d'alerte (sauvegarde/Telegram)
+            # pour ne pas exposer les zones masquées dans les captures
+            if frame is not None:
+                cam_masks = masks_by_camera.get(cid, [])
+                if cam_masks:
+                    frame = frame.copy()
+                    for _m in cam_masks:
+                        _poly = _m.get('polygon')
+                        if _poly and len(_poly) >= 3:
+                            _pts = np.array(_poly, dtype=np.int32)
+                            cv2.fillPoly(frame, [_pts], (0, 0, 0))
+            logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
+            asyncio.run_coroutine_threadsafe(
+                alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
+                loop
+            )
     return detection_callback
 
 
