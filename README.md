@@ -84,9 +84,10 @@ CameraManager  ──── frame brute (1080p)
      │   │     kp < 4      → rejet (conf < 0.40)             │
      │   │     kp ≥ 4      → OK                              │
      │   │                                                    │
-     │   │  2. Debounce temporel                             │
+     │   │  2. Debounce temporel (configurable par zone)    │
      │   │     N frames consécutives (défaut N=2)            │
-     │   │     1 frame isolée → ignorée                      │
+     │   │     délai de reset (défaut 0.8 s)                 │
+     │   │     → configurable dans zones.ini par zone        │
      │   │                                                    │
      │   │  3. Label driver                                  │
      │   │     label='driver' → jamais d'alerte              │
@@ -142,14 +143,28 @@ Lorsque ce paramètre est `true`, les rejets sur `pose=[]` ou `kp < 4` sont igno
 
 > **Note diagnostic** : lorsque le filtre est bypassé, un message `Filtre keypoints bypassé zones=[…]` apparaît au niveau INFO dans les logs. Un message `Faux positif écarté — pose=[] zones=[] skip_flags=[…]` indique qu'une détection a été rejetée, avec le contexte complet des zones et de leur configuration.
 
-#### 2. Debounce temporel (N frames consécutives)
+#### 2. Debounce temporel (configurable par zone)
 
-Configuré dans `app.py` via deux constantes :
+Le debounce est configurable globalement (dans `app.py`) **et par zone** (dans `config/zones.ini`) :
 
-| Constante | Valeur par défaut | Rôle |
+| Paramètre | Valeur globale | Rôle |
 |---|---|---|
-| `PERSON_DEBOUNCE_FRAMES` | `2` | Nombre de frames valides consécutives requises avant de déclencher l'alerte |
-| `PERSON_RESET_SECONDS` | `0.8 s` | Délai après lequel le compteur se réinitialise en l'absence de détection |
+| `PERSON_DEBOUNCE_FRAMES` / `debounce_frames` | `2` | Nombre de frames valides consécutives requises avant de déclencher l'alerte |
+| `PERSON_RESET_SECONDS` / `debounce_reset_seconds` | `0.8 s` | Délai après lequel le compteur se réinitialise en l'absence de détection |
+
+Si une zone définit ses propres valeurs dans `zones.ini`, elles priment sur les constantes globales. Une valeur absente ou vide utilise la valeur globale.
+
+**Configuration dans zones.ini :**
+
+```ini
+[zone1_cam0]
+polygon = …
+relays = 1
+debounce_frames = 5       # Optionnel — 5 frames requises avant alerte (défaut : 2)
+debounce_reset_seconds = 2.0  # Optionnel — 2 s sans détection pour reset (défaut : 0.8)
+```
+
+Ces valeurs sont également éditables directement dans l'**éditeur graphique** (`/zone_editor/<cam_id>`) via deux champs numériques par zone dans le panneau latéral.
 
 Une détection isolée sur une seule frame est ignorée. L'alerte ne se déclenche que si la même zone contient une personne valide sur **N frames successives**.
 
@@ -409,6 +424,15 @@ L'interface `/zone_editor/<cam_id>` permet de dessiner et modifier les zones et 
 | `Échap` | Terminer l'édition des sommets |
 | `Delete` | Supprimer le polygone sélectionné (désactivé pendant l'édition des sommets) |
 
+**Options par zone dans le panneau latéral :**
+
+| Champ | Description |
+|---|---|
+| Cases à cocher *Relais* | Active/désactive les relais associés à la zone |
+| Case à cocher *🚶 Piétons certains* | Bypass du filtre keypoints de pose (`skip_keypoint_filter`) |
+| Champ *Débounce frames* | Nombre de frames positives avant alerte (vide = valeur globale `2`) |
+| Champ *Reset (s)* | Délai de remise à zéro du compteur (vide = valeur globale `0.8`) |
+
 **Boutons :**
 
 | Bouton | Résultat |
@@ -432,11 +456,14 @@ Les zones de détection sont stockées dans [`config/zones.ini`](config/zones.in
 rect = x1,y1,x2,y2
 color = 255,0,255
 relays = 0,1
+debounce_frames = 3
+debounce_reset_seconds = 1.5
 
 [zone2_cam0]
 polygon = (x1,y1)(x2,y2)(x3,y3)...
 color = 0,255,255
 skip_keypoint_filter = true
+# debounce_frames et debounce_reset_seconds absents → valeurs globales (2 et 0.8)
 ```
 
 #### Paramètres disponibles par zone
@@ -448,6 +475,8 @@ skip_keypoint_filter = true
 | `color` | `R,G,B` | Couleur d'affichage de la zone dans l'interface web |
 | `relays` | `0,1,2,…` | Indices des relais activés lors d'une détection dans cette zone |
 | `skip_keypoint_filter` | `true` / `false` (défaut) | Bypass du filtre keypoints de pose pour cette zone (voir §Filtres anti-faux-positifs) |
+| `debounce_frames` | entier ≥ 1 (défaut : `2`) | Frames valides consécutives requises avant de déclencher l'alerte — surcharge la constante globale |
+| `debounce_reset_seconds` | décimal ≥ 0.1 (défaut : `0.8`) | Délai (en secondes) sans détection avant remise à zéro du compteur — surcharge la constante globale |
 
 #### Exemple de schéma de zones
 
