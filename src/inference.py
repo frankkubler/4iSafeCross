@@ -9,7 +9,8 @@ from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
                              DETECTION, POSE_ENABLED,
                              URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
-                             EXTENDED_CLASSES, TRANSFERT_CLASSES, SIMPLE_CLASSES)
+                             EXTENDED_CLASSES, TRANSFERT_CLASSES, SIMPLE_CLASSES,
+                             FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS)
 
 from src.motion import MotionDetector
 from src.pose_analyser import PoseAnalyzer
@@ -55,11 +56,11 @@ class InferenceServerThread(threading.Thread):
             image_height=1080
         )
         self.motion_detector = MotionDetector()
-        # Initialisation des paramètres
+        # Initialisation des paramètres depuis config.ini
         self.motion_detector.update_fgbg_params(
-            varThreshold=getattr(self.motion_detector, 'varThreshold', 7),
-            history=getattr(self.motion_detector, 'history', 250),
-            detectShadows=getattr(self.motion_detector, 'detectShadows', False)
+            varThreshold=FGBG_VAR_THRESHOLD,
+            history=FGBG_HISTORY,
+            detectShadows=FGBG_DETECT_SHADOWS
         )
         
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
