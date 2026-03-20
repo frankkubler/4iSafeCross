@@ -29,6 +29,13 @@ def load_zones_by_camera_from_ini(ini_path):
         zone["relays"] = [int(r.strip()) for r in relays_str.split(',') if r.strip().isdigit()]
         skip_str = config[section].get("skip_keypoint_filter", "false").strip().lower()
         zone["skip_keypoint_filter"] = skip_str in ("true", "1", "yes")
+        debounce_frames_str = config[section].get("debounce_frames", "").strip()
+        zone["debounce_frames"] = int(debounce_frames_str) if debounce_frames_str.isdigit() else None
+        debounce_reset_str = config[section].get("debounce_reset_seconds", "").strip()
+        try:
+            zone["debounce_reset_seconds"] = float(debounce_reset_str) if debounce_reset_str else None
+        except ValueError:
+            zone["debounce_reset_seconds"] = None
         if "_cam" in section:
             try:
                 cam_id = int(section.split("_cam")[-1])

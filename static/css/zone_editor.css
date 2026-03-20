@@ -281,6 +281,47 @@ body {
     flex-shrink: 0;
 }
 
+/* Débounce par zone */
+.zone-debounce {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-left: 4px;
+    margin-top: 4px;
+}
+
+.zone-debounce-label {
+    font-size: 0.72rem;
+    color: #a0c4e0;
+    white-space: nowrap;
+}
+
+.debounce-input {
+    width: 52px;
+    padding: 2px 5px;
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(160, 196, 224, 0.35);
+    border-radius: 4px;
+    color: #e0f0ff;
+    text-align: center;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.debounce-input::-webkit-outer-spin-button,
+.debounce-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.debounce-input:focus {
+    outline: none;
+    border-color: #a0c4e0;
+    background: rgba(255, 255, 255, 0.14);
+}
+
 /* Instructions */
 .instructions {
     background: var(--bg-base);
