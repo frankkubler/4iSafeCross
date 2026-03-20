@@ -330,6 +330,10 @@ def get_zone_for_detection(det, zones):
 def detection_callback_factory(cid, main_loop=None):
     # previous_detection devient un dict par zone
     previous_detection = {}
+    # Debounce temporel : nombre de frames consécutives avec personne détectée avant déclenchement.
+    # Évite les fausses alertes sur 1 frame isolée (ex: chariot entrant brièvement classifié 'person').
+    person_consecutive_frames = {}  # {zone_name: int}
+    PERSON_DEBOUNCE_FRAMES = 2
 
     def detection_callback(detection_result):
         nonlocal previous_detection
@@ -368,6 +372,20 @@ def detection_callback_factory(cid, main_loop=None):
                     for zn in zone_names:
                         zones_detected.add(zn)
             shared_detections[cid] = detections_with_zone
+
+            # Debounce : mise à jour des compteurs consécutifs par zone
+            for zone_name in zone_names_list:
+                if zone_name not in person_consecutive_frames:
+                    person_consecutive_frames[zone_name] = 0
+                if zone_name in zones_detected:
+                    person_consecutive_frames[zone_name] += 1
+                else:
+                    person_consecutive_frames[zone_name] = 0
+            # Zones ayant confirmé la présence sur N frames consécutives
+            debounced_zones = {
+                zn for zn in zone_names_list
+                if person_consecutive_frames.get(zn, 0) >= PERSON_DEBOUNCE_FRAMES
+            }
 
         with shared_motion_roi_lock:
             # Si la méthode motion.py retourne le tuple étendu (x_pad, y_pad, w_pad, h_pad, x, y, w, h)
@@ -409,13 +427,12 @@ def detection_callback_factory(cid, main_loop=None):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
-        # Pour chaque zone, gérer l'état previous_detection
+        # Pour chaque zone, gérer l'état previous_detection (basé sur les zones debouncées)
         for zone_name in zone_names_list:
-            detected = zone_name in zones_detected
+            detected = zone_name in debounced_zones
             if detected and not previous_detection[zone_name]:
-                # Début d'une détection dans cette zone
+                # Début d'une détection confirmée (N frames consécutives) dans cette zone
                 previous_detection[zone_name] = True
-                # On peut logger ou déclencher une action spécifique à la zone ici si besoin
             elif not detected and previous_detection[zone_name]:
                 # Fin de détection dans cette zone
                 previous_detection[zone_name] = False
@@ -434,7 +451,8 @@ def detection_callback_factory(cid, main_loop=None):
         for det in detections_person:
             zone_names = get_zone_for_detection(det, zones)
             det_with_zone = det.copy()  # Copie le dictionnaire
-            det_with_zone["zones"] = zone_names  # Ajoute les zones
+            # N'inclure que les zones confirmées par le debounce temporel
+            det_with_zone["zones"] = [zn for zn in zone_names if zn in debounced_zones]
 
             # Vérifier si cette détection doit déclencher une alerte (filtre keypoints)
             if alert_manager.should_trigger_alert_for_detection(det_with_zone):
