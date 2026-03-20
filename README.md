@@ -129,9 +129,31 @@ pose absent/None   → fail-safe, alerte autorisée
 
 **Justification du seuil 4 kp / 0.40** : un chariot élévateur peut générer 2 à 3 keypoints parasites à confiance > 0.40 par réflexion sur les barres métalliques. Un vrai corps humain en génère toujours plus de 4.
 
+##### Bypass du filtre keypoints : `skip_keypoint_filter`
+
+Certaines zones peuvent requérir une détection même lorsque le modèle de pose ne voit pas de corps complet (personne partiellement hors-champ, occlusion, vitesse de traversée élevée). Dans ce cas, activez `skip_keypoint_filter` **par zone** dans `config/zones.ini` :
+
+```ini
+[zone1_cam0]
+skip_keypoint_filter = true
+```
+
+Lorsque ce paramètre est `true`, les rejets sur `pose=[]` ou `kp < 4` sont ignorés pour cette zone spécifique. Les autres filtres (debounce, label `driver`) restent actifs.
+
+> **Note diagnostic** : lorsque le filtre est bypassé, un message `Filtre keypoints bypassé zones=[…]` apparaît au niveau INFO dans les logs. Un message `Faux positif écarté — pose=[] zones=[] skip_flags=[…]` indique qu'une détection a été rejetée, avec le contexte complet des zones et de leur configuration.
+
 #### 2. Debounce temporel (N frames consécutives)
 
-Configuré via `PERSON_DEBOUNCE_FRAMES = 2` dans `app.py`. Une détection isolée sur une seule frame est ignorée. L'alerte ne se déclenche que si la même zone contient une personne valide sur **N frames successives**.
+Configuré dans `app.py` via deux constantes :
+
+| Constante | Valeur par défaut | Rôle |
+|---|---|---|
+| `PERSON_DEBOUNCE_FRAMES` | `2` | Nombre de frames valides consécutives requises avant de déclencher l'alerte |
+| `PERSON_RESET_SECONDS` | `0.8 s` | Délai après lequel le compteur se réinitialise en l'absence de détection |
+
+Une détection isolée sur une seule frame est ignorée. L'alerte ne se déclenche que si la même zone contient une personne valide sur **N frames successives**.
+
+**Pourquoi un reset temporel et non par frame ?** MOG2 peut émettre des callbacks vides (`[]`) à 50 ms d'intervalle entre deux inférences réelles distantes de 300–500 ms. Sans reset temporel, ces callbacks vides réinitialisent le compteur à chaque fois, empêchant le debounce de dépasser 1 même lors d'une présence continue. La fenêtre de 0.8 s absorbe jusqu'à ~16 callbacks vides sans pénaliser la réactivité.
 
 Ce filtre protège contre les fausses détections transitoires lors de l'entrée d'un chariot dans le champ (la silhouette du conducteur peut être brièvement classifiée `person` avant que le modèle identifie `driver`).
 
@@ -150,6 +172,18 @@ Le système est conçu pour **alerter en cas de doute** plutôt que de rater une
 | Alerte déclenchée | Timer minimum : relais reste ON au moins **11 s** même si la personne quitte la zone |
 | `pose=None` (timeout serveur pose) | Fail-safe : alerte autorisée sans vérification keypoints |
 
+### Câblage des relais Yoctopuce (NC vs NO)
+
+Le module Yocto-MaxRelay expose pour chaque canal deux modes de fermeture de contact :
+
+| État logiciel | Bobine | Contact NO | Contact NC |
+|---|---|---|---|
+| `STATE_B` (`action_on`) | Excitée | Fermé | Ouvert |
+| `STATE_A` (`action_off`) | Désexcitée | Ouvert | **Fermé** |
+
+Un relais câblé en **NC (Normally Closed)** présente un état de contact fermé (`True`) lorsque la bobine est **désexcitée** (`action_off` → `STATE_A`). C'est le comportement attendu côté Yocto : `get_relay_state()` retourne `True` après extinction pour un relais NC. Ceci n'est pas un bug — la cohérence avec le monde physique dépend du câblage de chaque canal.
+
+> Sur le déploiement Chaunay : relais 0 et 2 câblés en **NC**, relais 1 câblé en **NO**. Les logs `Relais N → état True` après extinction sont attendus pour 0 et 2.
 
 
 ### Prérequis
@@ -397,11 +431,23 @@ Les zones de détection sont stockées dans [`config/zones.ini`](config/zones.in
 [zone1_cam0]
 rect = x1,y1,x2,y2
 color = 255,0,255
+relays = 0,1
 
 [zone2_cam0]
 polygon = (x1,y1)(x2,y2)(x3,y3)...
 color = 0,255,255
+skip_keypoint_filter = true
 ```
+
+#### Paramètres disponibles par zone
+
+| Paramètre | Valeur | Description |
+|---|---|---|
+| `rect` | `x1,y1,x2,y2` | Zone rectangulaire (coin haut-gauche → bas-droit) |
+| `polygon` | `(x1,y1)(x2,y2)…` | Zone polygonale (≥ 3 sommets) |
+| `color` | `R,G,B` | Couleur d'affichage de la zone dans l'interface web |
+| `relays` | `0,1,2,…` | Indices des relais activés lors d'une détection dans cette zone |
+| `skip_keypoint_filter` | `true` / `false` (défaut) | Bypass du filtre keypoints de pose pour cette zone (voir §Filtres anti-faux-positifs) |
 
 #### Exemple de schéma de zones
 
