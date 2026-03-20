@@ -193,11 +193,12 @@ class AlerteManager:
                     self.logger.info(f"Activation du relais pour la zone {zone_name} (relais numéro {relay_num})")
                     self.relay_on[relay_num] = True
                 self.relay_on_time[relay_num] = now
+                # Annuler le timer d'extinction du relais si une détection arrive
+                timer = self.relay_timer_task.get(relay_num)
+                if timer and not timer.done():
+                    timer.cancel()
+                    self.logger.debug(f"Timer d'extinction annulé pour relais {relay_num} (re-détection zone {zone_name})")
             self.last_detection_time_by_zone[zone_name] = timestamp
-            # Annuler le timer d'extinction pour cette zone
-            timer = self.timer_task.get(zone_name)
-            if timer and not timer.done():
-                timer.cancel()
         # Gestion de l'enregistrement des frames et alertes
         if frame is not None and cid is not None:
             last_time = self.camera_last_detection.get(cid)
@@ -340,6 +341,16 @@ class AlerteManager:
             self.zones = zones_or_by_camera
             self._zones_flat = {z["name"]: z for z in self.zones}
         self.logger.info(f"Zones mises à jour : {len(self.zones)} zones sur {len(set(z['name'].split('_cam')[-1] for z in self.zones if '_cam' in z['name']))} caméra(s)")
+        # Éteindre physiquement les relais qui étaient allumés avant la reconfiguration
+        for relay_num, was_on in list(self.relay_on.items()):
+            if was_on:
+                self.relays.action_off(relay_num)
+                self.logger.info(f"Extinction du relais {relay_num} suite à la reconfiguration des zones")
+        # Annuler les timers d'extinction en cours
+        for relay_num, timer in list(self.relay_timer_task.items()):
+            if timer and not timer.done():
+                timer.cancel()
+        self.relay_timer_task = {}
         # Réinitialiser relay_on, relay_on_time, relay_active_zones pour chaque relay_num
         relay_nums = set()
         for zone in self.zones:
