@@ -220,6 +220,8 @@
                         color: color,
                         relays: zone.relays || [],
                         skip_keypoint_filter: zone.skip_keypoint_filter || false,
+                        debounce_frames: zone.debounce_frames != null ? zone.debounce_frames : null,
+                        debounce_reset_seconds: zone.debounce_reset_seconds != null ? zone.debounce_reset_seconds : null,
                         fabricObj: fabricObj,
                     });
                 });
@@ -720,6 +722,8 @@
             color: color,
             relays: [],
             skip_keypoint_filter: false,
+            debounce_frames: null,
+            debounce_reset_seconds: null,
             fabricObj: fabricObj,
         });
 
@@ -1130,6 +1134,18 @@
                         <span>🚶 Piétons certains (ignorer filtre pose)</span>
                     </label>
                 </div>`;
+                const dbFramesVal = zone.debounce_frames != null ? zone.debounce_frames : '';
+                const dbResetVal = zone.debounce_reset_seconds != null ? zone.debounce_reset_seconds : '';
+                const debounceInputs = `<div class="zone-debounce" onclick="event.stopPropagation()">
+                    <span class="zone-debounce-label" title="Nombre de frames positives consécutives avant déclenchement de l'alerte (vide = valeur globale : 2)">⏱ Débounce frames :</span>
+                    <input type="number" min="1" max="30" step="1" value="${dbFramesVal}" placeholder="2"
+                        class="debounce-input" title="Frames requises avant alerte"
+                        onchange="zoneEditor.setDebounceFrames(${i}, this.value)">
+                    <span class="zone-debounce-label" title="Secondes sans détection avant remise à zéro du compteur (vide = valeur globale : 0.8)">Reset (s) :</span>
+                    <input type="number" min="0.1" max="30" step="0.1" value="${dbResetVal}" placeholder="0.8"
+                        class="debounce-input" title="Délai de remise à zéro"
+                        onchange="zoneEditor.setDebounceResetSeconds(${i}, this.value)">
+                </div>`;
                 html += `
                     <div class="zone-item${selected}" data-idx="${i}" onclick="zoneEditor.selectZone(${i})">
                         <div class="zone-item-header">
@@ -1140,6 +1156,7 @@
                         </div>
                         ${relayCheckboxes}
                         ${skipCheckbox}
+                        ${debounceInputs}
                     </div>
                 `;
             });
@@ -1203,6 +1220,8 @@
             color: zone.color,
             relays: zone.relays || [],
             skip_keypoint_filter: zone.skip_keypoint_filter || false,
+            debounce_frames: zone.debounce_frames != null ? parseInt(zone.debounce_frames, 10) : null,
+            debounce_reset_seconds: zone.debounce_reset_seconds != null ? parseFloat(zone.debounce_reset_seconds) : null,
         }));
 
         const masksData = completedMasks.map((mask) => ({
@@ -1303,6 +1322,8 @@
             color: [...z.color],
             relays: [...(z.relays || [])],
             skip_keypoint_filter: z.skip_keypoint_filter || false,
+            debounce_frames: z.debounce_frames != null ? z.debounce_frames : null,
+            debounce_reset_seconds: z.debounce_reset_seconds != null ? z.debounce_reset_seconds : null,
         }));
         const savedMasks = completedMasks.map((m) => ({
             name: m.name,
@@ -1341,6 +1362,8 @@
                     color: z.color,
                     relays: z.relays || [],
                     skip_keypoint_filter: z.skip_keypoint_filter || false,
+                    debounce_frames: z.debounce_frames != null ? z.debounce_frames : null,
+                    debounce_reset_seconds: z.debounce_reset_seconds != null ? z.debounce_reset_seconds : null,
                     fabricObj: fabricObj,
                 });
             });
@@ -1412,6 +1435,28 @@
     }
 
     /**
+     * Définit le nombre de frames de débounce pour une zone.
+     * Valeur vide = utiliser la valeur globale (null dans l'objet).
+     */
+    function setDebounceFrames(zoneIdx, value) {
+        const zone = completedZones[zoneIdx];
+        if (!zone) return;
+        const v = value.trim();
+        zone.debounce_frames = v !== '' ? Math.max(1, parseInt(v, 10)) : null;
+    }
+
+    /**
+     * Définit le délai de remise à zéro du débounce (en secondes) pour une zone.
+     * Valeur vide = utiliser la valeur globale (null dans l'objet).
+     */
+    function setDebounceResetSeconds(zoneIdx, value) {
+        const zone = completedZones[zoneIdx];
+        if (!zone) return;
+        const v = value.trim();
+        zone.debounce_reset_seconds = v !== '' ? Math.max(0.1, parseFloat(v)) : null;
+    }
+
+    /**
      * Bascule l'activation d'un relais pour une zone.
      */
     function toggleRelay(zoneIdx, relayNum) {
@@ -1434,6 +1479,8 @@
         deleteZone: deleteZone,
         toggleRelay: toggleRelay,
         toggleSkipKeypointFilter: toggleSkipKeypointFilter,
+        setDebounceFrames: setDebounceFrames,
+        setDebounceResetSeconds: setDebounceResetSeconds,
         selectMask: selectMask,
         deleteMask: deleteMask,
     };

@@ -339,6 +339,20 @@ def detection_callback_factory(cid, main_loop=None):
     PERSON_DEBOUNCE_FRAMES = 2
     PERSON_RESET_SECONDS = 0.8      # Reset le counter après 800ms sans détection
 
+    def _get_zone_debounce(zone_name):
+        """Retourne (debounce_frames, reset_seconds) pour la zone donnée.
+
+        Utilise les valeurs configurées dans zones.ini si présentes,
+        sinon replie sur les constantes globales.
+        """
+        zone_cfg = alert_manager._zones_flat.get(zone_name, {})
+        frames = zone_cfg.get("debounce_frames")
+        reset = zone_cfg.get("debounce_reset_seconds")
+        return (
+            int(frames) if frames is not None else PERSON_DEBOUNCE_FRAMES,
+            float(reset) if reset is not None else PERSON_RESET_SECONDS,
+        )
+
     def detection_callback(detection_result):
         nonlocal previous_detection
         # Extraire les valeurs du dictionnaire
@@ -379,22 +393,23 @@ def detection_callback_factory(cid, main_loop=None):
 
             # Debounce : mise à jour des compteurs avec reset temporel par zone.
             # Le counter reste stable tant que la dernière détection valide date de moins de
-            # PERSON_RESET_SECONDS — indépendant du nombre de frames vides entre inférences.
+            # debounce_reset_seconds (par zone, sinon PERSON_RESET_SECONDS global).
             now_ts = time.time()
             for zone_name in zone_names_list:
                 if zone_name not in person_consecutive_frames:
                     person_consecutive_frames[zone_name] = 0
                 if zone_name not in person_last_detect_time:
                     person_last_detect_time[zone_name] = 0.0
+                _, reset_secs = _get_zone_debounce(zone_name)
                 if zone_name in zones_detected:
                     person_consecutive_frames[zone_name] += 1
                     person_last_detect_time[zone_name] = now_ts
-                elif now_ts - person_last_detect_time[zone_name] > PERSON_RESET_SECONDS:
+                elif now_ts - person_last_detect_time[zone_name] > reset_secs:
                     person_consecutive_frames[zone_name] = 0
-            # Zones ayant confirmé la présence sur N frames consécutives
+            # Zones ayant confirmé la présence sur N frames consécutives (seuil par zone)
             debounced_zones = {
                 zn for zn in zone_names_list
-                if person_consecutive_frames.get(zn, 0) >= PERSON_DEBOUNCE_FRAMES
+                if person_consecutive_frames.get(zn, 0) >= _get_zone_debounce(zn)[0]
             }
 
         with shared_motion_roi_lock:
@@ -1162,6 +1177,8 @@ def get_zones(cid):
             'color': list(zone.get('color', (255, 0, 0))),
             'relays': zone.get('relays', []),
             'skip_keypoint_filter': zone.get('skip_keypoint_filter', False),
+            'debounce_frames': zone.get('debounce_frames'),
+            'debounce_reset_seconds': zone.get('debounce_reset_seconds'),
         })
     return jsonify(result)
 

@@ -70,6 +70,10 @@ def save_zones_to_ini(ini_path, cam_id, zones):
             entries.append(("relays", ",".join(str(r) for r in relays)))
         if zone.get("skip_keypoint_filter"):
             entries.append(("skip_keypoint_filter", "true"))
+        if zone.get("debounce_frames") is not None:
+            entries.append(("debounce_frames", str(int(zone["debounce_frames"]))))
+        if zone.get("debounce_reset_seconds") is not None:
+            entries.append(("debounce_reset_seconds", str(float(zone["debounce_reset_seconds"]))))
 
         section = {
             "header": name,
