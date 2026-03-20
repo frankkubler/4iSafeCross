@@ -7,7 +7,8 @@ import io
 import cv2
 from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
-                             DETECTION, URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
+                             DETECTION, POSE_ENABLED,
+                             URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
                              EXTENDED_CLASSES, TRANSFERT_CLASSES, SIMPLE_CLASSES)
 
 from src.motion import MotionDetector
@@ -36,6 +37,7 @@ class InferenceServerThread(threading.Thread):
         self.past_detections = []
         self.detections = []
         self.confidence_threshold = INF_THRESHOLD
+        self.pose_enabled = POSE_ENABLED
         if DETECTION == 'extended':
             self.class_id = EXTENDED_CLASSES
         elif DETECTION == 'finetuned':
@@ -209,7 +211,10 @@ class InferenceServerThread(threading.Thread):
                     response = requests.post(
                         self.url,
                         files={"frame": buffer.getvalue()},
-                        params={"confidence": self.confidence_threshold}
+                        params={
+                            "confidence": self.confidence_threshold,
+                            "skip_pose": not self.pose_enabled,
+                        }
                     )
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])
