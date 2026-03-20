@@ -1,45 +1,156 @@
 # 4iSafeCross
 
-**4iSafeCross** est une application de supervision et de détection intelligente pour caméras de surveillance, intégrant la gestion de flux RTSP, la détection d'événements par IA, l'alerte Telegram, et une interface web de contrôle en temps réel, sur machine Nvidia Jetson Orin NX [reServer Indutrial J4012](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/)
+**4iSafeCross** est un système de sécurité industrielle basé sur la vision par ordinateur, conçu pour détecter la présence de piétons dans les zones de circulation de chariots élévateurs et déclencher des alertes physiques (relais) et numériques (Telegram).
+
+Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/)), il traite en temps réel les flux RTSP de caméras fixes, effectue l'inférence IA via des serveurs dédiés et pilote des relais Yoctopuce pour activer des avertisseurs lumineux ou sonores.
 
 ## Fonctionnalités principales
 
-- **Supervision multi-caméras** (RTSP/IP)
-- **Détection d'événements** (mouvement, objets, etc.) via modèles IA (YOLO, RF-DETR)
-- **Alertes Telegram** automatiques avec capture d'image
-- **Contrôle des relais Yoctopuce** pour actionneurs physiques
-- **Interface web** (Flask) : visualisation, activation/désactivation des flux/détections, réglage des seuils, galerie des détections, panneau debug
-- **Gestion multi-thread** pour l’inférence et le streaming
-- **Statistiques système** : RAM, CPU, disque, IP, état du service
+- **Supervision multi-caméras** (RTSP/IP) avec décodage GStreamer accéléré matériellement (nvv4l2decoder Jetson)
+- **Détection d'événements** par IA (YOLO11m / RF-DETR) via serveurs d'inférence dédiés sur HTTP
+- **3 filtres anti-faux-positifs** en cascade : keypoints de pose, debounce temporel multi-frames, détection du conducteur (`driver`)
+- **Mode fail-safe** : relais maintenus ON au démarrage, watchdog heartbeat, timer minimum d'allumage
+- **Alertes Telegram** avec capture annotée (boîtes, zones, stature)
+- **Pilotage de relais Yoctopuce** multi-canaux (avertisseurs lumineux/sonores) mappés par zone
+- **Interface web Flask** : flux vidéo en direct, éditeur de zones/masques graphique, galerie des détections, statistiques système
+- **Collecte automatique de dataset** intégrée (4 stratégies : temporel, événement, fond, hard-negatives)
+- **Base de données SQLite** des événements (détections + activations relais)
 
 ## Structure du projet
 
 ```
-.
-
-├── app.py                # Serveur principal Flask
-├── pyproject.toml        # Métadonnées et dépendances
-├── requirements.txt      # Dépendances Python
-├── uv.lock               # Fichier de verrouillage uv
-├── README.md             # Documentation
+4iSafeCross/
+├── app.py                    # Application Flask principale (point d'entrée)
+├── pyproject.toml            # Métadonnées et dépendances (uv)
+├── requirements.txt          # Dépendances Python
 ├── config/
-│   ├── config.ini        # Configuration principale
-│   ├── zones.ini         # Définition des zones de détection
-│   └── masks.ini         # Définition des masques (zones exclues du traitement)
+│   ├── config.ini            # Configuration principale (RTSP, IA, Telegram, relais…)
+│   ├── zones.ini             # Zones de détection par caméra (polygones / rectangles)
+│   ├── masks.ini             # Masques d'exclusion (zones noircies avant traitement)
+│   └── relay_positions.ini   # Position des icônes de projecteurs sur le canvas web
 ├── db/
-│   └── detections.db     # Base de données des détections
-├── detections/           # Captures d'images des détections
-├── logs/                 # Logs applicatifs
-├── scripts/              # Scripts utilitaires et automation
-├── src/                  # Code source Python (modules, gestion, IA, etc.)
-├── static/               # Fichiers statiques (CSS, JS, images)
-├── templates/
-│   └── index.html        # Interface web principale
-├── utils/                # Fonctions utilitaires
-└── __pycache__/          # Fichiers compilés Python
+│   └── detections.db         # Base SQLite (détections + événements relais)
+├── detections/               # Captures annotées lors des alertes
+├── dataset/                  # Images et labels collectés automatiquement
+├── logs/                     # Logs applicatifs (rotation logrotate)
+├── src/
+│   ├── alert_manager.py      # Gestion des alertes, relais, timers async
+│   ├── bot_aiogram.py        # Bot Telegram (aiogram 3.x)
+│   ├── camera_manager.py     # Capture RTSP via GStreamer (H.264, HW decoder)
+│   ├── collect_dataset.py    # Thread de collecte automatique de dataset
+│   ├── context_vehicle.py    # Analyse IoU personne/véhicule (contexte conducteur)
+│   ├── detection_db.py       # Schéma et insertions SQLite
+│   ├── inference.py          # Thread d'inférence IA (YOLO + pose)
+│   ├── motion.py             # Détection de mouvement MOG2
+│   ├── pose_analyser.py      # Analyse de stature par keypoints COCO
+│   └── relay_pilot.py        # Contrôle des relais Yoctopuce (USB)
+├── utils/
+│   ├── constants.py          # Chargement de config.ini → constantes Python
+│   ├── utils.py              # Fonctions génériques (IP, Docker, logs, sauvegarde frame)
+│   ├── zone_writer.py        # Sérialisation zones/masques vers INI
+│   └── coco_classes.py       # Correspondance ID → nom de classe COCO
+├── static/                   # Ressources web (CSS, JS, Fabric.js, icônes)
+├── templates/                # Templates Jinja2 Flask (index, zone_editor, preview…)
+└── scripts/                  # Scripts systemd, déploiement Jetson, logrotate
 ```
 
-## Installation
+## Pipeline de détection
+
+### Vue d'ensemble
+
+```
+Caméra RTSP
+     │  GStreamer (nvv4l2decoder H.264 HW)
+     ▼
+CameraManager  ──── frame brute (1080p)
+     │
+     ├── _apply_masks()          # Pixels masqués → 0 (config/masks.ini)
+     │
+     ├── MOG2 detect_motion()    # Détection de mouvement (seuil MOTIONTHRESHOLD)
+     │         │ mouvement détecté ?
+     │         ▼
+     │   POST /infer (YOLO)      # Serveur inférence HTTP (port 8002)
+     │   + POST /pose (YOLOv8-pose)
+     │         │
+     │         ▼
+     │   Détections brutes : forklift | driver | person | …
+     │         │
+     │         ▼
+     │   ┌──────────────────────────────────────────────────┐
+     │   │        3 filtres anti-faux-positifs               │
+     │   │                                                    │
+     │   │  1. Keypoints de pose                             │
+     │   │     pose=[]     → rejet (faux +, chariot)         │
+     │   │     kp < 4      → rejet (conf < 0.40)             │
+     │   │     kp ≥ 4      → OK                              │
+     │   │                                                    │
+     │   │  2. Debounce temporel                             │
+     │   │     N frames consécutives (défaut N=2)            │
+     │   │     1 frame isolée → ignorée                      │
+     │   │                                                    │
+     │   │  3. Label driver                                  │
+     │   │     label='driver' → jamais d'alerte              │
+     │   └──────────────────────────────────────────────────┘
+     │         │ personne confirmée dans une zone ?
+     │         ▼
+     │   AlerteManager.on_detection()
+     │         │
+     │         ├── Relais Yoctopuce ON (zone → relais config/zones.ini)
+     │         ├── Timer minimum d'allumage (11 s par défaut)
+     │         ├── Alerte Telegram (image annotée)
+     │         └── Sauvegarde frame (detections/)
+     │
+     └── gen_frames()            # Flux MJPEG vers interface web
+```
+
+### Modes de détection (`DETECTION` dans config.ini)
+
+| Mode | Classes surveillées | Usage |
+|---|---|---|
+| `simple` | `person` uniquement (COCO class 0) | Environnement sans chariot |
+| `extended` | `person` + `forklift` + autres COCO | Surveillance générale |
+| `transfert` | Classes custom entraînées : `forklift(0)`, `driver(1)`, `person(2)`, `bus`, `truck`, `car` | **Mode production** — modèle réentraîné site |
+
+En mode `transfert`, seul `label='person'` déclenche des alertes. `label='driver'` est filtré en aval : l'opérateur assis sur son chariot ne génère pas d'alerte.
+
+### Filtres anti-faux-positifs
+
+#### 1. Filtre keypoints de pose
+
+Avant toute alerte, `should_trigger_alert_for_detection()` vérifie les keypoints COCO-17 retournés par le modèle de pose :
+
+```
+pose = []          → modèle a tourné, aucun corps détecté → rejet (faux positif)
+pose = [[x,y,c]…] → compter les keypoints visibles (conf ≥ 0.40)
+                     < 4 kp visibles → rejet (probable structure métallique)
+                     ≥ 4 kp visibles → alerte autorisée
+pose absent/None   → fail-safe, alerte autorisée
+```
+
+**Justification du seuil 4 kp / 0.40** : un chariot élévateur peut générer 2 à 3 keypoints parasites à confiance > 0.40 par réflexion sur les barres métalliques. Un vrai corps humain en génère toujours plus de 4.
+
+#### 2. Debounce temporel (N frames consécutives)
+
+Configuré via `PERSON_DEBOUNCE_FRAMES = 2` dans `app.py`. Une détection isolée sur une seule frame est ignorée. L'alerte ne se déclenche que si la même zone contient une personne valide sur **N frames successives**.
+
+Ce filtre protège contre les fausses détections transitoires lors de l'entrée d'un chariot dans le champ (la silhouette du conducteur peut être brièvement classifiée `person` avant que le modèle identifie `driver`).
+
+#### 3. Label `driver`
+
+Toute détection avec `label='driver'` est exclue de la boucle d'alerte. Seul `label='person'` (piéton à pied) est traité.
+
+### Mode fail-safe
+
+Le système est conçu pour **alerter en cas de doute** plutôt que de rater une détection réelle :
+
+| Situation | Comportement |
+|---|---|
+| Démarrage application | Tous les relais passent à **ON** immédiatement |
+| Absence de heartbeat > 30 s | Watchdog réactive tous les relais à **ON** |
+| Alerte déclenchée | Timer minimum : relais reste ON au moins **11 s** même si la personne quitte la zone |
+| `pose=None` (timeout serveur pose) | Fail-safe : alerte autorisée sans vérification keypoints |
+
+
 
 ### Prérequis
 

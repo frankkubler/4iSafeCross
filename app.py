@@ -458,6 +458,19 @@ def detection_callback_factory(cid, main_loop=None):
             if alert_manager.should_trigger_alert_for_detection(det_with_zone):
                 detections_person_with_zone.append(det_with_zone)
 
+        # Logger une seule fois les zones confirmées qui déclenchent l'alerte
+        if detections_person_with_zone:
+            for det in detections_person_with_zone:
+                pose = det.get("pose")
+                visible_kp_log = (
+                    sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= 0.40)
+                    if pose else "N/A"
+                )
+                logger.info(
+                    f"Alerte déclenchée — zones {det.get('zones', [])}"
+                    f" (keypoints visibles : {visible_kp_log})"
+                )
+
         # Déclencher l'alerte seulement si il y a des détections valides après filtrage
         if len(detections_person_with_zone) > 0:
             current_day = now.strftime('%Y-%m-%d %H:%M:%S')

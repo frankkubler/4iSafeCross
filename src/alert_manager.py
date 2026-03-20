@@ -120,37 +120,51 @@ class AlerteManager:
 
         pose = detection.get("pose")
         if pose is not None:
-            visible_kp = sum(
-                1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD
-            )
-            if visible_kp < KP_MIN_VISIBLE:
-                # Si l'une des zones de la détection désactive le filtre keypoints, laisser passer
+            # pose=[] signifie que le modèle a tourné mais n'a trouvé aucun corps —
+            # c'est un rejet ferme même si skip_keypoint_filter=True (cas différent
+            # de « peu de keypoints visibles » qui lui peut être bypassé).
+            if len(pose) == 0:
                 detection_zones = detection.get("zones", [])
                 skip = any(
                     self._zones_flat.get(zn, {}).get("skip_keypoint_filter", False)
                     for zn in detection_zones
                 )
-                if skip:
-                    self.logger.info(
-                        f"Filtre keypoints bypassé (skip_keypoint_filter=True) pour zone(s) {detection_zones}"
-                        f" — {visible_kp} keypoint(s) visible(s), seuil non appliqué"
-                    )
-                else:
+                if not skip:
                     self.logger.debug(
-                        f"Faux positif écarté — seulement {visible_kp} keypoint(s) humain(s)"
-                        f" visible(s) (seuil : {KP_MIN_VISIBLE}, conf >= {KP_CONF_THRESHOLD})"
-                        " — probable chariot élévateur"
+                        "Faux positif écarté — pose=[] (modèle de pose a tourné, aucun corps détecté)"
                     )
                     return False
+                self.logger.info(
+                    f"Filtre keypoints bypassé (skip_keypoint_filter=True) pour zone(s) {detection_zones}"
+                    f" — 0 keypoint(s) visible(s), seuil non appliqué"
+                )
+            else:
+                visible_kp = sum(
+                    1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD
+                )
+                if visible_kp < KP_MIN_VISIBLE:
+                    # skip_keypoint_filter bypass uniquement le seuil N-kp (pas le pose=[])
+                    detection_zones = detection.get("zones", [])
+                    skip = any(
+                        self._zones_flat.get(zn, {}).get("skip_keypoint_filter", False)
+                        for zn in detection_zones
+                    )
+                    if skip:
+                        self.logger.info(
+                            f"Filtre keypoints bypassé (skip_keypoint_filter=True) pour zone(s) {detection_zones}"
+                            f" — {visible_kp} keypoint(s) visible(s), seuil non appliqué"
+                        )
+                    else:
+                        self.logger.debug(
+                            f"Faux positif écarté — seulement {visible_kp} keypoint(s) humain(s)"
+                            f" visible(s) (seuil : {KP_MIN_VISIBLE}, conf >= {KP_CONF_THRESHOLD})"
+                            " — probable chariot élévateur"
+                        )
+                        return False
 
         if not detection.get("zones"):
             return False
 
-        visible_kp_log = sum(1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD) if pose else 'N/A'
-        self.logger.info(
-            f"Alerte déclenchée — zones {detection['zones']}"
-            f" (keypoints visibles : {visible_kp_log})"
-        )
         return True
 
     async def on_detection(self, timestamp: float, frame=None, detections=None, cid=None):
