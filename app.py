@@ -25,7 +25,8 @@ from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
                              DATASET_HARD_NEG_CONFIDENCE, DATASET_HARD_NEG_ENABLED,
                              URL_YOLO, FONCTION_YOLO,
                              MASKS_BY_CAMERA, load_masks_by_camera_from_ini,
-                             RELAY_POSITIONS_BY_CAMERA, load_relay_positions_from_ini)
+                             RELAY_POSITIONS_BY_CAMERA, load_relay_positions_from_ini,
+                             FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -851,12 +852,23 @@ def index():
     cam_infos = []
     for idx, cam_id in enumerate(CAM_IDS):
         threshold = MOTIONTHRESHOLD  # valeur par défaut
+        var_threshold = FGBG_VAR_THRESHOLD
+        history = FGBG_HISTORY
+        detect_shadows = FGBG_DETECT_SHADOWS
         if idx in inference_threads:
             threshold = getattr(inference_threads[idx], 'white_pixels_threshold', MOTIONTHRESHOLD)
+            detector = getattr(inference_threads[idx], 'motion_detector', None)
+            if detector is not None:
+                var_threshold = getattr(detector, 'varThreshold', FGBG_VAR_THRESHOLD)
+                history = getattr(detector, 'history', FGBG_HISTORY)
+                detect_shadows = getattr(detector, 'detectShadows', FGBG_DETECT_SHADOWS)
         cam_infos.append({
             'id': cam_id,
             'idx': idx,
             'white_pixels_threshold': threshold,
+            'varThreshold': var_threshold,
+            'history': history,
+            'detectShadows': detect_shadows,
             'roi_display_enabled': roi_display_enabled.get(idx, False)
         })
     return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled, stature_colors=OBJECT_COLORS)
