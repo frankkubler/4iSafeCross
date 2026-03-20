@@ -231,7 +231,9 @@ class InferenceServerThread(threading.Thread):
                                 "pose": d.get("pose", []),
                                 "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if d["label"] == "person" else ""))
                             }
-                            for d in detections if d["class_id"] in self.class_id
+                            for d in detections
+                            if d["class_id"] in self.class_id
+                            and float(d["confidence"]) >= self.confidence_threshold
                         ]
                         # # Si on a des personnes et des véhicules dans les détections actuelles, enrichir avec le contexte véhicule
                         # try:
