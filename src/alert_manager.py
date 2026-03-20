@@ -120,9 +120,9 @@ class AlerteManager:
 
         pose = detection.get("pose")
         if pose is not None:
-            # pose=[] signifie que le modèle a tourné mais n'a trouvé aucun corps —
-            # c'est un rejet ferme même si skip_keypoint_filter=True (cas différent
-            # de « peu de keypoints visibles » qui lui peut être bypassé).
+            # pose=[] signifie que le modèle a tourné mais n'a trouvé aucun corps.
+            # Par défaut rejet, mais bypassable avec skip_keypoint_filter=True
+            # (même logique que « peu de keypoints visibles »).
             if len(pose) == 0:
                 detection_zones = detection.get("zones", [])
                 skip = any(
@@ -130,8 +130,9 @@ class AlerteManager:
                     for zn in detection_zones
                 )
                 if not skip:
-                    self.logger.debug(
-                        "Faux positif écarté — pose=[] (modèle de pose a tourné, aucun corps détecté)"
+                    self.logger.info(
+                        f"Faux positif écarté — pose=[] zones={detection_zones} "
+                        f"skip_flags={[self._zones_flat.get(zn, {}).get('skip_keypoint_filter') for zn in detection_zones]}"
                     )
                     return False
                 self.logger.info(
