@@ -330,10 +330,14 @@ def get_zone_for_detection(det, zones):
 def detection_callback_factory(cid, main_loop=None):
     # previous_detection devient un dict par zone
     previous_detection = {}
-    # Debounce temporel : nombre de frames consécutives avec personne détectée avant déclenchement.
-    # Évite les fausses alertes sur 1 frame isolée (ex: chariot entrant brièvement classifié 'person').
+    # Debounce : fenêtre temporelle glissante de détection par zone.
+    # Une alerte nécessite PERSON_DEBOUNCE_FRAMES détections valides dans la fenêtre PERSON_WINDOW_SECONDS.
+    # Le counter ne se remet à 0 qu'après PERSON_RESET_SECONDS sans aucune détection.
+    # Robuste aux dropouts MOG2 (frames vides ponctuelles entre deux inférences réelles).
     person_consecutive_frames = {}  # {zone_name: int}
+    person_last_detect_time = {}    # {zone_name: float} — timestamp de la dernière détection valide
     PERSON_DEBOUNCE_FRAMES = 2
+    PERSON_RESET_SECONDS = 0.8      # Reset le counter après 800ms sans détection
 
     def detection_callback(detection_result):
         nonlocal previous_detection
@@ -373,13 +377,19 @@ def detection_callback_factory(cid, main_loop=None):
                         zones_detected.add(zn)
             shared_detections[cid] = detections_with_zone
 
-            # Debounce : mise à jour des compteurs consécutifs par zone
+            # Debounce : mise à jour des compteurs avec reset temporel par zone.
+            # Le counter reste stable tant que la dernière détection valide date de moins de
+            # PERSON_RESET_SECONDS — indépendant du nombre de frames vides entre inférences.
+            now_ts = time.time()
             for zone_name in zone_names_list:
                 if zone_name not in person_consecutive_frames:
                     person_consecutive_frames[zone_name] = 0
+                if zone_name not in person_last_detect_time:
+                    person_last_detect_time[zone_name] = 0.0
                 if zone_name in zones_detected:
                     person_consecutive_frames[zone_name] += 1
-                else:
+                    person_last_detect_time[zone_name] = now_ts
+                elif now_ts - person_last_detect_time[zone_name] > PERSON_RESET_SECONDS:
                     person_consecutive_frames[zone_name] = 0
             # Zones ayant confirmé la présence sur N frames consécutives
             debounced_zones = {
