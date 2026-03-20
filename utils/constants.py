@@ -157,6 +157,7 @@ RTSP_STREAM = config.get('RTSP', 'STREAM')
 
 DB_PATH = config.get('APP', 'DB_PATH')
 DETECTION = config.get('APP', 'DETECTION', fallback='simple')
+POSE_ENABLED = config.getboolean('APP', 'POSE_ENABLED', fallback=True)
 EXTENDED_CLASSES = ast.literal_eval(config.get('APP', 'EXTENDED_CLASSES', fallback='[1, 3, 6, 7, 8]'))
 TRANSFERT_CLASSES = ast.literal_eval(config.get('APP', 'TRANSFERT_CLASSES', fallback='[0, 1, 2, 3, 4, 5]'))
 SIMPLE_CLASSES = ast.literal_eval(config.get('APP', 'SIMPLE_CLASSES', fallback='[1, 2]'))
