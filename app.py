@@ -880,12 +880,6 @@ def set_motion_param(cid):
     param = data.get('param')
     value = data.get('value')
 
-    # Correction : rediriger 'min_area' vers 'min_contour_area' pour le MotionDetector
-    if param == 'min_area':
-        param_detector = 'min_contour_area'
-    else:
-        param_detector = param
-
     if cid not in inference_threads:
         return jsonify({'status': 'error', 'message': 'Caméra inconnue'}), 400
 
@@ -904,15 +898,24 @@ def set_motion_param(cid):
 
     try:
         # Conversion typée
-        if param in ('padding', 'min_area', 'varThreshold', 'history'):
+        if param in ('padding', 'min_area', 'varThreshold', 'history',
+                     'motion_on_frames', 'motion_off_frames', 'min_single_contour'):
             value = int(value)
-        if param == 'detectShadows':
+        if param in ('detectShadows', 'gaussian_blur', 'aspect_filter'):
             value = value in (True, 'true', 'True', 1, '1', 'on')
 
-        # Mise à jour simple pour champ non MOG2
+        # Mapping des noms API → attributs MotionDetector
+        PARAM_TO_ATTR = {
+            'min_area': 'min_contour_area',
+            'gaussian_blur': 'use_gaussian_blur',
+            'aspect_filter': 'use_aspect_filter',
+        }
+        attr_name = PARAM_TO_ATTR.get(param, param)
+
+        # Mise à jour simple pour les champs non MOG2
         if param not in ('varThreshold', 'history', 'detectShadows'):
-            if hasattr(detector, param_detector):
-                setattr(detector, param_detector, value)
+            if hasattr(detector, attr_name):
+                setattr(detector, attr_name, value)
             else:
                 return jsonify({'status': 'error', 'message': f'Paramètre {param} inconnu'}), 400
 
