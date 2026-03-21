@@ -10,7 +10,10 @@ from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
                              DETECTION, POSE_ENABLED,
                              URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
                              EXTENDED_CLASSES, TRANSFERT_CLASSES, SIMPLE_CLASSES,
-                             FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS)
+                             FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS,
+                             MOTION_ON_FRAMES, MOTION_OFF_FRAMES,
+                             MOTION_GAUSSIAN_BLUR, MOTION_ASPECT_FILTER,
+                             MOTION_MIN_SINGLE_CONTOUR)
 
 from src.motion import MotionDetector
 from src.pose_analyser import PoseAnalyzer
@@ -56,11 +59,19 @@ class InferenceServerThread(threading.Thread):
             image_height=1080
         )
         self.motion_detector = MotionDetector()
-        # Initialisation des paramètres depuis config.ini
+        # Initialisation des paramètres MOG2 depuis config.ini
         self.motion_detector.update_fgbg_params(
             varThreshold=FGBG_VAR_THRESHOLD,
             history=FGBG_HISTORY,
             detectShadows=FGBG_DETECT_SHADOWS
+        )
+        # Initialisation des paramètres de détection (hystérésis, filtrages) depuis config.ini
+        self.motion_detector.update_detection_params(
+            motion_on_frames=MOTION_ON_FRAMES,
+            motion_off_frames=MOTION_OFF_FRAMES,
+            use_gaussian_blur=MOTION_GAUSSIAN_BLUR,
+            use_aspect_filter=MOTION_ASPECT_FILTER,
+            min_single_contour=MOTION_MIN_SINGLE_CONTOUR,
         )
         
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
