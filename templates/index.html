@@ -763,6 +763,26 @@
                             <span title="Détection des ombres dans l'algorithme MOG2.">Shadows</span>
                             <input type="checkbox" id="detectShadows-{{ cam.idx }}" {% if cam.detectShadows is defined and cam.detectShadows %}checked{% endif %} />
                         </div>
+                        <div class="motion-field">
+                            <span title="Frames consécutives avec mouvement brut pour confirmer ON. ↑ = moins de faux positifs, réponse plus lente.">ON frames</span>
+                            <input type="number" id="motion_on_frames-{{ cam.idx }}" value="{{ cam.motion_on_frames if cam.motion_on_frames is defined else 2 }}" min="1" max="30" step="1" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Frames consécutives sans mouvement pour confirmer OFF. ↑ = la détection reste active plus longtemps après disparition.">OFF frames</span>
+                            <input type="number" id="motion_off_frames-{{ cam.idx }}" value="{{ cam.motion_off_frames if cam.motion_off_frames is defined else 5 }}" min="1" max="60" step="1" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Surface minimale d'un seul contour pour déclencher indépendamment du total (détecte un piéton lointain isolé).">Min contour seul</span>
+                            <input type="number" id="min_single_contour-{{ cam.idx }}" value="{{ cam.min_single_contour if cam.min_single_contour is defined else 3000 }}" min="0" max="50000" step="100" />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Flou gaussien 5×5 avant MOG2 pour atténuer le bruit caméra (~2ms). Désactiver si perf critique.">Gaussian Blur</span>
+                            <input type="checkbox" id="gaussian_blur-{{ cam.idx }}" {% if cam.gaussian_blur is defined and cam.gaussian_blur %}checked{% endif %} />
+                        </div>
+                        <div class="motion-field">
+                            <span title="Ignore les contours très plats (h/w &lt; 0.3) — artefacts de vibrations horizontales. Désactivé par défaut.">Aspect Filter</span>
+                            <input type="checkbox" id="aspect_filter-{{ cam.idx }}" {% if cam.aspect_filter is defined and cam.aspect_filter %}checked{% endif %} />
+                        </div>
                         <button class="btn btn-teal" style="align-self:flex-end;" onclick="saveMotionParams({{ cam.idx }})">✓ Appliquer</button>
                     </div>
                 </div>
@@ -774,24 +794,25 @@
             min_area: document.getElementById('min_area-' + idx).value,
             varThreshold: document.getElementById('varThreshold-' + idx).value,
             history: document.getElementById('history-' + idx).value,
-            detectShadows: document.getElementById('detectShadows-' + idx).checked
+            detectShadows: document.getElementById('detectShadows-' + idx).checked,
+            motion_on_frames: document.getElementById('motion_on_frames-' + idx).value,
+            motion_off_frames: document.getElementById('motion_off_frames-' + idx).value,
+            min_single_contour: document.getElementById('min_single_contour-' + idx).value,
+            gaussian_blur: document.getElementById('gaussian_blur-' + idx).checked,
+            aspect_filter: document.getElementById('aspect_filter-' + idx).checked
         };
-        let ok = true;
-        for (const [param, value] of Object.entries(params)) {
+        const promises = Object.entries(params).map(([param, value]) =>
             fetch('/set_motion_param/' + idx, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({param: param === 'white_pixels_threshold' ? 'white_pixels_threshold' : param, value: value})
+                body: JSON.stringify({param: param, value: value})
             })
             .then(r => r.json())
-            .then(data => {
-                if(data.status !== 'ok') {
-                    ok = false;
-                    alert('Erreur lors de la mise à jour du paramètre ' + param + ' : ' + data.message);
-                }
-            });
-        }
-        if(ok) alert('Paramètres sauvegardés !');
+            .then(data => { if (data.status !== 'ok') throw new Error(param + ' : ' + data.message); })
+        );
+        Promise.all(promises)
+            .then(() => alert('Paramètres sauvegardés !'))
+            .catch(err => alert('Erreur : ' + err.message));
     }
     </script>
                 <div class="cam-video-box" id="cam_box_{{ cam.idx }}">
