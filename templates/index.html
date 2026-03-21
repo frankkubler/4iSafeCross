@@ -421,6 +421,17 @@
             btn.textContent = enabled ? 'ROI : ON' : 'ROI : OFF';
             btn.className = 'btn ' + (enabled ? 'btn-blue' : 'btn-slate');
         }
+        function toggleMaskOverlay(idx, btn) {
+            const enabled = btn.dataset.enabled === 'true' ? false : true;
+            fetch('/toggle_mask_overlay/' + idx, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: enabled})
+            });
+            btn.dataset.enabled = enabled;
+            btn.textContent = enabled ? '🟢 Mask : ON' : '🔴 Mask : OFF';
+            btn.className = 'btn ' + (enabled ? 'btn-orange' : 'btn-slate');
+        }
         function toggleMotionPanel(idx) {
             const panel = document.getElementById('motion-panel-' + idx);
             const btn   = document.getElementById('btn_tuning_' + idx);
@@ -731,6 +742,7 @@
                     <button id="btn_stream_{{ cam.idx }}" data-enabled="false" class="btn btn-slate" onclick="toggleStream({{ cam.idx }}, this)">▶ Vidéo</button>
                     <button id="btn_detect_{{ cam.idx }}" data-enabled="true" class="btn btn-green" onclick="toggleDetection({{ cam.idx }}, this)">⛔ Stop détection</button>
                     <button id="btn_roi_{{ cam.idx }}" data-enabled="{{ 'true' if cam.roi_display_enabled else 'false' }}" class="btn {{ 'btn-blue' if cam.roi_display_enabled else 'btn-slate' }}" onclick="toggleROIDisplay({{ cam.idx }}, this)">{{ 'ROI : ON' if cam.roi_display_enabled else 'ROI : OFF' }}</button>
+                    <button id="btn_mask_{{ cam.idx }}" data-enabled="{{ 'true' if cam.mask_overlay_enabled else 'false' }}" class="btn {{ 'btn-orange' if cam.mask_overlay_enabled else 'btn-slate' }}" onclick="toggleMaskOverlay({{ cam.idx }}, this)">{{ '🟢 Mask : ON' if cam.mask_overlay_enabled else '🔴 Mask : OFF' }}</button>
                     <button id="btn_tuning_{{ cam.idx }}" class="btn btn-tuning" onclick="toggleMotionPanel({{ cam.idx }})">⚙ Motion Tuning</button>
                     <button id="btn_switch_inference_{{ cam.idx }}" class="btn btn-green" onclick="switchInferenceMode({{ cam.idx }})">To RFDETR</button>
                     <button id="btn_res_switch_{{ cam.idx }}" class="btn btn-blue" onclick="switchResolution({{ cam.idx }})">720p</button>

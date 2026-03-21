@@ -590,12 +590,15 @@ stream_enabled = {}
 detection_enabled = {}
 # Dictionnaire pour activer/désactiver l'affichage des ROI de chaque caméra
 roi_display_enabled = {}
+# Dictionnaire pour activer/désactiver l'overlay debug du masque de mouvement
+mask_overlay_enabled = {}
 # Résolution d'affichage du stream (largeur en pixels) : 854 (480p) ou 1280 (720p)
 stream_display_width = {}
 for i in range(len(CAM_IDS)):
     stream_enabled[i] = False  # vidéo masquée par défaut
     detection_enabled[i] = True  # détection active par défaut
     roi_display_enabled[i] = False  # affichage ROI désactivé par défaut
+    mask_overlay_enabled[i] = False  # overlay masque désactivé par défaut
     stream_display_width[i] = 854  # 480p par défaut (854x480)
     # Démarrage automatique de la détection
     stop_event = threading.Event()
@@ -765,6 +768,16 @@ def gen_frames(cid):
                     x2r = max(0, min(w - 1, x_raw + w_raw))
                     y2r = max(0, min(h - 1, y_raw + h_raw))
                     cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), (0, 255, 255), 2)
+            # Overlay debug du masque de mouvement (semi-transparent vert)
+            if mask_overlay_enabled.get(cid, False) and cid in inference_threads:
+                detector = getattr(inference_threads[cid], 'motion_detector', None)
+                if detector is not None and detector._last_mask is not None:
+                    dbg_mask = detector._last_mask
+                    if dbg_mask.shape[:2] != (h, w):
+                        dbg_mask = cv2.resize(dbg_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+                    green_overlay = np.zeros_like(frame)
+                    green_overlay[dbg_mask > 0] = (0, 200, 0)
+                    frame = cv2.addWeighted(frame, 1.0, green_overlay, 0.45, 0)
             # Superposer l'overlay des zones (créé une seule fois)
             zone_overlay = get_zone_overlay(frame.shape, cid)
             # Créer un masque pour ne dessiner que les pixels non-noirs de l'overlay
@@ -893,7 +906,8 @@ def index():
             'gaussian_blur': gaussian_blur,
             'aspect_filter': aspect_filter,
             'min_single_contour': min_single_contour,
-            'roi_display_enabled': roi_display_enabled.get(idx, False)
+            'roi_display_enabled': roi_display_enabled.get(idx, False),
+            'mask_overlay_enabled': mask_overlay_enabled.get(idx, False)
         })
     return render_template('index.html', cam_infos=cam_infos, app_name=APP_NAME, app_version=APP_VERSION, telegram_alert_enabled=telegram_alert_enabled, stature_colors=OBJECT_COLORS)
 
@@ -1024,6 +1038,14 @@ def toggle_roi_display(cid):
     data = request.get_json()
     enabled = data.get('enabled', False)
     roi_display_enabled[cid] = enabled
+    return jsonify({'status': 'ok', 'enabled': enabled})
+
+
+@app.route('/toggle_mask_overlay/<int:cid>', methods=['POST'])
+def toggle_mask_overlay(cid):
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+    mask_overlay_enabled[cid] = enabled
     return jsonify({'status': 'ok', 'enabled': enabled})
 
 

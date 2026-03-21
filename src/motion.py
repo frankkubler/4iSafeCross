@@ -47,6 +47,7 @@ class MotionDetector:
         )
         self.background = None  # pour méthode frame differencing
         self.frame_diff_threshold = 50
+        self._last_mask = None  # masque debug (mis à jour à chaque frame)
 
     def update_fgbg_params(self, varThreshold=None, history=None, detectShadows=None):
         """Met à jour les paramètres MOG2 dynamiquement.
@@ -144,6 +145,9 @@ class MotionDetector:
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_std)
 
         white_pixels = cv2.countNonZero(mask)
+
+        # Conserver le masque pour l'affichage debug dans la web UI
+        self._last_mask = mask
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         roi = None
