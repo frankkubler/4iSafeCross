@@ -9,7 +9,7 @@ class MotionDetector:
                  padding=40, min_contour_area=30,
                  motion_on_frames=2, motion_off_frames=5,
                  use_gaussian_blur=True, use_aspect_filter=False,
-                 min_single_contour=3000):
+                 min_single_contour=1500):
         self.history = history
         self.varThreshold = varThreshold
         self.detectShadows = detectShadows

@@ -753,7 +753,7 @@
                         </div>
                         <div class="motion-field">
                             <span title="Seuil de variance MOG2 — plus bas = plus sensible.">Var Threshold</span>
-                            <input type="number" id="varThreshold-{{ cam.idx }}" value="{{ cam.varThreshold if cam.varThreshold is defined else 7 }}" min="1" max="255" step="1" />
+                            <input type="number" id="varThreshold-{{ cam.idx }}" value="{{ cam.varThreshold if cam.varThreshold is defined else 10 }}" min="1" max="255" step="1" />
                         </div>
                         <div class="motion-field">
                             <span title="Nombre de frames pour modéliser l'arrière-plan (MOG2).">History</span>
@@ -773,7 +773,7 @@
                         </div>
                         <div class="motion-field">
                             <span title="Surface minimale d'un seul contour pour déclencher indépendamment du total (détecte un piéton lointain isolé).">Min contour seul</span>
-                            <input type="number" id="min_single_contour-{{ cam.idx }}" value="{{ cam.min_single_contour if cam.min_single_contour is defined else 3000 }}" min="0" max="50000" step="100" />
+                            <input type="number" id="min_single_contour-{{ cam.idx }}" value="{{ cam.min_single_contour if cam.min_single_contour is defined else 1500 }}" min="0" max="50000" step="100" />
                         </div>
                         <div class="motion-field">
                             <span title="Flou gaussien 5×5 avant MOG2 pour atténuer le bruit caméra (~2ms). Désactiver si perf critique.">Gaussian Blur</span>
