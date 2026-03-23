@@ -120,25 +120,17 @@ class AlerteManager:
 
         pose = detection.get("pose")
         if pose is not None:
-            # pose=[] signifie que le modèle a tourné mais n'a trouvé aucun corps.
-            # Par défaut rejet, mais bypassable avec skip_keypoint_filter=True
-            # (même logique que « peu de keypoints visibles »).
+            # pose=[] signifie que le modèle a tourné mais n'a trouvé aucun corps humain.
+            # Ce cas est TOUJOURS rejeté : skip_keypoint_filter ne bypass que le seuil
+            # de nombre de keypoints (peu de kp visibles), pas l'absence totale de corps.
+            # Un chariot élévateur détecté comme "person" génère typiquement pose=[].
             if len(pose) == 0:
                 detection_zones = detection.get("zones", [])
-                skip = any(
-                    self._zones_flat.get(zn, {}).get("skip_keypoint_filter", False)
-                    for zn in detection_zones
-                )
-                if not skip:
-                    self.logger.info(
-                        f"Faux positif écarté — pose=[] zones={detection_zones} "
-                        f"skip_flags={[self._zones_flat.get(zn, {}).get('skip_keypoint_filter') for zn in detection_zones]}"
-                    )
-                    return False
                 self.logger.info(
-                    f"Filtre keypoints bypassé (skip_keypoint_filter=True) pour zone(s) {detection_zones}"
-                    f" — 0 keypoint(s) visible(s), seuil non appliqué"
+                    f"Faux positif écarté — pose=[] zones={detection_zones} "
+                    f"(skip_keypoint_filter ignoré pour pose=[])"
                 )
+                return False
             else:
                 visible_kp = sum(
                     1 for kp in pose if len(kp) >= 3 and float(kp[2]) >= KP_CONF_THRESHOLD
