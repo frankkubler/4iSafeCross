@@ -1179,7 +1179,7 @@ def detections_thumbs():
         files = glob.glob(os.path.join('detections', '*.jpg'))
         files.sort(key=os.path.getctime, reverse=True)
         result = []
-        for f in files[:10]:
+        for f in files[:20]:
             filename = os.path.basename(f)
             cam_id = None
             display_date = None
