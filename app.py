@@ -372,6 +372,23 @@ def detection_callback_factory(cid, main_loop=None):
             x_pad = None
             y_pad = None
             is_skipped_frame = False
+
+        def _iou_overlap(a, b):
+            """Retourne max(IoU, part de a contenue dans b) entre deux bboxes."""
+            ix1 = max(a["x_min"], b["x_min"])
+            iy1 = max(a["y_min"], b["y_min"])
+            ix2 = min(a["x_max"], b["x_max"])
+            iy2 = min(a["y_max"], b["y_max"])
+            inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+            if inter == 0:
+                return 0.0
+            area_a = (a["x_max"] - a["x_min"]) * (a["y_max"] - a["y_min"])
+            area_b = (b["x_max"] - b["x_min"]) * (b["y_max"] - b["y_min"])
+            union = area_a + area_b - inter
+            iou = inter / union if union > 0 else 0.0
+            overlap_ratio = inter / area_a if area_a > 0 else 0.0
+            return max(iou, overlap_ratio)
+
         # Stocker les détections dans la structure partagée
         with shared_detections_lock:
             # Ajoute la zone à la fin de chaque détection
@@ -384,17 +401,22 @@ def detection_callback_factory(cid, main_loop=None):
                     previous_detection[zone_name] = False
             # Marquer les zones détectées dans cette frame
             zones_detected = set()  # uniquement les personnes valides (pour le tracking previous_detection)
+            forklifts_in_frame = [d for d in detections if d.get("label") == "forklift"]
             for det in detections:
                 zone_names = get_zone_for_detection(det, zones)
                 det_with_zone = det.copy()  # Copie le dictionnaire
                 det_with_zone["zones"] = zone_names  # Ajoute les zones
                 detections_with_zone.append(det_with_zone)
                 # Ne compter la zone comme "détectée" que pour les personnes passant le filtre keypoints
-                # (même critère que pour déclencher l'alerte) — évite qu'un chariot à fourche
-                # détecté comme "person" avec peu de keypoints bloque l'extinction de l'alerte
+                # ET ne chevauchant pas un forklift (même critère que pour déclencher l'alerte)
                 if det.get("label") == "person" and alert_manager.should_trigger_alert_for_detection(det_with_zone):
-                    for zn in zone_names:
-                        zones_detected.add(zn)
+                    # Filtre IoU inline (cohérent avec le filtre appliqué lors de l'alerte)
+                    overlapping_forklift = any(
+                        _iou_overlap(det, f) > 0.15 for f in forklifts_in_frame
+                    ) if forklifts_in_frame else False
+                    if not overlapping_forklift:
+                        for zn in zone_names:
+                            zones_detected.add(zn)
             shared_detections[cid] = detections_with_zone
 
             # Debounce : mise à jour des compteurs avec reset temporel par zone.
@@ -477,7 +499,23 @@ def detection_callback_factory(cid, main_loop=None):
 
         # Filtrer pour l'alerte uniquement label == "person" (personne_type/posture non utilisé)
         # Ce bloc est HORS de la boucle zones pour n'appeler on_detection qu'une seule fois par frame
-        detections_person = [det for det in detections if det.get("label") == "person"]
+
+        # Filtre IoU : exclure les personnes dont la bbox chevauche significativement
+        # un chariot élévateur dans la même frame (pose=[] ou avec keypoints parasites).
+        forklifts = [d for d in detections if d.get("label") == "forklift"]
+        detections_person = []
+        for det in [d for d in detections if d.get("label") == "person"]:
+            overlapping = next(
+                (f for f in forklifts if _iou_overlap(det, f) > 0.15),
+                None
+            )
+            if overlapping:
+                logger.info(
+                    f"Personne écartée (IoU/overlap={_iou_overlap(det, overlapping):.2f}"
+                    f" > 0.15 avec forklift) — probable même objet"
+                )
+            else:
+                detections_person.append(det)
 
         # Ajouter les zones aux détections personnes et appliquer le filtrage par stature/zone
         detections_person_with_zone = []

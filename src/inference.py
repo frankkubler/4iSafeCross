@@ -246,7 +246,10 @@ class InferenceServerThread(threading.Thread):
                                 "class_id": int(d["class_id"]),
                                 "label": d.get("label", ""),
                                 "tracker_id": int(d.get("tracker_id") or -1),  # Utilise 'or -1' au lieu de la valeur par défaut
-                                "pose": d.get("pose", []),
+                                # pose=None → pose désactivée (POSE_ENABLED=False, skip_pose=True)
+                                # pose=[]   → pose activée, modèle a tourné, aucun corps trouvé
+                                # pose=[..] → keypoints disponibles
+                                "pose": None if not self.pose_enabled else d.get("pose", []),
                                 "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if d["label"] == "person" else ""))
                             }
                             for d in detections
