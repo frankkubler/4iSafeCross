@@ -120,15 +120,16 @@ class AlerteManager:
 
         pose = detection.get("pose")
         if pose is not None:
-            # pose=[] signifie que le modèle a tourné mais n'a trouvé aucun corps humain.
-            # Ce cas est TOUJOURS rejeté : skip_keypoint_filter ne bypass que le seuil
-            # de nombre de keypoints (peu de kp visibles), pas l'absence totale de corps.
-            # Un chariot élévateur détecté comme "person" génère typiquement pose=[].
+            # pose=None → POSE_ENABLED=False (désactivé côté config) → fail-safe, laisser passer
+            # pose=[]   → POSE_ENABLED=True, modèle a tourné, aucun corps détecté
+            #             → faux positif typique d'un chariot mal classifié, toujours rejeter
+            #             → skip_keypoint_filter NE bypass PAS ce cas
+            # pose=[..] → keypoints disponibles → appliquer filtre de count (bypassable)
             if len(pose) == 0:
                 detection_zones = detection.get("zones", [])
                 self.logger.info(
-                    f"Faux positif écarté — pose=[] zones={detection_zones} "
-                    f"(skip_keypoint_filter ignoré pour pose=[])"
+                    f"Faux positif écarté — pose=[] (pose activée, aucun corps trouvé) "
+                    f"zones={detection_zones}"
                 )
                 return False
             else:
