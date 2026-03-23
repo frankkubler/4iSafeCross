@@ -198,12 +198,13 @@ class InferenceServerThread(threading.Thread):
 
             # 🚀 Vérification si inférence nécessaire (économie de 100ms par frame sautée)
             if not self._should_run_inference(frame):
-                # Renvoyer les dernières détections connues
+                # Renvoyer les dernières détections connues (frame sautée, ne contribue pas au debounce)
                 self._call_detection_callback({
                     "detections": self.past_detections,
                     "roi": roi,
                     "x_pad": (x_pad, y_pad, w_pad, h_pad, x, y, w, h),
-                    "y_pad": None
+                    "y_pad": None,
+                    "skipped": True,  # Indique que ce n'est pas une vraie inférence
                 })
                 self.consecutive_skips += 1
                 # 🚀 Sleep progressif : plus on skip, plus on dort longtemps (jusqu'à 50ms max)

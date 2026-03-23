@@ -365,11 +365,13 @@ def detection_callback_factory(cid, main_loop=None):
             roi = detection_result.get("roi", None)
             x_pad = detection_result.get("x_pad", None)
             y_pad = detection_result.get("y_pad", None)
+            is_skipped_frame = detection_result.get("skipped", False)
         else:
             detections = detection_result
             roi = None
             x_pad = None
             y_pad = None
+            is_skipped_frame = False
         # Stocker les détections dans la structure partagée
         with shared_detections_lock:
             # Ajoute la zone à la fin de chaque détection
@@ -398,6 +400,8 @@ def detection_callback_factory(cid, main_loop=None):
             # Debounce : mise à jour des compteurs avec reset temporel par zone.
             # Le counter reste stable tant que la dernière détection valide date de moins de
             # debounce_reset_seconds (par zone, sinon PERSON_RESET_SECONDS global).
+            # Les frames sautées (is_skipped_frame=True) réutilisent past_detections et ne
+            # comptent PAS comme une nouvelle frame d'inférence : elles n'incrémentent pas le counter.
             now_ts = time.time()
             for zone_name in zone_names_list:
                 if zone_name not in person_consecutive_frames:
@@ -405,10 +409,10 @@ def detection_callback_factory(cid, main_loop=None):
                 if zone_name not in person_last_detect_time:
                     person_last_detect_time[zone_name] = 0.0
                 _, reset_secs = _get_zone_debounce(zone_name)
-                if zone_name in zones_detected:
+                if zone_name in zones_detected and not is_skipped_frame:
                     person_consecutive_frames[zone_name] += 1
                     person_last_detect_time[zone_name] = now_ts
-                elif now_ts - person_last_detect_time[zone_name] > reset_secs:
+                elif zone_name not in zones_detected and now_ts - person_last_detect_time[zone_name] > reset_secs:
                     person_consecutive_frames[zone_name] = 0
             # Zones ayant confirmé la présence sur N frames consécutives (seuil par zone)
             debounced_zones = {
