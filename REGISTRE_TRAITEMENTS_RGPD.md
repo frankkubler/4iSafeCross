@@ -84,7 +84,7 @@
 | Technicien de maintenance | Images debug, logs applicatifs | Accès physique local (connexion RJ45) uniquement |
 | *(Option)* Groupe Telegram de supervision | Image JPEG annotée lors d'une alerte | Uniquement si `TELEGRAM_ENABLED = true` en config — HTTPS |
 
-> ⚠️ En configuration de production standard (`TELEGRAM_ENABLED = false`), aucune donnée ne quitte le réseau local du site.
+> ⚠️ En configuration de production standard (`TELEGRAM_ENABLED = false`), aucune donnée ne quitte le réseau local du site, pas de clé 4G branchée au PC IA.
 
 ---
 
