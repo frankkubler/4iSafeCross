@@ -142,8 +142,11 @@ print("Sections trouvées:", config.sections())
 
 LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 
-TOKEN = config.get('TELEGRAM', 'TOKEN')
-CHAT_ID = config.get('TELEGRAM', 'CHAT_ID')
+# Credentials Telegram : lus depuis les variables d'environnement en priorité.
+# Positionner TELEGRAM_TOKEN et TELEGRAM_CHAT_ID dans l'environnement système
+# (fichier .env chargé par l'unité systemd, ou export manuel) plutôt que dans config.ini.
+TOKEN = os.environ.get('TELEGRAM_TOKEN') or config.get('TELEGRAM', 'TOKEN', fallback='')
+CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID') or config.get('TELEGRAM', 'CHAT_ID', fallback='')
 TELEGRAM_ENABLED = config.getboolean('TELEGRAM', 'ENABLED', fallback=False)
 
 MOTIONTHRESHOLD = config.getint('APP', 'MOTIONTHRESHOLD')
