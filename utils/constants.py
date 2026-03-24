@@ -199,6 +199,10 @@ URL_RFDETR = config.get('APP', 'URL_RFDETR', fallback='http://127.0.0.1:8002/')
 FONCTION_YOLO = config.get('APP', 'FONCTION_YOLO', fallback='/predict_frame/')
 URL_YOLO = config.get('APP', 'URL_YOLO', fallback='http://127.0.0.1:8004/')
 
+# Rétention des images de détection (debug/maintenance)
+DETECTION_FILES_MAX = config.getint('APP', 'DETECTION_FILES_MAX', fallback=30)
+DETECTION_FILES_KEEP_DAYS = config.getint('APP', 'DETECTION_FILES_KEEP_DAYS', fallback=30)
+
 
 # Chargement des couleurs de stature depuis config.ini
 STATURE_COLORS = {}

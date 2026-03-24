@@ -1,6 +1,8 @@
 import os
+import time
 import cv2
 import logging
+from utils.constants import DETECTION_FILES_MAX, DETECTION_FILES_KEEP_DAYS
 
 logger = logging.getLogger(__name__).getChild('utils')
 
@@ -17,12 +19,30 @@ def clean_files(dir, max_files=5, ext='.log'):
             os.remove(os.path.join(dir, log_file))
 
 
+def _clean_files_by_age(directory, keep_days, ext='.jpg'):
+    """Supprime les fichiers plus anciens que keep_days jours."""
+    cutoff = time.time() - (keep_days * 86400)
+    for f in os.listdir(directory):
+        if f.endswith(ext):
+            fpath = os.path.join(directory, f)
+            try:
+                if os.path.getmtime(fpath) < cutoff:
+                    os.remove(fpath)
+            except OSError:
+                pass
+
+
 def save_frame_to_file(frame, cid, timestamp):
-    """Enregistre une frame dans un fichier en tant que tâche séparée"""
+    """Enregistre une frame dans un fichier en tant que tâche séparée.
+
+    La rétention est contrôlée par DETECTION_FILES_MAX et DETECTION_FILES_KEEP_DAYS
+    dans config/config.ini (section APP).
+    """
     try:
         output_dir = 'detections'
         os.makedirs(output_dir, exist_ok=True)
-        clean_files(output_dir, max_files=220, ext='.jpg')  # Nettoyer les fichiers précédents
+        _clean_files_by_age(output_dir, DETECTION_FILES_KEEP_DAYS, ext='.jpg')
+        clean_files(output_dir, max_files=DETECTION_FILES_MAX, ext='.jpg')
         filename = os.path.join(output_dir, f"cam_{cid}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg")
         cv2.imwrite(filename, frame)
         logger.info(f"Frame enregistrée: {filename}")
