@@ -144,6 +144,7 @@ LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 
 TOKEN = config.get('TELEGRAM', 'TOKEN')
 CHAT_ID = config.get('TELEGRAM', 'CHAT_ID')
+TELEGRAM_ENABLED = config.getboolean('TELEGRAM', 'ENABLED', fallback=False)
 
 MOTIONTHRESHOLD = config.getint('APP', 'MOTIONTHRESHOLD')
 FGBG_HISTORY = config.getint('APP', 'FGBG_HISTORY', fallback=500)
