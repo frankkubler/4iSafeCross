@@ -232,9 +232,35 @@ uv sync
 ### Configuration
 
 Modifiez les paramètres dans [`config/config.ini`](config/config.ini) :
-- Identifiants RTSP (`LOGIN`, `PASSWORD`, `HOST`, etc. dans la section [RTSP])
-- Seuils de détection (`MOTIONTRESHOLD`, `INF_THRESHOLD` dans la section [APP])
-- Token Telegram (`TOKEN`, `CHAT_ID` dans la section [TELEGRAM])
+- Identifiants RTSP (`LOGIN`, `PASSWORD`, `HOST`, etc. dans la section `[RTSP]`)
+- Seuils de détection (`MOTIONTHRESHOLD`, `INF_THRESHOLD` dans la section `[APP]`)
+- Activation Telegram (`TELEGRAM_ENABLED` dans la section `[TELEGRAM]`)
+
+#### Credentials sensibles — Token Telegram
+
+Le token du bot Telegram et l'identifiant du groupe de supervision **ne doivent pas être écrits dans `config.ini`** (risque d'exposition dans le dépôt Git).
+
+Ils sont lus en priorité depuis des **variables d'environnement** :
+
+```
+TELEGRAM_TOKEN=<token_du_bot>
+TELEGRAM_CHAT_ID=<id_du_groupe>
+```
+
+**Procédure de configuration sur le boîtier :**
+
+```sh
+# 1. Créer le fichier .env depuis le modèle fourni
+cp .env.example .env
+
+# 2. Renseigner les valeurs réelles
+nano .env
+
+# 3. Restreindre les permissions (lecture uniquement par user-4itec)
+chmod 600 .env
+```
+
+Le fichier `.env` est chargé automatiquement par le service systemd via `EnvironmentFile` (voir section [Services systemd](#services-systemd-et-scripts-bash-associés)). Il est exclu du dépôt Git (`.gitignore`).
 
 ### Rendre les scripts exécutables
 
@@ -284,11 +310,17 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 ### Fichiers systemd
 
 - **4isafecross.service** :
-  - Lance automatiquement l’application via le script `4isafecross.sh` au démarrage.
+  - Lance automatiquement l'application au démarrage.
+  - Charge les variables d'environnement depuis `.env` via `EnvironmentFile` (credentials Telegram, etc.).
   - Gère les logs dans le dossier `logs/`.
-  - Exemple d’installation :
+  - Exemple d'installation :
     ```sh
-    sudo cp 4isafecross.service /etc/systemd/system/
+    # Créer et remplir le fichier .env AVANT de démarrer le service
+    cp .env.example /home/user-4itec/4iSafeCross/.env
+    nano /home/user-4itec/4iSafeCross/.env
+    chmod 600 /home/user-4itec/4iSafeCross/.env
+
+    sudo cp scripts/4isafecross.service /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable 4isafecross.service
     sudo systemctl start 4isafecross.service
