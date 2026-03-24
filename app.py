@@ -29,7 +29,7 @@ from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN,
                              FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS,
                              MOTION_ON_FRAMES, MOTION_OFF_FRAMES,
                              MOTION_GAUSSIAN_BLUR, MOTION_ASPECT_FILTER,
-                             MOTION_MIN_SINGLE_CONTOUR)
+                             MOTION_MIN_SINGLE_CONTOUR, TELEGRAM_ENABLED)
 from utils.coco_classes import COCO_CLASSES
 import psutil
 import glob
@@ -80,9 +80,11 @@ for i in range(len(relays.relays)):
 logger.warning(f"⚠️  MODE FAIL-SAFE ACTIVÉ : {len(relays.relays)} relais allumés par défaut")
 # logger.info(f"Relais initialisé : {relays.is_initialized}, état actuel : {relays.states}")
 # Lancer le bot Telegram au démarrage de l'app
-telegram_bot = BotThread(overwrite_file=False)
-threading.Thread(target=telegram_bot.run, daemon=True).start()
-
+if TELEGRAM_ENABLED:
+    telegram_bot = BotThread(overwrite_file=False)
+    threading.Thread(target=telegram_bot.run, daemon=True).start()
+else:
+    telegram_bot = None
 # Définir les zones pour chaque caméra
 zones_by_camera = ZONES_BY_CAMERA
 
@@ -98,7 +100,7 @@ mask_overlay_lock = threading.Lock()
 MAX_MASK_OVERLAY_CACHE_SIZE = 10
 
 # Passer toutes les zones (toutes caméras) à l'alert_manager
-alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones_by_camera=zones_by_camera, telegram_alert_enabled=False)
+alert_manager = AlerteManager(relays, telegram_bot=telegram_bot, zones_by_camera=zones_by_camera, telegram_alert_enabled=TELEGRAM_ENABLED)
 
 # ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
 # Variables globales pour le heartbeat
