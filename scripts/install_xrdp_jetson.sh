@@ -4,7 +4,7 @@
 # Installation xrdp sur Jetson Orin NX (JetPack / Ubuntu)
 # Remplace gnome-remote-desktop
 # Usage : sudo bash install_xrdp_jetson.sh [--xfce] [--ip 192.168.3.X]
-# Exemple : sudo bash install_xrdp_jetson.sh --ip 192.168.3.50
+# Exemple : sudo bash install_xrdp_jetson.sh --ip 192.168.3.122
 # ============================================================
 
 set -e
