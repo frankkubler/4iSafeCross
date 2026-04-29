@@ -4,23 +4,30 @@
 # Installation xrdp sur Jetson Orin NX (JetPack / Ubuntu)
 # Remplace gnome-remote-desktop
 # xrdp écoute sur toutes les interfaces, UFW filtre le sous-réseau maintenance
-# Usage : sudo bash install_xrdp_jetson.sh [--xfce] [--subnet 192.168.3.0/24] [--tailscale]
+# Usage : sudo bash install_xrdp_jetson.sh [--xfce|--fluxbox] [--subnet 192.168.3.0/24] [--tailscale]
 # ============================================================
 
 set -e
 
 USE_XFCE=false
+USE_FLUXBOX=false
 USE_TAILSCALE=false
 MAINTENANCE_SUBNET="192.168.3.0/24"   # Sous-réseau du port de maintenance
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --xfce)   USE_XFCE=true; shift ;;
+        --fluxbox) USE_FLUXBOX=true; shift ;;
         --tailscale) USE_TAILSCALE=true; shift ;;
         --subnet) MAINTENANCE_SUBNET="$2"; shift 2 ;;
         *) echo "Argument inconnu : $1"; exit 1 ;;
     esac
 done
+
+if [ "$USE_XFCE" = true ] && [ "$USE_FLUXBOX" = true ]; then
+    echo "Options incompatibles : --xfce et --fluxbox"
+    exit 1
+fi
 
 CURRENT_USER=$(logname 2>/dev/null || echo "$SUDO_USER")
 USER_HOME=$(eval echo "~$CURRENT_USER")
@@ -28,7 +35,7 @@ USER_HOME=$(eval echo "~$CURRENT_USER")
 echo "============================================"
 echo " Installation xrdp - Jetson Orin NX"
 echo " Utilisateur  : $CURRENT_USER"
-echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || echo GNOME)"
+echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || echo GNOME))"
 echo " Sous-réseau  : $MAINTENANCE_SUBNET (port maintenance RJ45)"
 echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisation RDP via tailscale0)' || echo 'DÉSACTIVÉ')"
 echo "============================================"
@@ -58,6 +65,38 @@ echo "    OK"
 
 # --- 4. Configuration startwm.sh ---
 echo "[4/9] Configuration /etc/xrdp/startwm.sh..."
+if [ "$USE_XFCE" = true ]; then
+cat > /etc/xrdp/startwm.sh << 'STARTWM'
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --exit-with-session)
+fi
+
+export DESKTOP_SESSION=xfce
+export XDG_CURRENT_DESKTOP=XFCE
+export XDG_SESSION_TYPE=x11
+exec startxfce4
+STARTWM
+elif [ "$USE_FLUXBOX" = true ]; then
+cat > /etc/xrdp/startwm.sh << 'STARTWM'
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --exit-with-session)
+fi
+
+export DESKTOP_SESSION=fluxbox
+export XDG_CURRENT_DESKTOP=fluxbox
+export XDG_SESSION_TYPE=x11
+export XDG_SESSION_DESKTOP=fluxbox
+exec fluxbox
+STARTWM
+else
 cat > /etc/xrdp/startwm.sh << 'STARTWM'
 #!/bin/sh
 unset DBUS_SESSION_BUS_ADDRESS
@@ -72,20 +111,9 @@ export GNOME_SHELL_SESSION_MODE=ubuntu
 export XDG_CURRENT_DESKTOP=ubuntu:GNOME
 export XDG_SESSION_TYPE=x11
 export XDG_SESSION_DESKTOP=ubuntu
-
-if command -v gnome-session >/dev/null 2>&1; then
-    gnome-session --session=ubuntu
-    status=$?
-    if [ "$status" -eq 0 ]; then
-        exit 0
-    fi
-fi
-
-export DESKTOP_SESSION=fluxbox
-export XDG_CURRENT_DESKTOP=fluxbox
-export XDG_SESSION_DESKTOP=fluxbox
-exec fluxbox
+exec gnome-session --session=ubuntu
 STARTWM
+fi
 chmod +x /etc/xrdp/startwm.sh
 echo "    OK"
 
@@ -101,7 +129,20 @@ startxfce4
 XSESSION
     chmod +x "$USER_HOME/.xsession"
     chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.xsession"
+    rm -f "$USER_HOME/.xsessionrc"
+elif [ "$USE_FLUXBOX" = true ]; then
+    cat > "$USER_HOME/.xsession" << 'XSESSION'
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+setxkbmap fr
+exec fluxbox
+XSESSION
+    chmod +x "$USER_HOME/.xsession"
+    chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.xsession"
+    rm -f "$USER_HOME/.xsessionrc"
 else
+    rm -f "$USER_HOME/.xsession"
     cat > "$USER_HOME/.xsessionrc" << 'XSESSIONRC'
 export GNOME_SHELL_SESSION_MODE=ubuntu
 export XDG_CURRENT_DESKTOP=ubuntu:GNOME
@@ -210,7 +251,7 @@ echo "============================================"
 echo "   Protocole   : RDP"
 echo "   Port        : 3389"
 echo "   Utilisateur : $CURRENT_USER"
-echo "   Session     : $([ "$USE_XFCE" = true ] && echo 'XFCE (léger)' || echo 'GNOME X11 avec fallback Fluxbox')"
+echo "   Session     : $([ "$USE_XFCE" = true ] && echo 'XFCE (léger)' || ([ "$USE_FLUXBOX" = true ] && echo 'Fluxbox (stable)' || echo 'GNOME X11'))"
 echo ""
 echo " Workflow port maintenance :"
 echo "   1. Brancher le câble RJ45"
