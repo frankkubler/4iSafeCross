@@ -133,17 +133,13 @@ content = re.sub(r'^port=.*', 'port=3389', content, flags=re.MULTILINE)
 
 # Buffer TCP
 if 'tcp_send_buffer_bytes' not in content:
-    content = content.replace('[globals]', '[globals]
-tcp_send_buffer_bytes=4194304', 1)
+    content = content.replace('[globals]', '[globals]\ntcp_send_buffer_bytes=4194304', 1)
 else:
     content = re.sub(r'^tcp_send_buffer_bytes=.*', 'tcp_send_buffer_bytes=4194304', content, flags=re.MULTILINE)
 
 # Codec RemoteFX
 if '[Xorg]' in content and 'codec_id' not in content:
-    content = content.replace('[Xorg]', '[Xorg]
-codec_id=2
-quality=0
-max_bpp=24', 1)
+    content = content.replace('[Xorg]', '[Xorg]\ncodec_id=2\nquality=0\nmax_bpp=24', 1)
 
 with open('/etc/xrdp/xrdp.ini', 'w') as f:
     f.write(content)

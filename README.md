@@ -344,6 +344,19 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 - **switch-display.sh** :
   - Configure un écran virtuel (dummy) si aucun écran HDMI n’est détecté.
 
+- **scripts/install_xrdp_jetson.sh** :
+  - Installe et configure `xrdp` sur Jetson (désactive `gnome-remote-desktop`, configure clavier FR/AZERTY, ajuste `xrdp.ini`, active le service).
+  - Restreint l’accès RDP au sous-réseau de maintenance via UFW.
+  - Options principales :
+    - `--xfce` : utilise une session XFCE légère au lieu de GNOME.
+    - `--subnet <CIDR>` : définit le sous-réseau autorisé sur le port 3389 (par défaut `192.168.3.0/24`).
+  - Exemple :
+    ```sh
+    sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24
+    # ou en session légère
+    sudo bash scripts/install_xrdp_jetson.sh --xfce
+    ```
+
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
 
 ## Schéma des ports RJ45, adresses IP et fonctions associées
