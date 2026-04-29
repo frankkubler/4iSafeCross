@@ -348,6 +348,7 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
   - Installe et configure `xrdp` sur Jetson (désactive `gnome-remote-desktop`, configure clavier FR/AZERTY, ajuste `xrdp.ini`, active le service).
   - Restreint l’accès RDP au sous-réseau de maintenance via UFW.
   - Option `--tailscale` : autorise aussi RDP via `tailscale0` pour un accès distant sécurisé sans exposition large sur la 4G.
+  - En mode `--tailscale`, le script tente d’afficher automatiquement l’IPv4 Tailscale et le nom MagicDNS détectés en fin d’exécution.
   - Options principales :
     - `--xfce` : utilise une session XFCE légère au lieu de GNOME.
     - `--subnet <CIDR>` : définit le sous-réseau autorisé sur le port 3389 (par défaut `192.168.3.0/24`).

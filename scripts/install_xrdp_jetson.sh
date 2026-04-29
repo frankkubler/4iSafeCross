@@ -214,6 +214,35 @@ echo " Accès distant sécurisé (option Tailscale) :"
 echo "   1. Installer Tailscale : curl -fsSL https://tailscale.com/install.sh | sh"
 echo "   2. Joindre le tailnet : sudo tailscale up"
 echo "   3. Utiliser l IP Tailscale du Jetson dans votre client RDP"
+if command -v tailscale >/dev/null 2>&1; then
+    TS_IP4=$(tailscale ip -4 2>/dev/null | head -n 1 || true)
+    TS_STATUS_JSON=$(tailscale status --json 2>/dev/null || true)
+    TS_DNS=""
+
+    if [ -n "$TS_STATUS_JSON" ]; then
+        TS_DNS=$(printf '%s' "$TS_STATUS_JSON" | python3 -c 'import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print("")
+    raise SystemExit(0)
+print(data.get("Self", {}).get("DNSName", "").rstrip("."))' 2>/dev/null || true)
+    fi
+
+    if [ -n "$TS_IP4" ]; then
+        echo "   IP Tailscale détectée : $TS_IP4"
+        echo "   RDP via Tailscale IP : ${TS_IP4}:3389"
+    else
+        echo "   IP Tailscale : non détectée (vérifier: sudo tailscale up)"
+    fi
+
+    if [ -n "$TS_DNS" ]; then
+        echo "   MagicDNS détecté     : $TS_DNS"
+        echo "   RDP via MagicDNS     : ${TS_DNS}:3389"
+    fi
+else
+    echo "   tailscale introuvable (installation requise pour afficher l IP)"
+fi
 fi
 echo ""
 echo " Pour créer le profil maintenance NetworkManager :"
