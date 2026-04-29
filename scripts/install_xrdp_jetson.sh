@@ -151,6 +151,8 @@ ufw --force delete allow 3389/tcp 2>/dev/null || true
 ufw --force delete allow ${VNC_PORT}/tcp 2>/dev/null || true
 ufw --force delete allow in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
 ufw --force delete deny in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
+ufw --force delete deny from 100.64.0.0/10 to any port $VNC_PORT proto tcp 2>/dev/null || true
+ufw --force delete deny from fd7a:115c:a1e0::/48 to any port $VNC_PORT proto tcp 2>/dev/null || true
 
 SSH_CLIENT_IP=""
 if [ -n "${SSH_CLIENT:-}" ]; then
@@ -173,11 +175,15 @@ ufw allow from "$MAINTENANCE_SUBNET" to any port $VNC_PORT proto tcp
 echo "    UFW : ${VNC_PORT}/tcp autorisé depuis $MAINTENANCE_SUBNET"
 
 if [ "$USE_TAILSCALE" = true ]; then
+    ufw --force delete deny from 100.64.0.0/10 to any port $VNC_PORT proto tcp 2>/dev/null || true
+    ufw --force delete deny from fd7a:115c:a1e0::/48 to any port $VNC_PORT proto tcp 2>/dev/null || true
     ufw allow in on tailscale0 to any port $VNC_PORT proto tcp
     echo "    UFW : ${VNC_PORT}/tcp autorisé aussi via tailscale0"
 else
+    ufw deny from 100.64.0.0/10 to any port $VNC_PORT proto tcp
+    ufw deny from fd7a:115c:a1e0::/48 to any port $VNC_PORT proto tcp
     ufw deny in on tailscale0 to any port $VNC_PORT proto tcp
-    echo "    UFW : accès tailscale0 non autorisé"
+    echo "    UFW : accès tailscale0 non autorisé (interface + plages IP Tailscale bloquées)"
 fi
 
 if ! ufw status 2>/dev/null | grep -q "Status: active"; then
