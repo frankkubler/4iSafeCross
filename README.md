@@ -353,6 +353,7 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
   - Désactive `gnome-remote-desktop` et les règles xrdp existantes si présentes.
   - Nettoie automatiquement les anciennes règles (`3389`, `5999` global, `tailscale0:5999`) avant d'appliquer les nouvelles règles.
   - Sans option `--tailscale`, applique un blocage explicite `DENY` sur `tailscale0` pour le port `5999`, ainsi qu'un blocage des plages IP Tailscale (`100.64.0.0/10` et `fd7a:115c:a1e0::/48`).
+  - Si Tailscale est installé mais `--tailscale` n'est pas utilisé, active aussi `tailscale shields-up` pour bloquer toute connexion entrante depuis le tailnet.
   - Crée un service systemd `vncserver@99` (port `5999`, display `:99`), robuste au redémarrage.
   - Configure le clavier AZERTY via `setxkbmap fr` dans la session VNC.
   - En mode `--tailscale`, le script tente d'afficher automatiquement l'IPv4 Tailscale et le nom MagicDNS en fin d'exécution.

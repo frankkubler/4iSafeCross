@@ -179,11 +179,21 @@ if [ "$USE_TAILSCALE" = true ]; then
     ufw --force delete deny from fd7a:115c:a1e0::/48 to any port $VNC_PORT proto tcp 2>/dev/null || true
     ufw allow in on tailscale0 to any port $VNC_PORT proto tcp
     echo "    UFW : ${VNC_PORT}/tcp autorisé aussi via tailscale0"
+
+    if command -v tailscale >/dev/null 2>&1; then
+        tailscale set --shields-up=false >/dev/null 2>&1 || true
+        echo "    Tailscale : shields-up désactivé (accès entrant autorisé selon règles)"
+    fi
 else
     ufw deny from 100.64.0.0/10 to any port $VNC_PORT proto tcp
     ufw deny from fd7a:115c:a1e0::/48 to any port $VNC_PORT proto tcp
     ufw deny in on tailscale0 to any port $VNC_PORT proto tcp
     echo "    UFW : accès tailscale0 non autorisé (interface + plages IP Tailscale bloquées)"
+
+    if command -v tailscale >/dev/null 2>&1; then
+        tailscale set --shields-up=true >/dev/null 2>&1 || true
+        echo "    Tailscale : shields-up activé (aucune connexion entrante tailnet)"
+    fi
 fi
 
 if ! ufw status 2>/dev/null | grep -q "Status: active"; then
