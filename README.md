@@ -356,6 +356,13 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
     # ou en session légère
     sudo bash scripts/install_xrdp_jetson.sh --xfce
     ```
+  - Configuration réseau maintenance recommandée (NetworkManager GUI) :
+    - Ouvrir les paramètres réseau Ubuntu et éditer l’interface maintenance (eth2 / enP1p1s0 selon machine).
+    - IPv4 : `Manuel`
+    - Adresse : `192.168.3.122/24`
+    - Passerelle : vide
+    - DNS : vide
+    - Route par défaut : désactivée (`never-default`)
 
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
 

@@ -190,16 +190,7 @@ echo "   Session     : $([ "$USE_XFCE" = true ] && echo 'XFCE (léger)' || echo 
 echo ""
 echo " Workflow port maintenance :"
 echo "   1. Brancher le câble RJ45"
-echo "   2. Assigner l IP manuellement : sudo nmcli connection up maintenance"
+echo "   2. Ouvrir NetworkManager (GUI) et forcer l IP manuellement sur le port maintenance"
+echo "      IPv4: Manuel | Adresse: 192.168.3.122/24 | Passerelle: vide"
+echo "      DNS: vide | Route par défaut: désactivée (never-default)"
 echo "   3. Se connecter depuis Remmina sur 192.168.3.122:3389"
-echo ""
-echo " Pour créer le profil maintenance NetworkManager :"
-cat << 'NMCLI_EXAMPLE'
-     sudo nmcli connection add type ethernet ifname enP1p1s0 \
-         con-name maintenance \
-         ipv4.method manual \
-         ipv4.addresses 192.168.3.122/24 \
-         ipv4.never-default yes \
-         connection.autoconnect no
-NMCLI_EXAMPLE
-echo "============================================"
