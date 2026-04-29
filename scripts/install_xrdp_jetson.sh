@@ -194,10 +194,12 @@ echo "   2. Assigner l IP manuellement : sudo nmcli connection up maintenance"
 echo "   3. Se connecter depuis Remmina sur 192.168.3.122:3389"
 echo ""
 echo " Pour créer le profil maintenance NetworkManager :"
-echo "   sudo nmcli connection add type ethernet ifname enP1p1s0 \"
-echo "     con-name maintenance \"
-echo "     ipv4.method manual \"
-echo "     ipv4.addresses 192.168.3.122/24 \"
-echo "     ipv4.never-default yes \"
-echo "     connection.autoconnect no"
+cat << 'NMCLI_EXAMPLE'
+     sudo nmcli connection add type ethernet ifname enP1p1s0 \
+         con-name maintenance \
+         ipv4.method manual \
+         ipv4.addresses 192.168.3.122/24 \
+         ipv4.never-default yes \
+         connection.autoconnect no
+NMCLI_EXAMPLE
 echo "============================================"
