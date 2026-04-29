@@ -347,7 +347,8 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 - **scripts/install_xrdp_jetson.sh** :
   - Installe et configure **TigerVNC + XFCE** sur Jetson Orin NX — configuration unique et validée sur JetPack/Ubuntu.
   - Installe aussi **UFW**, applique les politiques par défaut (`deny incoming`, `allow outgoing`) puis active automatiquement le pare-feu.
-  - En exécution distante SSH, ajoute une règle temporaire anti-lockout pour autoriser l'IP SSH courante sur le port `22` avant activation de UFW.
+  - Installe et configure aussi **Fail2ban** pour bloquer les tentatives répétées d'authentification VNC (jail `tigervnc-auth`, backend systemd, action UFW).
+  - En exécution distante SSH, ajoute une règle anti-lockout pour autoriser l'IP SSH courante sur le port `22` avant activation de UFW.
   - Applique les règles de pare-feu nécessaires au port VNC `5999`.
   - Désactive `gnome-remote-desktop` et les règles xrdp existantes si présentes.
   - Nettoie automatiquement les anciennes règles (`3389`, `5999` global, `tailscale0:5999`) avant d'appliquer les nouvelles règles.
@@ -381,11 +382,13 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
     vncpasswd
     # 2. Vérifier la politique UFW et les règles 5999/22
     sudo ufw status numbered
-    # 3. Démarrer le service VNC (display :99, port 5999)
+    # 3. Vérifier l'état Fail2ban
+    sudo fail2ban-client status tigervnc-auth
+    # 4. Démarrer le service VNC (display :99, port 5999)
     sudo systemctl start vncserver@99.service
-    # 4. Vérifier le statut
+    # 5. Vérifier le statut
     sudo systemctl status vncserver@99.service
-    # 5. Connexion Remmina : VNC | hôte:5999
+    # 6. Connexion Remmina : VNC | hôte:5999
     ```
 
 ### Installation rapide de Tailscale (Jetson)

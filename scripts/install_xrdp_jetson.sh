@@ -54,7 +54,7 @@ echo ""
 
 echo "[1/5] Installation des paquets..."
 apt update -q
-apt install -y dbus-x11 tigervnc-standalone-server xfce4 xfce4-goodies xfce4-terminal xterm ufw
+apt install -y dbus-x11 tigervnc-standalone-server xfce4 xfce4-goodies xfce4-terminal xterm ufw fail2ban
 echo "    OK"
 
 echo "[2/5] Configuration de la session XFCE pour VNC..."
@@ -121,7 +121,32 @@ systemctl daemon-reload
 systemctl enable "vncserver@${VNC_DISPLAY}.service"
 echo "    OK"
 
-echo "[4/5] Configuration du pare-feu..."
+echo "[4/6] Configuration de Fail2ban (protection VNC)..."
+cat > /etc/fail2ban/filter.d/tigervnc-auth.conf << 'F2B_FILTER'
+[Definition]
+# Xvnc / TigerVNC auth failures seen in journald when running under systemd
+failregex = ^.*(?:authentication failed|AuthProcessClient: authentication failed).*$
+ignoreregex =
+F2B_FILTER
+
+cat > /etc/fail2ban/jail.d/tigervnc-local.conf << F2B_JAIL
+[tigervnc-auth]
+enabled = true
+backend = systemd
+filter = tigervnc-auth
+journalmatch = _SYSTEMD_UNIT=vncserver@${VNC_DISPLAY}.service
+port = ${VNC_PORT}
+maxretry = 5
+findtime = 10m
+bantime = 1h
+banaction = ufw
+F2B_JAIL
+
+systemctl enable fail2ban
+systemctl restart fail2ban
+echo "    OK"
+
+echo "[5/6] Configuration du pare-feu..."
 ufw --force delete allow 3389/tcp 2>/dev/null || true
 ufw --force delete allow ${VNC_PORT}/tcp 2>/dev/null || true
 ufw --force delete allow in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
@@ -163,9 +188,10 @@ ufw reload
 echo "    UFW : configuration rechargée"
 echo "    OK"
 
-echo "[5/5] Vérification finale..."
+echo "[6/6] Vérification finale..."
 which vncserver > /dev/null 2>&1 && echo " TigerVNC     : INSTALLÉ" || echo " TigerVNC     : ERREUR"
 systemctl is-enabled "vncserver@${VNC_DISPLAY}.service" 2>/dev/null && echo " vncserver@${VNC_DISPLAY} : SERVICE ACTIVÉ" || true
+systemctl is-enabled fail2ban 2>/dev/null && echo " Fail2ban     : SERVICE ACTIVÉ" || true
 
 echo ""
 echo "============================================"
