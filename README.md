@@ -350,12 +350,13 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
   - Option `--tailscale` : autorise aussi RDP via `tailscale0` pour un accès distant sécurisé sans exposition large sur la 4G.
   - En mode `--tailscale`, le script tente d’afficher automatiquement l’IPv4 Tailscale et le nom MagicDNS détectés en fin d’exécution.
   - Options principales :
+    - `--gnome` : force une session GNOME (utile si vous voulez VNC + GNOME explicitement).
     - `--fluxbox` : utilise Fluxbox comme gestionnaire de fenêtres (**recommandé sur Jetson** — contourne les incompatibilités xorgxrdp/Nvidia Tegra).
     - `--xfce` : utilise une session XFCE légère au lieu de GNOME.
     - `--vnc` : installe TigerVNC en parallèle de xrdp (port `5999`, display `:99`) — **alternative recommandée si xrdp échoue** (bypass total de xorgxrdp).
     - `--subnet <CIDR>` : définit le sous-réseau autorisé (par défaut `192.168.3.0/24`).
     - `--tailscale` : conserve l'accès local maintenance et ajoute l'accès via Tailscale.
-  - Options incompatibles : `--xfce` et `--fluxbox` ne peuvent pas être combinées.
+  - Options incompatibles : `--gnome`, `--xfce` et `--fluxbox` ne peuvent pas être combinées.
   - Exemple :
     ```sh
     # Accès local RJ45 uniquement
@@ -363,6 +364,9 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 
     # Recommandé Jetson : Fluxbox + VNC + accès Tailscale distant
     sudo bash scripts/install_xrdp_jetson.sh --fluxbox --vnc --tailscale
+
+    # VNC + GNOME (si vous preferez GNOME)
+    sudo bash scripts/install_xrdp_jetson.sh --gnome --vnc --tailscale
 
     # XFCE léger + accès local uniquement
     sudo bash scripts/install_xrdp_jetson.sh --xfce

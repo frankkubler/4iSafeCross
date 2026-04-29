@@ -28,6 +28,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Mode par defaut: GNOME si aucun WM explicite n'est demande
+if [ "$USE_GNOME" = false ] && [ "$USE_XFCE" = false ] && [ "$USE_FLUXBOX" = false ]; then
+    USE_GNOME=true
+fi
+
 if ([ "$USE_XFCE" = true ] || [ "$USE_FLUXBOX" = true ] || [ "$USE_GNOME" = true ]); then
     count=0
     [ "$USE_XFCE" = true ] && count=$((count + 1))
