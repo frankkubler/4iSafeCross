@@ -126,6 +126,23 @@ ufw --force delete allow 3389/tcp 2>/dev/null || true
 ufw --force delete allow ${VNC_PORT}/tcp 2>/dev/null || true
 ufw --force delete allow in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
 
+SSH_CLIENT_IP=""
+if [ -n "${SSH_CLIENT:-}" ]; then
+    SSH_CLIENT_IP=$(echo "$SSH_CLIENT" | awk '{print $1}')
+elif [ -n "${SSH_CONNECTION:-}" ]; then
+    SSH_CLIENT_IP=$(echo "$SSH_CONNECTION" | awk '{print $1}')
+fi
+
+if [ -n "$SSH_CLIENT_IP" ]; then
+    ufw --force delete allow from "$SSH_CLIENT_IP" to any port 22 proto tcp 2>/dev/null || true
+    ufw allow from "$SSH_CLIENT_IP" to any port 22 proto tcp
+    echo "    UFW : SSH autorisé depuis $SSH_CLIENT_IP (anti lockout)"
+fi
+
+ufw default deny incoming
+ufw default allow outgoing
+echo "    UFW : politiques par défaut appliquées (deny incoming / allow outgoing)"
+
 ufw allow from "$MAINTENANCE_SUBNET" to any port $VNC_PORT proto tcp
 echo "    UFW : ${VNC_PORT}/tcp autorisé depuis $MAINTENANCE_SUBNET"
 
@@ -137,8 +154,11 @@ else
 fi
 
 if ! ufw status 2>/dev/null | grep -q "Status: active"; then
-    echo "    UFW est installé mais inactif. Activez-le avec : sudo ufw --force enable"
+    ufw --force enable
+    echo "    UFW : activé automatiquement"
 fi
+ufw reload
+echo "    UFW : configuration rechargée"
 echo "    OK"
 
 echo "[5/5] Vérification finale..."

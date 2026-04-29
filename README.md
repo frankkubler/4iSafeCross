@@ -346,7 +346,9 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 
 - **scripts/install_xrdp_jetson.sh** :
   - Installe et configure **TigerVNC + XFCE** sur Jetson Orin NX — configuration unique et validée sur JetPack/Ubuntu.
-  - Installe aussi **UFW** et applique les règles de pare-feu nécessaires au port VNC `5999`.
+  - Installe aussi **UFW**, applique les politiques par défaut (`deny incoming`, `allow outgoing`) puis active automatiquement le pare-feu.
+  - En exécution distante SSH, ajoute une règle temporaire anti-lockout pour autoriser l'IP SSH courante sur le port `22` avant activation de UFW.
+  - Applique les règles de pare-feu nécessaires au port VNC `5999`.
   - Désactive `gnome-remote-desktop` et les règles xrdp existantes si présentes.
   - Nettoie automatiquement les anciennes règles (`3389`, `5999` global, `tailscale0:5999`) avant d'appliquer les nouvelles règles.
   - Crée un service systemd `vncserver@99` (port `5999`, display `:99`), robuste au redémarrage.
@@ -376,7 +378,7 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
     ```sh
     # 1. Définir le mot de passe VNC (en tant qu'utilisateur normal)
     vncpasswd
-    # 2. Vérifier la politique UFW et les règles 5999
+    # 2. Vérifier la politique UFW et les règles 5999/22
     sudo ufw status numbered
     # 3. Démarrer le service VNC (display :99, port 5999)
     sudo systemctl start vncserver@99.service
