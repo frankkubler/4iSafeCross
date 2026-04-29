@@ -37,7 +37,7 @@ USER_HOME=$(eval echo "~$CURRENT_USER")
 echo "============================================"
 echo " Installation xrdp - Jetson Orin NX"
 echo " Utilisateur  : $CURRENT_USER"
-echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || echo GNOME))$([ "$USE_VNC" = true ] && echo ' + VNC (port 5901)')"
+echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || echo GNOME))$([ "$USE_VNC" = true ] && echo ' + VNC (port 5999)')"
 echo " Sous-réseau  : $MAINTENANCE_SUBNET (port maintenance RJ45)"
 echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisation RDP via tailscale0)' || echo 'DÉSACTIVÉ')"
 echo "============================================"
@@ -238,8 +238,8 @@ echo "    OK"
 # --- 10. Configuration VNC (si --vnc) ---
 if [ "$USE_VNC" = true ]; then
     echo "[10] Configuration TigerVNC..."
-    VNC_DISPLAY=1
-    VNC_PORT=5901
+    VNC_DISPLAY=99
+    VNC_PORT=5999
 
     # Répertoire .vnc
     mkdir -p "$USER_HOME/.vnc"
@@ -314,7 +314,7 @@ ss -tlnp | grep "3389" && echo " Port 3389    : EN ECOUTE" || echo " Port 3389  
 ls /etc/xrdp/km-00000000.ini > /dev/null 2>&1 && echo " Clavier fr   : OK" || echo " Clavier fr   : NON CONFIGURÉ"
 if [ "$USE_VNC" = true ]; then
     which vncserver > /dev/null 2>&1 && echo " TigerVNC     : INSTALLÉ" || echo " TigerVNC     : ERREUR"
-    systemctl is-enabled vncserver@1.service 2>/dev/null && echo " vncserver@1  : SERVICE ACTIVÉ (en attente du mot de passe)" || true
+    systemctl is-enabled vncserver@99.service 2>/dev/null && echo " vncserver@99 : SERVICE ACTIVÉ (port 5999)" || true
 fi
 if [ "$USE_TAILSCALE" = true ]; then
     echo " Accès RDP    : $MAINTENANCE_SUBNET + interface tailscale0 (via UFW)"
@@ -336,7 +336,7 @@ echo " Accès VNC (TigerVNC) :"
 echo "   1. Définir le mot de passe  : sudo -u $CURRENT_USER vncpasswd"
 echo "   2. Démarrer le service      : sudo systemctl start vncserver@1.service"
 echo "   3. Vérifier le statut       : sudo systemctl status vncserver@1.service"
-echo "   4. Connexion Remmina        : VNC | hôte:5901 (ou IP Tailscale:5901)"
+echo "   4. Connexion Remmina        : VNC | hôte:5999 (ou IP Tailscale:5999)"
 echo "   (Le service redémarre automatiquement à chaque boot après vncpasswd)"
 fi
 echo ""

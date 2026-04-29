@@ -388,13 +388,22 @@ tailscale status
 tailscale ip -4
 ```
 
-Ensuite, lancez la configuration XRDP avec l'option Tailscale :
+Ensuite, lancez la configuration xrdp + VNC avec l'option Tailscale (**recommandé sur Jetson**) :
 
 ```sh
-sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24 --tailscale
+sudo bash scripts/install_xrdp_jetson.sh --fluxbox --vnc --tailscale
 ```
 
-Puis connectez-vous en RDP sur l'IP Tailscale du Jetson (port `3389`).
+Après l'installation, définir le mot de passe VNC puis démarrer le service :
+
+```sh
+vncpasswd
+sudo systemctl start vncserver@1.service
+```
+
+Connectez-vous ensuite via Remmina :
+- **VNC** sur `<IP_Tailscale>:5901` (recommandé — bypass xorgxrdp)
+- **RDP** sur `<IP_Tailscale>:3389` (si xrdp fonctionne)
 
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
 
