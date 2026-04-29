@@ -45,7 +45,7 @@ echo "    OK"
 # --- 2. Installation des paquets ---
 echo "[2/9] Installation des paquets..."
 apt update -q
-apt install -y xrdp xorgxrdp dbus-x11
+apt install -y xrdp xorgxrdp dbus-x11 fluxbox xterm
 if [ "$USE_XFCE" = true ]; then
     apt install -y xfce4 xfce4-goodies xfce4-terminal
 fi
@@ -73,7 +73,18 @@ export XDG_CURRENT_DESKTOP=ubuntu:GNOME
 export XDG_SESSION_TYPE=x11
 export XDG_SESSION_DESKTOP=ubuntu
 
-exec gnome-session --session=ubuntu
+if command -v gnome-session >/dev/null 2>&1; then
+    gnome-session --session=ubuntu
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        exit 0
+    fi
+fi
+
+export DESKTOP_SESSION=fluxbox
+export XDG_CURRENT_DESKTOP=fluxbox
+export XDG_SESSION_DESKTOP=fluxbox
+exec fluxbox
 STARTWM
 chmod +x /etc/xrdp/startwm.sh
 echo "    OK"
@@ -199,7 +210,7 @@ echo "============================================"
 echo "   Protocole   : RDP"
 echo "   Port        : 3389"
 echo "   Utilisateur : $CURRENT_USER"
-echo "   Session     : $([ "$USE_XFCE" = true ] && echo 'XFCE (léger)' || echo 'GNOME X11')"
+echo "   Session     : $([ "$USE_XFCE" = true ] && echo 'XFCE (léger)' || echo 'GNOME X11 avec fallback Fluxbox')"
 echo ""
 echo " Workflow port maintenance :"
 echo "   1. Brancher le câble RJ45"
