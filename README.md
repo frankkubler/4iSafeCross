@@ -345,46 +345,32 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
   - Configure un écran virtuel (dummy) si aucun écran HDMI n’est détecté.
 
 - **scripts/install_xrdp_jetson.sh** :
-  - Installe et configure `xrdp` sur Jetson (désactive `gnome-remote-desktop`, configure clavier FR/AZERTY, ajuste `xrdp.ini`, active le service).
-  - Restreint l’accès RDP au sous-réseau de maintenance via UFW.
-  - Option `--tailscale` : autorise aussi RDP via `tailscale0` pour un accès distant sécurisé sans exposition large sur la 4G.
-  - En mode `--tailscale`, le script tente d’afficher automatiquement l’IPv4 Tailscale et le nom MagicDNS détectés en fin d’exécution.
-  - Options principales :
-    - `--gnome` : force une session GNOME. Avec `--vnc`, ce mode reste **expérimental** sur Jetson et peut être instable.
-    - `--fluxbox` : utilise Fluxbox comme gestionnaire de fenêtres. Très léger et robuste, mais minimaliste.
-    - `--xfce` : utilise une session XFCE légère au lieu de GNOME. **Mode recommandé pour VNC sur Jetson**.
-    - `--vnc` : installe TigerVNC en parallèle de xrdp (port `5999`, display `:99`) — **mode recommandé pour l'accès distant Jetson**.
-    - `--subnet <CIDR>` : définit le sous-réseau autorisé (par défaut `192.168.3.0/24`).
-    - `--tailscale` : conserve l'accès local maintenance et ajoute l'accès via Tailscale.
-  - Options incompatibles : `--gnome`, `--xfce` et `--fluxbox` ne peuvent pas être combinées.
+  - Installe et configure **TigerVNC + XFCE** sur Jetson Orin NX — configuration unique et validée sur JetPack/Ubuntu.
+  - Désactive `gnome-remote-desktop` et les règles xrdp existantes si présentes.
+  - Crée un service systemd `vncserver@99` (port `5999`, display `:99`), robuste au redémarrage.
+  - Configure le clavier AZERTY via `setxkbmap fr` dans la session VNC.
+  - En mode `--tailscale`, le script tente d'afficher automatiquement l'IPv4 Tailscale et le nom MagicDNS en fin d'exécution.
+  - Options :
+    - `--subnet <CIDR>` : définit le sous-réseau autorisé pour le port VNC (par défaut `192.168.3.0/24`).
+    - `--tailscale` : autorise aussi le port VNC via `tailscale0` pour un accès distant sécurisé.
   - Exemple :
     ```sh
     # Accès local RJ45 uniquement
     sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24
 
-    # Recommandé Jetson : XFCE + VNC + accès Tailscale distant
-    sudo bash scripts/install_xrdp_jetson.sh --xfce --vnc --tailscale
-
-    # Alternative très légère : Fluxbox + VNC
-    sudo bash scripts/install_xrdp_jetson.sh --fluxbox --vnc --tailscale
-
-    # VNC + GNOME (expérimental sur Jetson)
-    sudo bash scripts/install_xrdp_jetson.sh --gnome --vnc --tailscale
-
-    # XFCE léger + accès local uniquement
-    sudo bash scripts/install_xrdp_jetson.sh --xfce
+    # Recommandé : XFCE + VNC + accès Tailscale distant
+    sudo bash scripts/install_xrdp_jetson.sh --tailscale
     ```
   - Configuration réseau maintenance recommandée (NetworkManager GUI) :
-    - Ouvrir les paramètres réseau Ubuntu et éditer l’interface maintenance (eth2 / enP1p1s0 selon machine).
+    - Ouvrir les paramètres réseau Ubuntu et éditer l'interface maintenance (eth2 / enP1p1s0 selon machine).
     - IPv4 : `Manuel`
     - Adresse : `192.168.3.122/24`
     - Passerelle : vide
     - DNS : vide
     - Route par défaut : désactivée (`never-default`)
   - Ordre recommandé pour Tailscale :
-    - Si vous utilisez `--tailscale`, installer Tailscale d’abord, puis exécuter `sudo tailscale up`, puis lancer le script.
-    - Si vous commencez par la maintenance locale RJ45 uniquement, vous pouvez lancer le script sans `--tailscale`, puis installer Tailscale ensuite et ajouter la règle UFW sur `tailscale0`.
-  - **Après installation avec `--vnc`** (obligatoire avant démarrage) :
+    - Installer Tailscale d'abord, puis exécuter `sudo tailscale up`, puis lancer le script avec `--tailscale`.
+  - **Après installation** (obligatoire avant démarrage) :
     ```sh
     # 1. Définir le mot de passe VNC (en tant qu'utilisateur normal)
     vncpasswd
@@ -397,7 +383,7 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 
 ### Installation rapide de Tailscale (Jetson)
 
-Pour activer un accès distant sécurisé sans exposer le port RDP sur Internet :
+Pour activer un accès distant sécurisé sans exposer le port VNC sur Internet :
 
 ```sh
 # 1) Installer Tailscale
@@ -411,10 +397,10 @@ tailscale status
 tailscale ip -4
 ```
 
-Ensuite, lancez la configuration VNC avec XFCE et l'option Tailscale (**recommandé sur Jetson**) :
+Ensuite, lancez la configuration VNC avec l'option Tailscale :
 
 ```sh
-sudo bash scripts/install_xrdp_jetson.sh --xfce --vnc --tailscale
+sudo bash scripts/install_xrdp_jetson.sh --tailscale
 ```
 
 Après l'installation, définir le mot de passe VNC puis démarrer le service :
@@ -425,13 +411,7 @@ sudo systemctl start vncserver@99.service
 ```
 
 Connectez-vous ensuite via Remmina :
-- **VNC** sur `<IP_Tailscale>:5999` (recommandé — XFCE + TigerVNC)
-- **RDP** sur `<IP_Tailscale>:3389` (si xrdp fonctionne)
-
-Notes de stabilité :
-- `GNOME + VNC` est expérimental sur Jetson/NVIDIA et peut échouer avec `gnome-shell` ou certains composants `gnome-settings-daemon`.
-- `XFCE + VNC` est le mode recommandé pour un accès distant stable.
-- `Fluxbox + VNC` reste une bonne alternative si vous voulez une session très légère.
+- **VNC** sur `<IP_Tailscale>:5999` (XFCE + TigerVNC)
 
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
 
@@ -445,7 +425,7 @@ Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec
 +-----------+-------------------+------------------------------------------+
 |  eth0     | DHCP              | Accès internet / réseau principal        |
 |  eth1     | 192.168.2.100     | Caméra 1 (Entrée principale)             |
-|  eth2     | 192.168.3.122     | Connexion directe RDP (maintenance)      |
+|  eth2     | 192.168.3.122     | Connexion directe VNC (maintenance)      |
 |  eth3     | (non utilisé)     | Libre / extension future                 |
 |  eth4     | (non utilisé)     | Libre / extension future                 |
 +-----------+-------------------+------------------------------------------+
@@ -453,7 +433,7 @@ Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec
 
 - **eth0** : Connecté au réseau principal, permet l'accès internet, la supervision distante et la communication avec Telegram.
 - **eth1** : Port dédié à la caméra principale (sur sous-réseau isolé pour la vidéo).
-- **eth2** : Port réservé à la maintenance (connexion RDP directe, accès d'urgence ou debug).
+- **eth2** : Port réservé à la maintenance (connexion VNC directe port 5999, accès d'urgence ou debug).
 - **eth3/eth4** : Disponibles pour ajout de caméras ou autres usages (à configurer selon besoin).
 
 > Adaptez les adresses IP et fonctions selon votre architecture réseau réelle. Utilisez des VLAN ou des sous-réseaux séparés pour la sécurité et la performance.
@@ -483,7 +463,7 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l’arrière de 
 > - Caméra 0 : 192.168.2.156
 > - Caméra 1 : 192.168.2.157
 > Vous pouvez modifier ces adresses dans le fichier [`config/zones.ini`](config/zones.ini), variable `RTSP_HOST`.
-- **eth2** est réservé pour la connexion RDP de maintenance, avec l’adresse IP 192.168.3.122. (masque 255.255.255.0) user : user-4itec / mdp : ***REMOVED-PASSWORD***
+- **eth2** est réservé pour la connexion VNC de maintenance (port 5999), avec l’adresse IP 192.168.3.122. (masque 255.255.255.0) user : user-4itec / mdp : ***REMOVED-PASSWORD***
 
 ## Gestion de la rotation des logs (logrotate)
 
