@@ -372,6 +372,30 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
     - Si vous utilisez `--tailscale`, installer Tailscale d’abord, puis exécuter `sudo tailscale up`, puis lancer le script.
     - Si vous commencez par la maintenance locale RJ45 uniquement, vous pouvez lancer le script sans `--tailscale`, puis installer Tailscale ensuite et ajouter la règle UFW sur `tailscale0`.
 
+### Installation rapide de Tailscale (Jetson)
+
+Pour activer un accès distant sécurisé sans exposer le port RDP sur Internet :
+
+```sh
+# 1) Installer Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# 2) Authentifier le Jetson dans votre tailnet
+sudo tailscale up
+
+# 3) Vérifier l'état et récupérer l'IP Tailscale
+tailscale status
+tailscale ip -4
+```
+
+Ensuite, lancez la configuration XRDP avec l'option Tailscale :
+
+```sh
+sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24 --tailscale
+```
+
+Puis connectez-vous en RDP sur l'IP Tailscale du Jetson (port `3389`).
+
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
 
 ## Schéma des ports RJ45, adresses IP et fonctions associées
