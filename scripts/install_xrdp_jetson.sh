@@ -125,6 +125,7 @@ echo "[4/5] Configuration du pare-feu..."
 ufw --force delete allow 3389/tcp 2>/dev/null || true
 ufw --force delete allow ${VNC_PORT}/tcp 2>/dev/null || true
 ufw --force delete allow in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
+ufw --force delete deny in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
 
 SSH_CLIENT_IP=""
 if [ -n "${SSH_CLIENT:-}" ]; then
@@ -150,6 +151,7 @@ if [ "$USE_TAILSCALE" = true ]; then
     ufw allow in on tailscale0 to any port $VNC_PORT proto tcp
     echo "    UFW : ${VNC_PORT}/tcp autorisé aussi via tailscale0"
 else
+    ufw deny in on tailscale0 to any port $VNC_PORT proto tcp
     echo "    UFW : accès tailscale0 non autorisé"
 fi
 
