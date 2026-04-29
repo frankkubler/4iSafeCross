@@ -277,17 +277,37 @@ VNCSTART
 cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
 #!/bin/sh
 unset DBUS_SESSION_BUS_ADDRESS
-unset XDG_RUNTIME_DIR
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval $(dbus-launch --sh-syntax --exit-with-session)
+
+# GNOME attend un runtime utilisateur valide. Sans session PAM/systemd,
+# on peut ne pas avoir /run/user/<uid> dans le contexte VNC.
+USER_ID=$(id -u)
+if [ -z "$XDG_RUNTIME_DIR" ] || [ ! -d "$XDG_RUNTIME_DIR" ]; then
+    if [ -d "/run/user/$USER_ID" ]; then
+        export XDG_RUNTIME_DIR="/run/user/$USER_ID"
+    else
+        export XDG_RUNTIME_DIR="/tmp/runtime-$USER"
+        mkdir -p "$XDG_RUNTIME_DIR"
+        chmod 700 "$XDG_RUNTIME_DIR"
+    fi
 fi
+
+# Crée une vraie session bus DBus pour GNOME.
+if command -v dbus-run-session >/dev/null 2>&1; then
+    DBUS_PREFIX="dbus-run-session --"
+else
+    if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+        eval $(dbus-launch --sh-syntax --exit-with-session)
+    fi
+    DBUS_PREFIX=""
+fi
+
 export DESKTOP_SESSION=ubuntu
 export GNOME_SHELL_SESSION_MODE=ubuntu
 export XDG_CURRENT_DESKTOP=ubuntu:GNOME
 export XDG_SESSION_TYPE=x11
 export XDG_SESSION_DESKTOP=ubuntu
 setxkbmap fr
-exec gnome-session --session=ubuntu
+exec sh -lc "$DBUS_PREFIX gnome-session --session=ubuntu"
 VNCSTART
     else
 cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
@@ -307,6 +327,15 @@ VNCSTART
     chmod +x "$USER_HOME/.vnc/xstartup"
     chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.vnc/xstartup"
 
+    # Neutraliser les anciennes configurations TigerVNC qui peuvent forcer un autre WM
+    if [ -f "$USER_HOME/.vnc/config" ]; then
+        cp "$USER_HOME/.vnc/config" "$USER_HOME/.vnc/config.bak.$(date +%Y%m%d-%H%M%S)"
+        rm -f "$USER_HOME/.vnc/config"
+    fi
+    if [ -d "$USER_HOME/.vnc/config.d" ]; then
+        mv "$USER_HOME/.vnc/config.d" "$USER_HOME/.vnc/config.d.bak.$(date +%Y%m%d-%H%M%S)"
+    fi
+
     # Service systemd TigerVNC
     cat > /etc/systemd/system/vncserver@.service << VNCSVC
 [Unit]
@@ -318,7 +347,7 @@ Type=forking
 User=$CURRENT_USER
 PIDFile=/tmp/.X%i-lock
 ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
-ExecStart=/usr/bin/vncserver :%i -geometry 1920x1080 -depth 24 -localhost no
+ExecStart=/usr/bin/vncserver :%i -geometry 1920x1080 -depth 24 -localhost no -xstartup $USER_HOME/.vnc/xstartup
 ExecStop=/usr/bin/vncserver -kill :%i
 Restart=on-failure
 
