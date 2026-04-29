@@ -4,17 +4,19 @@
 # Installation xrdp sur Jetson Orin NX (JetPack / Ubuntu)
 # Remplace gnome-remote-desktop
 # xrdp écoute sur toutes les interfaces, UFW filtre le sous-réseau maintenance
-# Usage : sudo bash install_xrdp_jetson.sh [--xfce] [--subnet 192.168.3.0/24]
+# Usage : sudo bash install_xrdp_jetson.sh [--xfce] [--subnet 192.168.3.0/24] [--tailscale]
 # ============================================================
 
 set -e
 
 USE_XFCE=false
+USE_TAILSCALE=false
 MAINTENANCE_SUBNET="192.168.3.0/24"   # Sous-réseau du port de maintenance
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --xfce)   USE_XFCE=true; shift ;;
+        --tailscale) USE_TAILSCALE=true; shift ;;
         --subnet) MAINTENANCE_SUBNET="$2"; shift 2 ;;
         *) echo "Argument inconnu : $1"; exit 1 ;;
     esac
@@ -28,6 +30,7 @@ echo " Installation xrdp - Jetson Orin NX"
 echo " Utilisateur  : $CURRENT_USER"
 echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || echo GNOME)"
 echo " Sous-réseau  : $MAINTENANCE_SUBNET (port maintenance RJ45)"
+echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisation RDP via tailscale0)' || echo 'DÉSACTIVÉ')"
 echo "============================================"
 echo ""
 
@@ -148,18 +151,25 @@ print("    xrdp.ini modifié avec succès")
 PYEOF
 echo "    OK"
 
-# --- 8. UFW : autoriser uniquement le sous-réseau maintenance ---
-echo "[8/9] Configuration pare-feu (sous-réseau maintenance uniquement)..."
+# --- 8. UFW : autoriser maintenance + option Tailscale ---
+echo "[8/9] Configuration pare-feu (maintenance locale + option Tailscale)..."
 if ufw status 2>/dev/null | grep -q "Status: active"; then
     # Supprimer toute règle existante sur 3389
     ufw delete allow 3389/tcp 2>/dev/null || true
     # N autoriser que le sous-réseau du port de maintenance
     ufw allow from "$MAINTENANCE_SUBNET" to any port 3389 proto tcp
-    echo "    UFW : 3389/tcp autorisé uniquement depuis $MAINTENANCE_SUBNET"
+    echo "    UFW : 3389/tcp autorisé depuis $MAINTENANCE_SUBNET"
+    if [ "$USE_TAILSCALE" = true ]; then
+        ufw allow in on tailscale0 to any port 3389 proto tcp
+        echo "    UFW : 3389/tcp autorisé aussi via tailscale0"
+    fi
 else
     echo "    UFW inactif - activation recommandée :"
     echo "    sudo ufw enable"
     echo "    sudo ufw allow from $MAINTENANCE_SUBNET to any port 3389 proto tcp"
+    if [ "$USE_TAILSCALE" = true ]; then
+        echo "    sudo ufw allow in on tailscale0 to any port 3389 proto tcp"
+    fi
 fi
 echo "    OK"
 
@@ -177,7 +187,11 @@ echo "============================================"
 systemctl is-active xrdp && echo " xrdp         : ACTIF" || echo " xrdp         : ERREUR"
 ss -tlnp | grep "3389" && echo " Port 3389    : EN ECOUTE" || echo " Port 3389    : NON TROUVÉ"
 ls /etc/xrdp/km-00000000.ini > /dev/null 2>&1 && echo " Clavier fr   : OK" || echo " Clavier fr   : NON CONFIGURÉ"
-echo " Accès RDP    : $MAINTENANCE_SUBNET uniquement (via UFW)"
+if [ "$USE_TAILSCALE" = true ]; then
+    echo " Accès RDP    : $MAINTENANCE_SUBNET + interface tailscale0 (via UFW)"
+else
+    echo " Accès RDP    : $MAINTENANCE_SUBNET uniquement (via UFW)"
+fi
 
 echo ""
 echo "============================================"
@@ -194,3 +208,21 @@ echo "   2. Ouvrir NetworkManager (GUI) et forcer l IP manuellement sur le port 
 echo "      IPv4: Manuel | Adresse: 192.168.3.122/24 | Passerelle: vide"
 echo "      DNS: vide | Route par défaut: désactivée (never-default)"
 echo "   3. Se connecter depuis Remmina sur 192.168.3.122:3389"
+if [ "$USE_TAILSCALE" = true ]; then
+echo ""
+echo " Accès distant sécurisé (option Tailscale) :"
+echo "   1. Installer Tailscale : curl -fsSL https://tailscale.com/install.sh | sh"
+echo "   2. Joindre le tailnet : sudo tailscale up"
+echo "   3. Utiliser l IP Tailscale du Jetson dans votre client RDP"
+fi
+echo ""
+echo " Pour créer le profil maintenance NetworkManager :"
+cat << 'NMCLI_EXAMPLE'
+     sudo nmcli connection add type ethernet ifname enP1p1s0 \
+         con-name maintenance \
+         ipv4.method manual \
+         ipv4.addresses 192.168.3.122/24 \
+         ipv4.never-default yes \
+         connection.autoconnect no
+NMCLI_EXAMPLE
+echo "============================================"

@@ -347,12 +347,16 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
 - **scripts/install_xrdp_jetson.sh** :
   - Installe et configure `xrdp` sur Jetson (désactive `gnome-remote-desktop`, configure clavier FR/AZERTY, ajuste `xrdp.ini`, active le service).
   - Restreint l’accès RDP au sous-réseau de maintenance via UFW.
+  - Option `--tailscale` : autorise aussi RDP via `tailscale0` pour un accès distant sécurisé sans exposition large sur la 4G.
   - Options principales :
     - `--xfce` : utilise une session XFCE légère au lieu de GNOME.
     - `--subnet <CIDR>` : définit le sous-réseau autorisé sur le port 3389 (par défaut `192.168.3.0/24`).
+    - `--tailscale` : conserve l’accès local maintenance et ajoute l’accès via Tailscale.
   - Exemple :
     ```sh
     sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24
+    # accès sécurisé distant via Tailscale + accès local maintenance
+    sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24 --tailscale
     # ou en session légère
     sudo bash scripts/install_xrdp_jetson.sh --xfce
     ```
@@ -363,6 +367,9 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
     - Passerelle : vide
     - DNS : vide
     - Route par défaut : désactivée (`never-default`)
+  - Ordre recommandé pour Tailscale :
+    - Si vous utilisez `--tailscale`, installer Tailscale d’abord, puis exécuter `sudo tailscale up`, puis lancer le script.
+    - Si vous commencez par la maintenance locale RJ45 uniquement, vous pouvez lancer le script sans `--tailscale`, puis installer Tailscale ensuite et ajouter la règle UFW sur `tailscale0`.
 
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
 
