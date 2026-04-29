@@ -54,7 +54,7 @@ echo ""
 
 echo "[1/5] Installation des paquets..."
 apt update -q
-apt install -y dbus-x11 tigervnc-standalone-server xfce4 xfce4-goodies xfce4-terminal xterm
+apt install -y dbus-x11 tigervnc-standalone-server xfce4 xfce4-goodies xfce4-terminal xterm ufw
 echo "    OK"
 
 echo "[2/5] Configuration de la session XFCE pour VNC..."
@@ -122,22 +122,22 @@ systemctl enable "vncserver@${VNC_DISPLAY}.service"
 echo "    OK"
 
 echo "[4/5] Configuration du pare-feu..."
-if ufw status 2>/dev/null | grep -q "Status: active"; then
-    ufw delete allow 3389/tcp 2>/dev/null || true
-    ufw delete allow ${VNC_PORT}/tcp 2>/dev/null || true
-    ufw allow from "$MAINTENANCE_SUBNET" to any port $VNC_PORT proto tcp
-    echo "    UFW : ${VNC_PORT}/tcp autorisé depuis $MAINTENANCE_SUBNET"
-    if [ "$USE_TAILSCALE" = true ]; then
-        ufw allow in on tailscale0 to any port $VNC_PORT proto tcp
-        echo "    UFW : ${VNC_PORT}/tcp autorisé aussi via tailscale0"
-    fi
+ufw --force delete allow 3389/tcp 2>/dev/null || true
+ufw --force delete allow ${VNC_PORT}/tcp 2>/dev/null || true
+ufw --force delete allow in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
+
+ufw allow from "$MAINTENANCE_SUBNET" to any port $VNC_PORT proto tcp
+echo "    UFW : ${VNC_PORT}/tcp autorisé depuis $MAINTENANCE_SUBNET"
+
+if [ "$USE_TAILSCALE" = true ]; then
+    ufw allow in on tailscale0 to any port $VNC_PORT proto tcp
+    echo "    UFW : ${VNC_PORT}/tcp autorisé aussi via tailscale0"
 else
-    echo "    UFW inactif - activation recommandée :"
-    echo "    sudo ufw enable"
-    echo "    sudo ufw allow from $MAINTENANCE_SUBNET to any port $VNC_PORT proto tcp"
-    if [ "$USE_TAILSCALE" = true ]; then
-        echo "    sudo ufw allow in on tailscale0 to any port $VNC_PORT proto tcp"
-    fi
+    echo "    UFW : accès tailscale0 non autorisé"
+fi
+
+if ! ufw status 2>/dev/null | grep -q "Status: active"; then
+    echo "    UFW est installé mais inactif. Activez-le avec : sudo ufw --force enable"
 fi
 echo "    OK"
 
