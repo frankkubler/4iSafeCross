@@ -343,12 +343,16 @@ Description=TigerVNC server display :%i
 After=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=$CURRENT_USER
-PIDFile=/tmp/.X%i-lock
+WorkingDirectory=$USER_HOME
+KillMode=mixed
+TimeoutStopSec=10
 ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
-ExecStart=/usr/bin/vncserver :%i -geometry 1920x1080 -depth 24 -localhost no -xstartup $USER_HOME/.vnc/xstartup
-ExecStop=/usr/bin/vncserver -kill :%i
+ExecStart=/usr/bin/vncserver -fg :%i -geometry 1920x1080 -depth 24 -localhost no -xstartup $USER_HOME/.vnc/xstartup
+ExecStop=-/usr/bin/timeout 8 /usr/bin/vncserver -kill :%i
+ExecStopPost=-/usr/bin/pkill -KILL -f "Xtigervnc.*:%i|Xvnc.*:%i|vncserver.*:%i"
+ExecStopPost=-/usr/bin/rm -f /tmp/.X%i-lock /tmp/.X11-unix/X%i
 Restart=on-failure
 
 [Install]
