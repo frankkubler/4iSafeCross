@@ -4,11 +4,12 @@
 # Installation xrdp sur Jetson Orin NX (JetPack / Ubuntu)
 # Remplace gnome-remote-desktop
 # xrdp écoute sur toutes les interfaces, UFW filtre le sous-réseau maintenance
-# Usage : sudo bash install_xrdp_jetson.sh [--xfce|--fluxbox] [--vnc] [--subnet 192.168.3.0/24] [--tailscale]
+# Usage : sudo bash install_xrdp_jetson.sh [--gnome|--xfce|--fluxbox] [--vnc] [--subnet 192.168.3.0/24] [--tailscale]
 # ============================================================
 
 set -e
 
+USE_GNOME=false
 USE_XFCE=false
 USE_FLUXBOX=false
 USE_VNC=false
@@ -17,6 +18,7 @@ MAINTENANCE_SUBNET="192.168.3.0/24"   # Sous-réseau du port de maintenance
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --gnome) USE_GNOME=true; shift ;;
         --xfce)   USE_XFCE=true; shift ;;
         --fluxbox) USE_FLUXBOX=true; shift ;;
         --vnc) USE_VNC=true; shift ;;
@@ -26,9 +28,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [ "$USE_XFCE" = true ] && [ "$USE_FLUXBOX" = true ]; then
-    echo "Options incompatibles : --xfce et --fluxbox"
-    exit 1
+if ([ "$USE_XFCE" = true ] || [ "$USE_FLUXBOX" = true ] || [ "$USE_GNOME" = true ]); then
+    count=0
+    [ "$USE_XFCE" = true ] && count=$((count + 1))
+    [ "$USE_FLUXBOX" = true ] && count=$((count + 1))
+    [ "$USE_GNOME" = true ] && count=$((count + 1))
+    if [ $count -gt 1 ]; then
+        echo "Options incompatibles : --gnome, --xfce et --fluxbox s'excluent mutuellement"
+        exit 1
+    fi
 fi
 
 CURRENT_USER=$(logname 2>/dev/null || echo "$SUDO_USER")
@@ -37,7 +45,7 @@ USER_HOME=$(eval echo "~$CURRENT_USER")
 echo "============================================"
 echo " Installation xrdp - Jetson Orin NX"
 echo " Utilisateur  : $CURRENT_USER"
-echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || echo GNOME))$([ "$USE_VNC" = true ] && echo ' + VNC (port 5999)')"
+echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || ([ "$USE_GNOME" = true ] && echo GNOME || echo 'GNOME (défaut)')))$([ "$USE_VNC" = true ] && echo ' + VNC (port 5999)')"
 echo " Sous-réseau  : $MAINTENANCE_SUBNET (port maintenance RJ45)"
 echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisation RDP via tailscale0)' || echo 'DÉSACTIVÉ')"
 echo "============================================"
@@ -101,7 +109,7 @@ export XDG_SESSION_TYPE=x11
 export XDG_SESSION_DESKTOP=fluxbox
 exec fluxbox
 STARTWM
-else
+elif [ "$USE_GNOME" = true ]; then
 cat > /etc/xrdp/startwm.sh << 'STARTWM'
 #!/bin/sh
 unset DBUS_SESSION_BUS_ADDRESS
@@ -245,22 +253,52 @@ if [ "$USE_VNC" = true ]; then
     mkdir -p "$USER_HOME/.vnc"
     chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.vnc"
 
-    # xstartup VNC (toujours Fluxbox — léger et stable sur Jetson)
-    cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
+    # xstartup VNC (utilise le même WM que xrdp)
+    if [ "$USE_XFCE" = true ]; then
+cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
 #!/bin/sh
 unset DBUS_SESSION_BUS_ADDRESS
 unset XDG_RUNTIME_DIR
-
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     eval $(dbus-launch --sh-syntax --exit-with-session)
 fi
-
+export DESKTOP_SESSION=xfce
+export XDG_CURRENT_DESKTOP=XFCE
+export XDG_SESSION_TYPE=x11
+setxkbmap fr
+exec startxfce4
+VNCSTART
+    elif [ "$USE_GNOME" = true ]; then
+cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --exit-with-session)
+fi
+export DESKTOP_SESSION=ubuntu
+export GNOME_SHELL_SESSION_MODE=ubuntu
+export XDG_CURRENT_DESKTOP=ubuntu:GNOME
+export XDG_SESSION_TYPE=x11
+export XDG_SESSION_DESKTOP=ubuntu
+setxkbmap fr
+exec gnome-session --session=ubuntu
+VNCSTART
+    else
+cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --exit-with-session)
+fi
 export DESKTOP_SESSION=fluxbox
 export XDG_CURRENT_DESKTOP=fluxbox
 export XDG_SESSION_TYPE=x11
 setxkbmap fr
 exec fluxbox
 VNCSTART
+    fi
     chmod +x "$USER_HOME/.vnc/xstartup"
     chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.vnc/xstartup"
 

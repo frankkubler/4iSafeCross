@@ -350,15 +350,21 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
   - Option `--tailscale` : autorise aussi RDP via `tailscale0` pour un accès distant sécurisé sans exposition large sur la 4G.
   - En mode `--tailscale`, le script tente d’afficher automatiquement l’IPv4 Tailscale et le nom MagicDNS détectés en fin d’exécution.
   - Options principales :
+    - `--fluxbox` : utilise Fluxbox comme gestionnaire de fenêtres (**recommandé sur Jetson** — contourne les incompatibilités xorgxrdp/Nvidia Tegra).
     - `--xfce` : utilise une session XFCE légère au lieu de GNOME.
-    - `--subnet <CIDR>` : définit le sous-réseau autorisé sur le port 3389 (par défaut `192.168.3.0/24`).
-    - `--tailscale` : conserve l’accès local maintenance et ajoute l’accès via Tailscale.
+    - `--vnc` : installe TigerVNC en parallèle de xrdp (port `5999`, display `:99`) — **alternative recommandée si xrdp échoue** (bypass total de xorgxrdp).
+    - `--subnet <CIDR>` : définit le sous-réseau autorisé (par défaut `192.168.3.0/24`).
+    - `--tailscale` : conserve l'accès local maintenance et ajoute l'accès via Tailscale.
+  - Options incompatibles : `--xfce` et `--fluxbox` ne peuvent pas être combinées.
   - Exemple :
     ```sh
+    # Accès local RJ45 uniquement
     sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24
-    # accès sécurisé distant via Tailscale + accès local maintenance
-    sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24 --tailscale
-    # ou en session légère
+
+    # Recommandé Jetson : Fluxbox + VNC + accès Tailscale distant
+    sudo bash scripts/install_xrdp_jetson.sh --fluxbox --vnc --tailscale
+
+    # XFCE léger + accès local uniquement
     sudo bash scripts/install_xrdp_jetson.sh --xfce
     ```
   - Configuration réseau maintenance recommandée (NetworkManager GUI) :
@@ -371,6 +377,16 @@ Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de
   - Ordre recommandé pour Tailscale :
     - Si vous utilisez `--tailscale`, installer Tailscale d’abord, puis exécuter `sudo tailscale up`, puis lancer le script.
     - Si vous commencez par la maintenance locale RJ45 uniquement, vous pouvez lancer le script sans `--tailscale`, puis installer Tailscale ensuite et ajouter la règle UFW sur `tailscale0`.
+  - **Après installation avec `--vnc`** (obligatoire avant démarrage) :
+    ```sh
+    # 1. Définir le mot de passe VNC (en tant qu'utilisateur normal)
+    vncpasswd
+    # 2. Démarrer le service VNC (display :99, port 5999)
+    sudo systemctl start vncserver@99.service
+    # 3. Vérifier le statut
+    sudo systemctl status vncserver@99.service
+    # 4. Connexion Remmina : VNC | hôte:5999
+    ```
 
 ### Installation rapide de Tailscale (Jetson)
 
@@ -398,11 +414,11 @@ Après l'installation, définir le mot de passe VNC puis démarrer le service :
 
 ```sh
 vncpasswd
-sudo systemctl start vncserver@1.service
+sudo systemctl start vncserver@99.service
 ```
 
 Connectez-vous ensuite via Remmina :
-- **VNC** sur `<IP_Tailscale>:5901` (recommandé — bypass xorgxrdp)
+- **VNC** sur `<IP_Tailscale>:5999` (recommandé — bypass xorgxrdp)
 - **RDP** sur `<IP_Tailscale>:3389` (si xrdp fonctionne)
 
 Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
