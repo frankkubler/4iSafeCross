@@ -378,7 +378,7 @@ Pour activer un accès distant sécurisé sans exposer le port RDP sur Internet 
 
 ```sh
 # 1) Installer Tailscale
-curl -fsSL https://tailscale.com/install.sh | sh
+sudo curl -fsSL https://tailscale.com/install.sh | sh
 
 # 2) Authentifier le Jetson dans votre tailnet
 sudo tailscale up

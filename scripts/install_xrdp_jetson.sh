@@ -73,8 +73,7 @@ export XDG_CURRENT_DESKTOP=ubuntu:GNOME
 export XDG_SESSION_TYPE=x11
 export XDG_SESSION_DESKTOP=ubuntu
 
-test -x /etc/X11/Xsession && exec /etc/X11/Xsession
-exec /bin/sh /etc/X11/Xsession
+exec gnome-session --session=ubuntu
 STARTWM
 chmod +x /etc/xrdp/startwm.sh
 echo "    OK"
