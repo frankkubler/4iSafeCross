@@ -4,13 +4,14 @@
 # Installation xrdp sur Jetson Orin NX (JetPack / Ubuntu)
 # Remplace gnome-remote-desktop
 # xrdp écoute sur toutes les interfaces, UFW filtre le sous-réseau maintenance
-# Usage : sudo bash install_xrdp_jetson.sh [--xfce|--fluxbox] [--subnet 192.168.3.0/24] [--tailscale]
+# Usage : sudo bash install_xrdp_jetson.sh [--xfce|--fluxbox] [--vnc] [--subnet 192.168.3.0/24] [--tailscale]
 # ============================================================
 
 set -e
 
 USE_XFCE=false
 USE_FLUXBOX=false
+USE_VNC=false
 USE_TAILSCALE=false
 MAINTENANCE_SUBNET="192.168.3.0/24"   # Sous-réseau du port de maintenance
 
@@ -18,6 +19,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --xfce)   USE_XFCE=true; shift ;;
         --fluxbox) USE_FLUXBOX=true; shift ;;
+        --vnc) USE_VNC=true; shift ;;
         --tailscale) USE_TAILSCALE=true; shift ;;
         --subnet) MAINTENANCE_SUBNET="$2"; shift 2 ;;
         *) echo "Argument inconnu : $1"; exit 1 ;;
@@ -35,7 +37,7 @@ USER_HOME=$(eval echo "~$CURRENT_USER")
 echo "============================================"
 echo " Installation xrdp - Jetson Orin NX"
 echo " Utilisateur  : $CURRENT_USER"
-echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || echo GNOME))"
+echo " Mode         : $([ "$USE_XFCE" = true ] && echo XFCE || ([ "$USE_FLUXBOX" = true ] && echo Fluxbox || echo GNOME))$([ "$USE_VNC" = true ] && echo ' + VNC (port 5901)')"
 echo " Sous-réseau  : $MAINTENANCE_SUBNET (port maintenance RJ45)"
 echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisation RDP via tailscale0)' || echo 'DÉSACTIVÉ')"
 echo "============================================"
@@ -55,6 +57,9 @@ apt update -q
 apt install -y xrdp xorgxrdp dbus-x11 fluxbox xterm
 if [ "$USE_XFCE" = true ]; then
     apt install -y xfce4 xfce4-goodies xfce4-terminal
+fi
+if [ "$USE_VNC" = true ]; then
+    apt install -y tigervnc-standalone-server
 fi
 echo "    OK"
 
@@ -230,6 +235,75 @@ systemctl enable xrdp
 systemctl restart xrdp
 echo "    OK"
 
+# --- 10. Configuration VNC (si --vnc) ---
+if [ "$USE_VNC" = true ]; then
+    echo "[10] Configuration TigerVNC..."
+    VNC_DISPLAY=1
+    VNC_PORT=5901
+
+    # Répertoire .vnc
+    mkdir -p "$USER_HOME/.vnc"
+    chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.vnc"
+
+    # xstartup VNC (toujours Fluxbox — léger et stable sur Jetson)
+    cat > "$USER_HOME/.vnc/xstartup" << 'VNCSTART'
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --exit-with-session)
+fi
+
+export DESKTOP_SESSION=fluxbox
+export XDG_CURRENT_DESKTOP=fluxbox
+export XDG_SESSION_TYPE=x11
+setxkbmap fr
+exec fluxbox
+VNCSTART
+    chmod +x "$USER_HOME/.vnc/xstartup"
+    chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.vnc/xstartup"
+
+    # Service systemd TigerVNC
+    cat > /etc/systemd/system/vncserver@.service << VNCSVC
+[Unit]
+Description=TigerVNC server display :%i
+After=network.target
+
+[Service]
+Type=forking
+User=$CURRENT_USER
+PIDFile=/tmp/.X%i-lock
+ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
+ExecStart=/usr/bin/vncserver :%i -geometry 1920x1080 -depth 24 -localhost no
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+VNCSVC
+
+    systemctl daemon-reload
+    systemctl enable vncserver@${VNC_DISPLAY}.service
+
+    # UFW : autoriser le port VNC
+    if ufw status 2>/dev/null | grep -q "Status: active"; then
+        ufw delete allow ${VNC_PORT}/tcp 2>/dev/null || true
+        ufw allow from "$MAINTENANCE_SUBNET" to any port $VNC_PORT proto tcp
+        echo "    UFW : ${VNC_PORT}/tcp autorisé depuis $MAINTENANCE_SUBNET"
+        if [ "$USE_TAILSCALE" = true ]; then
+            ufw allow in on tailscale0 to any port $VNC_PORT proto tcp
+            echo "    UFW : ${VNC_PORT}/tcp autorisé aussi via tailscale0"
+        fi
+    fi
+
+    echo "    OK"
+    echo ""
+    echo " !! IMPORTANT : définir le mot de passe VNC AVANT de démarrer le service :"
+    echo "    sudo -u $CURRENT_USER vncpasswd"
+    echo "    sudo systemctl start vncserver@${VNC_DISPLAY}.service"
+fi
+
 # --- Vérification finale ---
 echo ""
 echo "============================================"
@@ -238,6 +312,10 @@ echo "============================================"
 systemctl is-active xrdp && echo " xrdp         : ACTIF" || echo " xrdp         : ERREUR"
 ss -tlnp | grep "3389" && echo " Port 3389    : EN ECOUTE" || echo " Port 3389    : NON TROUVÉ"
 ls /etc/xrdp/km-00000000.ini > /dev/null 2>&1 && echo " Clavier fr   : OK" || echo " Clavier fr   : NON CONFIGURÉ"
+if [ "$USE_VNC" = true ]; then
+    which vncserver > /dev/null 2>&1 && echo " TigerVNC     : INSTALLÉ" || echo " TigerVNC     : ERREUR"
+    systemctl is-enabled vncserver@1.service 2>/dev/null && echo " vncserver@1  : SERVICE ACTIVÉ (en attente du mot de passe)" || true
+fi
 if [ "$USE_TAILSCALE" = true ]; then
     echo " Accès RDP    : $MAINTENANCE_SUBNET + interface tailscale0 (via UFW)"
 else
@@ -252,6 +330,15 @@ echo "   Protocole   : RDP"
 echo "   Port        : 3389"
 echo "   Utilisateur : $CURRENT_USER"
 echo "   Session     : $([ "$USE_XFCE" = true ] && echo 'XFCE (léger)' || ([ "$USE_FLUXBOX" = true ] && echo 'Fluxbox (stable)' || echo 'GNOME X11'))"
+if [ "$USE_VNC" = true ]; then
+echo ""
+echo " Accès VNC (TigerVNC) :"
+echo "   1. Définir le mot de passe  : sudo -u $CURRENT_USER vncpasswd"
+echo "   2. Démarrer le service      : sudo systemctl start vncserver@1.service"
+echo "   3. Vérifier le statut       : sudo systemctl status vncserver@1.service"
+echo "   4. Connexion Remmina        : VNC | hôte:5901 (ou IP Tailscale:5901)"
+echo "   (Le service redémarre automatiquement à chaque boot après vncpasswd)"
+fi
 echo ""
 echo " Workflow port maintenance :"
 echo "   1. Brancher le câble RJ45"
