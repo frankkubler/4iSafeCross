@@ -178,7 +178,7 @@ else
 fi
 
 # Vérifier si un port est accessible depuis internet via 4G/WAN
-WAN_IFACE=$(ip route | grep default | awk '{print $5}' | head -1)
+WAN_IFACE=$(ip route get 8.8.8.8 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
 if [ -n "$WAN_IFACE" ]; then
     WAN_IP=$(ip addr show "$WAN_IFACE" | grep "inet " | awk '{print $2}' | cut -d/ -f1)
     info "Interface WAN détectée : $WAN_IFACE ($WAN_IP)"
