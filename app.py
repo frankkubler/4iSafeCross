@@ -14,13 +14,14 @@ import logging.handlers
 import sys
 import os
 from datetime import datetime
+from pathlib import Path
 import time
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, RTSP_LOGIN, OBJECT_COLORS,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL, ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP, STATURE_COLORS, OBJECT_COLORS,
                              load_zones_by_camera_from_ini, NUM_RELAYS, STARTUP_GRACE_PERIOD,
                              DATASET_COLLECTION, DATASET_COLLECTION_INTERVAL,
                              DATASET_COLLECTION_START_HOUR, DATASET_COLLECTION_END_HOUR,
-                             DATASET_COLLECTION_MAX_PER_CLASS, DATASET_OUTPUT_DIR,
+                             DATASET_COLLECTION_MAX_PER_CLASS, DATASET_OUTPUT_DIR, DATASET_FILES_KEEP_DAYS,
                              DATASET_BG_INTERVAL, DATASET_BG_ENABLED,
                              DATASET_HARD_NEG_CONFIDENCE, DATASET_HARD_NEG_ENABLED,
                              URL_YOLO, FONCTION_YOLO,
@@ -657,6 +658,23 @@ for i in range(len(CAM_IDS)):
     )
     thread.start()
     inference_threads[i] = thread
+# Purge inconditionnelle des images dataset (RGPD — Art. 5-1-e) — quelle que soit la valeur de DATASET_COLLECTION
+_dataset_path = Path(DATASET_OUTPUT_DIR)
+_cutoff = time.time() - DATASET_FILES_KEEP_DAYS * 86400
+_purged = 0
+for _subdir, _ext in (("images/raw", ".jpg"), ("labels/raw", ".txt")):
+    _target = _dataset_path / _subdir
+    if _target.exists():
+        for _f in _target.iterdir():
+            if _f.suffix == _ext and _f.stat().st_mtime < _cutoff:
+                try:
+                    _f.unlink()
+                    _purged += 1
+                except OSError:
+                    pass
+if _purged:
+    logger.info(f"🗑️ Purge dataset : {_purged} fichier(s) supprimé(s) (>{DATASET_FILES_KEEP_DAYS}j)")
+
 dataset_threads = {}
 if DATASET_COLLECTION:
     logger.info(

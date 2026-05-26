@@ -7,7 +7,8 @@ from datetime import datetime
 import logging
 import cv2
 import asyncio
-from src.detection_db import init_db, insert_relay_event  # , insert_detection
+from src.detection_db import init_db, insert_relay_event, purge_old_relay_events  # , insert_detection
+from utils.constants import RELAY_EVENTS_KEEP_DAYS
 from utils.coco_classes import COCO_CLASSES
 
 # Queue avec limite pour éviter l'accumulation de tâches en mémoire
@@ -64,6 +65,9 @@ class AlerteManager:
             self.timer_task[name] = None
             self.last_detection_time_by_zone[name] = 0
         init_db()  # Initialise la base de données à la création du manager
+        deleted = purge_old_relay_events()  # Purge RGPD — Art. 5-1-e limitation de conservation
+        if deleted:
+            self.logger.info(f"RGPD purge relay_events : {deleted} enregistrement(s) supprimé(s) (> {RELAY_EVENTS_KEEP_DAYS}j)")
 
     def _on_task_done(self):
         """Callback appelé quand une tâche d'enregistrement est terminée."""

@@ -47,6 +47,8 @@ import cv2
 import numpy as np
 import requests
 
+from utils.constants import DATASET_FILES_KEEP_DAYS
+
 # Ajouter la racine du projet au sys.path pour importer les modules locaux
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -184,6 +186,29 @@ class DatasetCollectionThread(threading.Thread):
     # ------------------------------------------------------------------
     # Gestion des masques
     # ------------------------------------------------------------------
+
+    def _purge_old_dataset_files(self) -> None:
+        """Supprime les images et labels dataset plus anciens que DATASET_FILES_KEEP_DAYS jours.
+
+        Conforme RGPD — Art. 5-1-e (limitation de la conservation).
+        Durée configurée via DATASET_FILES_KEEP_DAYS dans config/config.ini (défaut : 90 jours).
+        Appelé une seule fois au démarrage du thread.
+        """
+        cutoff = time.time() - DATASET_FILES_KEEP_DAYS * 86400
+        total = 0
+        for subdir, ext in (("images/raw", ".jpg"), ("labels/raw", ".txt")):
+            target = self.output_dir / subdir
+            if not target.exists():
+                continue
+            for f in target.iterdir():
+                if f.suffix == ext and f.stat().st_mtime < cutoff:
+                    try:
+                        f.unlink()
+                        total += 1
+                    except OSError as e:
+                        self.logger.warning(f"Purge dataset : impossible de supprimer {f}: {e}")
+        if total:
+            self.logger.info(f"Purge dataset : {total} fichier(s) supprimé(s) (>{DATASET_FILES_KEEP_DAYS}j)")
 
     def set_masks(self, masks: list) -> None:
         """Met à jour les masques polygonaux de manière thread-safe.
@@ -359,6 +384,7 @@ class DatasetCollectionThread(threading.Thread):
         """Boucle de collecte : réutilise frames et détections déjà calculées."""
         interval_sec = self.interval_minutes * 60
         self.logger.info(f"🚀 Thread démarré — caméra {self.cam_idx}")
+        self._purge_old_dataset_files()
 
         while not self.stop_event.is_set():
             now = time.time()

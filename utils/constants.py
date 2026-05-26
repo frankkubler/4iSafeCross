@@ -161,13 +161,19 @@ MOTION_MIN_SINGLE_CONTOUR = config.getint('APP', 'MOTION_MIN_SINGLE_CONTOUR', fa
 APP_NAME = config.get('APP', 'APP_NAME')
 APP_VERSION = config.get('APP', 'APP_VERSION')
 INF_THRESHOLD = config.getfloat('APP', 'INF_THRESHOLD')
-RTSP_LOGIN = config.get('RTSP', 'LOGIN')
-RTSP_PASSWORD = config.get('RTSP', 'PASSWORD')
+# Credentials RTSP : lus depuis les variables d'environnement en priorité.
+# Exporter avant de lancer l'application :
+#   export RTSP_LOGIN="<login>" RTSP_PASSWORD="<password>"
+# Ou renseigner dans .env (chargé par l'unité systemd).
+# Les valeurs dans config.ini ne sont utilisées qu'en dernier recours (développement local).
+RTSP_LOGIN = os.environ.get('RTSP_LOGIN') or config.get('RTSP', 'LOGIN', fallback='admin')
+RTSP_PASSWORD = os.environ.get('RTSP_PASSWORD') or config.get('RTSP', 'PASSWORD', fallback='')
 RTSP_HOST = ast.literal_eval(config.get('RTSP', 'HOST'))
 RTSP_PORT = config.getint('RTSP', 'PORT')
 RTSP_STREAM = config.get('RTSP', 'STREAM')
 
 DB_PATH = config.get('APP', 'DB_PATH')
+RELAY_EVENTS_KEEP_DAYS = config.getint('APP', 'RELAY_EVENTS_KEEP_DAYS', fallback=365)
 DETECTION = config.get('APP', 'DETECTION', fallback='simple')
 POSE_ENABLED = config.getboolean('APP', 'POSE_ENABLED', fallback=True)
 EXTENDED_CLASSES = ast.literal_eval(config.get('APP', 'EXTENDED_CLASSES', fallback='[1, 3, 6, 7, 8]'))
@@ -205,6 +211,8 @@ URL_YOLO = config.get('APP', 'URL_YOLO', fallback='http://127.0.0.1:8004/')
 # Rétention des images de détection (debug/maintenance)
 DETECTION_FILES_MAX = config.getint('APP', 'DETECTION_FILES_MAX', fallback=30)
 DETECTION_FILES_KEEP_DAYS = config.getint('APP', 'DETECTION_FILES_KEEP_DAYS', fallback=30)
+# Rétention des images dataset (sécurité RGPD — suppression manuelle recommandée après entraînement)
+DATASET_FILES_KEEP_DAYS = config.getint('APP', 'DATASET_FILES_KEEP_DAYS', fallback=90)
 
 
 # Chargement des couleurs de stature depuis config.ini

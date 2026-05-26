@@ -64,6 +64,7 @@
 | **Analyse de posture** | Classification comportementale : debout statique / en marche / assis dans un engin | Accessoire — traité en mémoire vive, non stocké en base |
 | **Événements relais** | Horodatage d'allumage et d'extinction du projecteur d'alerte, durée, zone déclenchante | Persisté en base SQLite (`relay_events`) |
 | **Images de détection (debug)** | Capture JPEG annotée lors d'une détection confirmée (max 30 fichiers, 1 par caméra toutes les 120 s) | Temporaire — suppression automatique au-delà de `DETECTION_FILES_KEEP_DAYS` jours ou `DETECTION_FILES_MAX` fichiers |
+| **Images dataset entraînement** | Captures JPEG YOLO annotées (piétons, chariots, fond) issues des caméras — uniquement si `DATASET_COLLECTION = true` (désactivé par défaut) | Quota horaire par classe (`DATASET_COLLECTION_MAX_PER_CLASS` défaut : 30/h) — purge automatique au démarrage de l’application via `DATASET_FILES_KEEP_DAYS` |
 
 **Données NON collectées :**
 - Aucune reconnaissance faciale
@@ -94,8 +95,9 @@
 |---|---|---|
 | Flux vidéo temps réel | **Aucune persistance** — traitement en RAM uniquement | Volatil — effacé en continu |
 | Analyse de posture | **Aucune persistance** — résultat calculé en mémoire | Volatil |
-| Événements relais (BD SQLite) | **Durée à définir par le responsable de traitement** *(recommandation : 12 mois pour suivi sécurité)* | Suppression manuelle ou purge périodique à implémenter |
+| Événements relais (BD SQLite) | **`RELAY_EVENTS_KEEP_DAYS` jours** (défaut : **365 jours**) | Purge automatique au démarrage de l'application (`purge_old_relay_events()`) |
 | Images debug (`detections/`) | **`DETECTION_FILES_KEEP_DAYS` jours** (défaut : 30 jours) ET maximum **`DETECTION_FILES_MAX` fichiers** (défaut : 30) | Suppression automatique par le système |
+| Images dataset (`dataset/`) | **`DATASET_FILES_KEEP_DAYS` jours** (défaut : 90 jours) | Suppression automatique au démarrage de l’application, quelle que soit la valeur de `DATASET_COLLECTION` |
 | Logs applicatifs | **`LOGS_KEEP_DAYS` jours** (configurable) | Rotation automatique |
 
 ---
