@@ -709,7 +709,7 @@ Le dossier `dist/app.dist/` contiendra l'exécutable et tous les fichiers néces
 
 ### Compilation automatique avec GitLab CI/CD
 
-Pour compiler automatiquement l'exécutable ARM64 via **GitLab CI/CD** (sans avoir besoin du Jetson), consultez le guide complet : **[GITLAB_CI_BUILD.md](GITLAB_CI_BUILD.md)**
+Pour compiler automatiquement l'exécutable ARM64 via **GitLab CI/CD** (sans avoir besoin du Jetson), consultez le guide complet : **[gitlab-ci-build.md](docs/build/gitlab-ci-build.md)**
 
 **Déclenchement rapide :**
 ```bash
@@ -725,7 +725,7 @@ git push origin v1.0.0
 
 L'exécutable compilé sera disponible dans les artefacts du pipeline, prêt à être déployé sur votre Jetson Orin NX.
 
-**Prérequis :** Votre GitLab auto-hébergé doit avoir un Runner configuré avec Docker et les privilèges activés. Voir [GITLAB_CI_BUILD.md](GITLAB_CI_BUILD.md) pour les détails de configuration.  
+**Prérequis :** Votre GitLab auto-hébergé doit avoir un Runner configuré avec Docker et les privilèges activés. Voir [gitlab-ci-build.md](docs/build/gitlab-ci-build.md) pour les détails de configuration.  
 
 ## Collecte automatique de dataset
 
