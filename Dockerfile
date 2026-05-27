@@ -37,8 +37,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation de uv pour gestion des dependances
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Installation de uv pour gestion des dependances (telechargement verifie par SHA256)
+ARG UV_VERSION=0.11.16
+RUN set -eux \
+    && cd /tmp \
+    && curl -LsSf \
+        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-unknown-linux-gnu.tar.gz" \
+        -o uv-aarch64-unknown-linux-gnu.tar.gz \
+    && curl -LsSf \
+        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-unknown-linux-gnu.tar.gz.sha256" \
+        -o uv-aarch64-unknown-linux-gnu.tar.gz.sha256 \
+    && sha256sum --check uv-aarch64-unknown-linux-gnu.tar.gz.sha256 \
+    && mkdir -p /root/.local/bin \
+    && tar -xzf uv-aarch64-unknown-linux-gnu.tar.gz -C /root/.local/bin --strip-components=1 \
+    && rm uv-aarch64-unknown-linux-gnu.tar.gz uv-aarch64-unknown-linux-gnu.tar.gz.sha256
 ENV PATH="/root/.local/bin:$PATH"
 
 # Installation de Cython

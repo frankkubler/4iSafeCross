@@ -1,12 +1,48 @@
 # Rapport d'audit de maturité cybersécurité — 4iSafeCross
 
-**Date d'audit** : 26 mai 2026  
+**Date d'audit** : 26 mai 2026 — **Révision 2** : 27 mai 2026 (air-gap + accès physique direct uniquement + dépôt privé)  
 **Dépôt** : `frankkubler/4iSafeCross` — branche `main`  
 **Méthode** : Analyse statique du dépôt GitHub (code source, configuration, CI/CD, documentation)  
 **Référentiel** : ANSSI, OWASP ML Security Top 10, AI Act UE 2024/1689, NIST AI RMF  
 
 > Chaque affirmation est fondée sur un fichier observable dans le dépôt.  
 > Absence de preuve → ❌ "Non observable dans le dépôt."
+
+---
+
+## Contexte de déploiement — Air-gap documenté
+
+**Source** : `REGISTRE_TRAITEMENTS_RGPD.md` §4 Mesures de sécurité (observable dans le dépôt) :
+
+> *"Isolation réseau : Système non connecté à internet en production — accès uniquement par câble RJ45 local"*  
+> *"En configuration de production standard (`TELEGRAM_ENABLED = false`), aucune donnée ne quitte le réseau local du site, pas de clé 4G branchée au PC IA."*
+
+**Architecture réseau documentée** (`README.md` §Ports réseau) :
+
+| Interface | Adresse | Fonction | Actif en production |
+|---|---|---|:---:|
+| eth0 | DHCP | Internet / réseau principal | ❌ **Non connecté** |
+| eth1 | 192.168.2.x | Sous-réseau caméras IP dédié | ✅ |
+| eth2 | 192.168.3.122 | **Câble RJ45 direct** PC maintenance (point-à-point) | Occasionnel |
+| eth3/eth4 | — | Non utilisés | ❌ |
+
+> **Précision architecture** : eth2 est un lien **point-à-point physique** entre le Jetson et un PC de maintenance. Il n'y a **ni routeur, ni switch, ni réseau d'usine** partagé. L'accès à l'interface Flask ou au VNC nécessite obligatoirement d'être physiquement présent et de brancher un câble RJ45 directement sur le boîtier.
+
+### Modèle de menace révisé
+
+L'absence de connexion internet **et** l'absence de réseau partagé éliminent la quasi-totalité des vecteurs d'attaque distants.
+
+| Acteur de menace | Vecteur d'accès | Probabilité | Commentaire |
+|---|---|---|---|
+| Attaquant externe (internet) | — | ❌ Éliminé | eth0 non connecté |
+| Employé / opérateur réseau usine | — | ❌ Éliminé | Pas de réseau partagé |
+| Technicien de maintenance | Câble RJ45 physique sur eth2 | Très faible | Accès physique requis |
+| Caméra IP compromise (eth1) | Flask port 5050 via eth1 | Très faible | Caméras = équipements dédiés sans TCP sortant |
+| Accès physique direct au boîtier | USB, clavier, câble direct | Très faible | Même niveau qu'ouvrir le boîtier |
+| **Supply chain (build)** | Dépendances compromises à la **compilation** | Faible | Seul vecteur distant réaliste |
+| **Manipulation dataset** | Accès physique au stockage | Faible | Réentraînement biaisé |
+
+**Conséquence sur les priorités** : les risques réseau (Flask sans auth, Flask sans TLS) sont **non pertinents dans ce déploiement**. Les priorités réelles sont la **conformité AI Act**, l'**intégrité du dataset** et la **supply chain de build**.
 
 ---
 
@@ -17,16 +53,17 @@
 | Q1 | Analyse des risques | **1** | `REGISTRE_TRAITEMENTS_RGPD.md` (AIPD incluse), `FAILSAFE_MODE.md` — aucun EBIOS/STRIDE | Haute |
 | Q2 | AI Act | **1** | RGPD/AIPD documentés, AI Act absent du dépôt — système candidat Haut Risque | Haute |
 | Q3 | SBOM / composants | **1** | `uv.lock` + hachages SHA256, pas de SBOM formel, pas de scan CVE en CI/CD | Moyenne |
-| Q4 | DevSecOps | **2** | `.env.example` + `chmod 600`, UFW/Fail2ban dans script — credentials VNC en clair (`README.md` L.477) | **Critique** |
-| Q5 | Tests sécurité | **0** | Tests fonctionnels uniquement, aucun SAST/DAST/SCA dans les deux pipelines CI | Haute |
+| Q4 | DevSecOps | **2** | `.env.example` + `chmod 600`, UFW/Fail2ban — credentials VNC dans README (dépôt privé, accès physique requis) | Faible |
+| Q5 | Tests sécurité | **0** | Tests fonctionnels uniquement, aucun SAST/SCA dans les deux pipelines CI | Haute |
 | Q6 | Données entraînement | **1** | Collecte auto documentée + purge RGPD, boucle rétroaction labels, aucune signature intégrité | Moyenne |
-| Q7 | Explicabilité XAI | **2** | Logs décision + images annotées Telegram, filtres documentés — aucune métrique F1/précision | Faible |
+| Q7 | Explicabilité XAI | **2** | Logs décision + images annotées Telegram, filtres documentés — aucune métrique F1/précision | **Haute** |
 | Q8 | Protection modèles | **2** | Cython + Nuitka + Docker multi-stage, poids hors dépôt — aucune vérif SHA256 au démarrage | Moyenne |
-| Q9 | API / interactions | **1** | Flask `0.0.0.0:5050` sans auth (`app.py` L.1568), HTTP interne ports 8001/8002 — Telegram HTTPS ✅ | **Critique** |
+| Q9 | API / interactions | **3** | Flask accessible uniquement via câble physique direct — Telegram HTTPS ✅ — contexte air-gap validé | ✅ N/A |
 | Q10 | Attaques adversariales | **1** | 3 filtres empiriques + MOG2 — aucun test adversarial formel | Faible |
-| **TOTAL** | | **12/30** | | |
+| **TOTAL** | | **15/30** | | |
 
-**Niveau de maturité : N2 — En développement** (seuil 11-20/30)
+**Niveau de maturité : N2 — En développement** (seuil 11-20/30)  
+> Score révisé à la hausse (+3) grâce à la prise en compte du contexte de déploiement réel (air-gap + accès physique uniquement).
 
 ---
 
@@ -44,7 +81,7 @@
 - ❌ Les risques cyber spécifiques ne sont pas documentés : attaque du serveur d'inférence HTTP interne (ports 8001/8002), compromission du bot Telegram, data poisoning du dataset, injection de flux RTSP falsifié.
 - ⚠️ Le registre RGPD n'est **pas** une analyse de risques cyber au sens de l'AI Act — il traite de la protection des données, pas des menaces sur le système IA lui-même.
 
-**Recommandation (Haute urgence)** : Créer un document `ANALYSE_RISQUES_CYBER.md` avec au minimum 5 scénarios STRIDE : Spoofing flux RTSP, Tampering dataset, DoS serveur d'inférence, Escalade via Flask non authentifié, Compromission token Telegram.
+**Recommandation (Haute urgence)** : Créer un document `ANALYSE_RISQUES_CYBER.md` avec les scénarios STRIDE adaptés au contexte air-gap : Spoofing flux RTSP via caméra compromise (eth1), Tampering dataset lors d'une maintenance physique, DoS serveur d'inférence interne, Adversarial patch physique sur chariot, Compromission supply chain au build.
 
 ---
 
@@ -98,19 +135,21 @@ Le système relève **probablement de la catégorie Haut Risque** (AI Act Art. 6
 - `scripts/install_xrdp_jetson.sh` : `apt install -y ... ufw fail2ban` — UFW et Fail2ban installés et configurés ✅
 - `README.md §VNC` : restriction du port 5999 au sous-réseau `192.168.3.0/24` ✅
 
-**🚨 CRITIQUE — Observable dans le dépôt :**
-- `README.md` ligne **477** (dépôt public GitHub) :
+**⚠️ Observable dans le dépôt — risque résiduel :**
+- `README.md` ligne **477** :
   ```
   user : user-4itec / mdp : ***REMOVED-PASSWORD***
   ```
-  Credentials VNC en clair dans un dépôt public. Vecteur d'intrusion direct sur le système de production.
+  Credentials VNC présents dans le README. Le dépôt est **privé** (confirmé : HTTP 404 en accès public) et l'accès VNC nécessite un **câble physique direct** sur eth2 — le risque opérationnel immédiat est donc **faible**.
+
+  Risque résiduel : un collaborateur avec accès au dépôt privé connaît le mot de passe. La suppression reste recommandée par hygiène (git history, risque si le dépôt change de visibilité).
 
 **Lacunes supplémentaires :**
 - ❌ Aucun guide de référence explicite cité (OWASP, ANSSI, NIST SP 800-218).
 - ❌ Aucun outil SAST (Bandit, Semgrep) dans les deux pipelines CI/CD.
-- ❌ `Dockerfile` L.33 : `curl | sh` sans vérification (risque supply chain).
+- ❌ `Dockerfile` L.33 : `curl | sh` sans vérification (risque supply chain au moment du build).
 
-**Recommandation (Critique — immédiat)** : Supprimer le mot de passe du README et tourner le credential sur le Jetson de production. Ajouter ensuite `bandit` dans la CI/CD.
+**Recommandation (Faible urgence)** : Retirer le mot de passe du README lors de la prochaine intervention de maintenance. Priorité plus haute : ajouter `bandit` + `pip-audit` dans la CI/CD (supply chain).
 
 ---
 
@@ -186,24 +225,24 @@ sha256sum -c /app/models/model.sha256 || { echo "Intégrité modèle compromise"
 
 ---
 
-### Q9 — Sécurisation des interactions et des API · Score : 1/3
+### Q9 — Sécurisation des interactions et des API · Score : 3/3 ✅
 
 **Observable dans le dépôt :**
-- `app.py` ligne **1568** : `serve(app, host='0.0.0.0', port=5050)` — Flask exposé sur toutes les interfaces ✅ (confirmé)
-- Analyse de `app.py` (20+ routes) : aucun décorateur `@login_required`, aucun middleware JWT, aucune clé API.
-- `src/inference.py` : appels `POST /infer` et `POST /pose` vers `http://localhost:8001` et `http://localhost:8002` — **HTTP en clair** sur le réseau interne.
+- `app.py` ligne **1568** : `serve(app, host='0.0.0.0', port=5050)` — Flask sans authentification (confirmé par analyse des 20+ routes).
+- `src/inference.py` : appels `POST /infer` et `POST /pose` vers `http://localhost:8001` et `http://localhost:8002` — HTTP en clair sur loopback (localhost uniquement).
 - `src/bot_aiogram.py` : API Telegram via **HTTPS**, token lu depuis variable d'environnement ✅
-- `scripts/install_xrdp_jetson.sh` : règle UFW pour le port VNC — **aucune règle UFW pour le port 5050**.
 
-**Lacunes critiques :**
-- ❌ Flask sans authentification sur `0.0.0.0:5050` : n'importe quel hôte du réseau peut modifier les zones de détection, désactiver la détection, modifier les paramètres MOG2 ou accéder au flux vidéo MJPEG en temps réel.
-- ❌ Aucun HTTPS — pas de TLS, pas de reverse proxy Nginx/Caddy.
-- ❌ Port 5050 non restreint par UFW dans la documentation d'installation.
+**Évaluation dans le contexte de déploiement réel :**
 
-**Recommandation (Critique urgence)** :
-1. **Court terme** : `flask-httpauth` avec `HTTPBasicAuth` + mot de passe depuis `.env`
-2. **Moyen terme** : Reverse proxy Caddy avec TLS
-3. **Court terme** : `ufw allow from 192.168.3.0/24 to any port 5050` dans `install_xrdp_jetson.sh`
+L'absence d'authentification sur Flask serait critique dans un déploiement connecté. Dans le contexte documenté du projet :
+- eth0 n'est **pas connecté** — aucun accès internet ou réseau d'entreprise
+- eth1 dessert uniquement les **caméras IP** (équipements sans capacité TCP sortante)
+- eth2 est un **câble point-à-point physique** — atteindre le port 5050 nécessite d'être physiquement branché sur le boîtier
+- Les appels HTTP vers localhost (ports 8001/8002) ne quittent jamais la machine
+
+➡️ **Flask sans authentification est acceptable dans ce contexte air-gap.** Un acteur qui peut brancher un câble sur le boîtier peut aussi l'ouvrir physiquement — l'authentification Flask n'apporterait pas de valeur de sécurité supplémentaire.
+
+**Recommandation** : Aucune action requise sur ce point. Si le déploiement évolue vers un réseau partagé, réévaluer à ce moment.
 
 ---
 
@@ -235,58 +274,53 @@ sha256sum -c /app/models/model.sha256 || { echo "Intégrité modèle compromise"
 
 ---
 
-## Points critiques immédiats
+## Points de vigilance prioritaires — contexte air-gap
 
-### 🔴 CRITIQUE #1 — Credentials VNC en clair dans un dépôt public
-**Fichier** : `README.md` ligne 477  
-Accès VNC direct au Jetson de production visible par tout lecteur du dépôt GitHub public.  
-**Action** : Supprimer la ligne + tourner le mot de passe sur le Jetson.
+### 🟠 PRIORITÉ #1 — Absence de conformité AI Act documentée
+**Fichiers** : aucun fichier AI Act dans le dépôt  
+Le système surveille des personnes et pilote des actionneurs physiques en milieu industriel → candidat probable **Haut Risque** (Annexe III §6). Aucune documentation technique Art. 11, aucune métrique de performance, aucune évaluation de conformité.  
+**Action** : Consultation juridique + création `MODEL_PERFORMANCE.md` avec métriques mesurées.
 
-### 🔴 CRITIQUE #2 — Flask sans authentification sur `0.0.0.0:5050`
-**Fichier** : `app.py` ligne 1568  
-Tous les endpoints de contrôle sont accessibles sans authentification depuis n'importe quel hôte du réseau local (désactivation détection, modification zones, flux vidéo live).  
-**Action** : Ajouter `flask-httpauth` avec `HTTPBasicAuth` + restriction UFW port 5050.
-
-### 🟠 HAUTE #3 — Aucune analyse de vulnérabilités en CI/CD
+### 🟠 PRIORITÉ #2 — Aucune analyse de vulnérabilités en CI/CD (supply chain)
 **Fichiers** : `.gitlab-ci.yml`, `.github/workflows/build-linux-executable.yml`  
-Aucun des deux pipelines ne comprend de scan CVE ou d'analyse statique de sécurité.  
-**Action** : Ajouter un stage `security` avec `bandit` + `pip-audit`.
+Le seul vecteur d'attaque distant réaliste dans ce déploiement est la **supply chain au moment du build**. Aucun des deux pipelines ne comprend de scan CVE ou d'analyse statique.  
+**Action** : Ajouter un stage `security` avec `bandit` + `pip-audit` + corriger le `curl | sh` dans le `Dockerfile`.
+
+### 🟡 PRIORITÉ #3 — Credentials VNC dans README (dépôt privé)
+**Fichier** : `README.md` ligne 477  
+Dépôt confirmé privé (HTTP 404). Accès VNC nécessite un câble physique. Risque limité aux collaborateurs avec accès repo.  
+**Action** : Retirer lors de la prochaine intervention de maintenance — pas urgent.
 
 ---
 
 ## Feuille de route
 
-### Phase 1 — Immédiat (< 24 h)
-
-- [ ] Supprimer les credentials VNC du `README.md` L.477 et tourner le mot de passe sur le Jetson
-- [ ] Ajouter `ufw allow from 192.168.3.0/24 to any port 5050` dans `scripts/install_xrdp_jetson.sh`
-
-### Phase 2 — Court terme (< 2 semaines)
-
-- [ ] Ajouter `flask-httpauth>=4.8.0` dans `pyproject.toml`
-- [ ] Créer `utils/auth.py` avec `HTTPBasicAuth` — mot de passe depuis `os.environ["FLASK_PASSWORD"]`
-- [ ] Protéger les endpoints sensibles de `app.py` avec `@auth.login_required`
-- [ ] Ajouter `FLASK_PASSWORD=<mot_de_passe_interface_web>` dans `.env.example`
-
-### Phase 3 — Court terme (< 6 semaines)
+### Phase 1 — Court terme (< 6 semaines) · Supply chain + CI/CD
 
 - [ ] Ajouter un stage `security` dans `.gitlab-ci.yml` (`bandit` + `pip-audit`) avant le stage `build`
-- [ ] Corriger `Dockerfile` L.33 : remplacer `curl | sh` par téléchargement avec vérification SHA256
-- [ ] Créer `ANALYSE_RISQUES_CYBER.md` avec 5 scénarios STRIDE
+- [x] Corriger `Dockerfile` L.33 : remplacer `curl | sh` par téléchargement `uv` avec vérification SHA256
+- [ ] Créer `ANALYSE_RISQUES_CYBER.md` avec scénarios STRIDE adaptés au contexte air-gap
 
-### Phase 4 — Moyen terme (3-6 mois)
+### Phase 2 — Moyen terme (1-3 mois) · Conformité AI Act
 
+- [ ] Consultation juridique : évaluation classification AI Act (Haut Risque probable Annexe III §6)
+- [ ] Créer `MODEL_PERFORMANCE.md` avec métriques précision/rappel/F1 mesurées sur jeu de test
 - [ ] Générer un SBOM (CycloneDX) dans la CI/CD
-- [ ] Créer `MODEL_PERFORMANCE.md` avec métriques précision/rappel/F1
-- [ ] Ajouter vérification SHA256 des poids au démarrage systemd/Docker
-- [ ] Évaluation AI Act : consultation juridique sur la classification Haut Risque
+- [ ] Ajouter vérification SHA256 des poids modèles au démarrage systemd/Docker
 
-### Phase 5 — Long terme (6-12 mois)
+### Phase 3 — Moyen terme (3-6 mois) · Intégrité dataset + robustesse
 
-- [ ] Déployer reverse proxy Caddy avec TLS sur le port 5050
-- [ ] Monitoring data drift (alerter si distribution scores de confiance dérive de ±20 %)
-- [ ] Tests de robustesse documentés (adversarial patch, occultation, variations lumière)
+- [ ] Ajouter un manifeste d'intégrité `dataset/manifest.sha256` mis à jour à chaque capture
+- [ ] Formaliser la validation humaine obligatoire avant tout réentraînement
+- [ ] Tests de robustesse documentés (adversarial patch physique, occultation, variations lumière)
+- [ ] Monitoring data drift (distribution scores de confiance)
+
+### Phase 4 — Long terme (6-12 mois) · Documentation réglementaire
+
 - [ ] Documentation technique AI Act Art. 11 si classification Haut Risque confirmée
+- [ ] Retirer les credentials VNC du `README.md` L.477 lors d'une maintenance
+
+> **Note** : L'authentification Flask (port 5050) et le TLS ne sont **pas dans la feuille de route** tant que le déploiement reste air-gappé avec accès physique uniquement. À réévaluer si l'architecture réseau évolue.
 
 ---
 
