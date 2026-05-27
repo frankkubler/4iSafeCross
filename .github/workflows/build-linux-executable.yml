@@ -6,8 +6,46 @@ on:
   workflow_dispatch:  # Permet de déclencher manuellement
 
 jobs:
+  # ─── SAST + audit dépendances (s'exécute avant le build) ────────────────────
+  security:
+    runs-on: ubuntu-24.04
+    continue-on-error: true  # intégration progressive — passer à false après stabilisation
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install security tools
+        run: pip install bandit pip-audit --quiet
+
+      - name: Run Bandit SAST
+        run: |
+          bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
+          bandit -r src/ utils/ app.py -ll
+
+      - name: Run pip-audit
+        run: |
+          pip-audit -r requirements.txt -f json -o pip-audit-report.json || true
+          pip-audit -r requirements.txt
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            pip-audit-report.json
+          retention-days: 30
+
+  # ─── Build exécutable ARM64 (attend la fin du job security) ───────────────────
   build-linux-executable-arm64:
     runs-on: ubuntu-24.04
+    needs: [security]
     
     steps:
       - name: Checkout repository
@@ -52,8 +90,20 @@ jobs:
               libcairo2-dev \
               libgirepository1.0-dev
             
-            # Installation de uv (gestionnaire de dépendances)
-            curl -LsSf https://astral.sh/uv/install.sh | sh
+            # Installation de uv avec verification SHA256
+            UV_VERSION="0.11.16"
+            cd /tmp
+            curl -LsSf \
+              "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-unknown-linux-gnu.tar.gz" \
+              -o uv-aarch64-unknown-linux-gnu.tar.gz
+            curl -LsSf \
+              "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-unknown-linux-gnu.tar.gz.sha256" \
+              -o uv-aarch64-unknown-linux-gnu.tar.gz.sha256
+            sha256sum --check uv-aarch64-unknown-linux-gnu.tar.gz.sha256
+            mkdir -p /root/.local/bin
+            tar -xzf uv-aarch64-unknown-linux-gnu.tar.gz -C /root/.local/bin --strip-components=1
+            rm uv-aarch64-unknown-linux-gnu.tar.gz uv-aarch64-unknown-linux-gnu.tar.gz.sha256
+            cd /workspace
             export PATH="/root/.local/bin:$PATH"
             
             # Synchronisation des dépendances avec uv

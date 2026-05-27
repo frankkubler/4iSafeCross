@@ -297,9 +297,9 @@ Dépôt confirmé privé (HTTP 404). Accès VNC nécessite un câble physique. R
 
 ### Phase 1 — Court terme (< 6 semaines) · Supply chain + CI/CD
 
-- [ ] Ajouter un stage `security` dans `.gitlab-ci.yml` (`bandit` + `pip-audit`) avant le stage `build`
+- [x] Ajouter un stage `security` dans `.gitlab-ci.yml` (`bandit` + `pip-audit`) avant le stage `build`
 - [x] Corriger `Dockerfile` L.33 : remplacer `curl | sh` par téléchargement `uv` avec vérification SHA256
-- [ ] Créer `ANALYSE_RISQUES_CYBER.md` avec scénarios STRIDE adaptés au contexte air-gap
+- [x] Créer `ANALYSE_RISQUES_CYBER.md` avec scénarios STRIDE adaptés au contexte air-gap
 
 ### Phase 2 — Moyen terme (1-3 mois) · Conformité AI Act
 

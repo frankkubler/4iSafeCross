@@ -2,6 +2,7 @@
 # Code protege par conteneur signe
 
 stages:
+  - security   # fail fast : scan SAST + audit dependances avant tout build
   - build
   - release
 
@@ -10,6 +11,30 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   IMAGE_NAME: "${CI_REGISTRY_IMAGE}"
   IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
+
+# ─── Stage security : SAST (Bandit) + audit dependances (pip-audit) ──────────
+security:sast:
+  stage: security
+  image: python:3.10-slim
+  before_script:
+    - pip install bandit pip-audit --quiet
+  script:
+    - echo "=== Analyse SAST avec Bandit ==="
+    - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
+    - bandit -r src/ utils/ app.py -ll
+    - echo "=== Audit des dependances avec pip-audit ==="
+    - pip-audit -r requirements.txt -f json -o pip-audit-report.json || true
+    - pip-audit -r requirements.txt
+  artifacts:
+    when: always
+    paths:
+      - bandit-report.json
+      - pip-audit-report.json
+    expire_in: 30 days
+  allow_failure: true  # integration progressive — passer a false apres stabilisation
+  only:
+    - main
+    - merge_requests
 
 # Build image Docker ARM64
 build:docker:arm64:

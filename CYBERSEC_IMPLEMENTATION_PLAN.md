@@ -11,7 +11,7 @@
 
 > **Pourquoi c'est la vraie priorité** : le seul vecteur d'attaque distant réaliste dans ce déploiement est la compromission de dépendances au moment du **build** (pas du runtime). La CI/CD est donc le seul point d'entrée non physique.
 
-### Étape 1.1 — Ajouter un stage `security` dans `.gitlab-ci.yml`
+### Étape 1.1 — Ajouter un stage `security` dans `.gitlab-ci.yml` ✅ Complété
 
 | | |
 |---|---|
@@ -90,7 +90,7 @@ RUN set -eux \
 
 ---
 
-### Étape 1.3 — Créer `ANALYSE_RISQUES_CYBER.md`
+### Étape 1.3 — Créer `ANALYSE_RISQUES_CYBER.md` ✅ Complété
 
 | | |
 |---|---|
@@ -141,6 +141,7 @@ Structure minimale à rédiger (5 scénarios STRIDE) :
 # Phase 1 — CI/CD supply chain
 cat .gitlab-ci.yml | grep "stages" -A5                 # → stage security présent
 cat Dockerfile | grep "sha256sum"                       # → vérification présente
+ls ANALYSE_RISQUES_CYBER.md && echo OK                  # → document STRIDE présent
 
 # Phase 2 — AI Act + intégrité modèles
 ls dataset/manifest.sha256 2>/dev/null && echo OK       # → manifeste présent
