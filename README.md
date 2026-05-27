@@ -51,8 +51,57 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   └── coco_classes.py       # Correspondance ID → nom de classe COCO
 ├── static/                   # Ressources web (CSS, JS, Fabric.js, icônes)
 ├── templates/                # Templates Jinja2 Flask (index, zone_editor, preview…)
-└── scripts/                  # Scripts systemd, déploiement Jetson, logrotate
+├── scripts/                  # Scripts systemd, déploiement Jetson, logrotate
+└── docs/
+    ├── build/                # CI/CD, compilation Cython, GitHub Actions / GitLab CI
+    ├── compliance/           # Registre RGPD (Art. 30)
+    ├── deployment/           # Flash Jetson, dépendances système
+    ├── features/             # Documentation des fonctionnalités
+    ├── security/             # Audits cybersécurité et plans de correction
+    └── tools/                # Prompts et outils d'audit
 ```
+
+## Documentation
+
+La documentation technique du projet est organisée dans le dossier [`docs/`](docs/) selon les thématiques suivantes :
+
+### Déploiement matériel
+
+| Document | Description |
+|---|---|
+| [Flash JetPack 6.2 — reServer Industrial J4012](docs/deployment/flash-jetson-reserver-j4012-jetpack62.md) | Procédure complète de flash du Jetson Orin NX avec JetPack 6.2 (L4T 36.4.3) : mode Force Recovery, commande de flash, configuration initiale |
+| [Scripts et services de déploiement](docs/deployment/scripts-deploiement.md) | Services systemd (4isafecross, PoE GPIO, dummy display), scripts Bash (deploy, autosuspend, VNC), logrotate — procédures d'installation complètes |
+| [Dépendances système — GStreamer et PyGObject](docs/deployment/install-system-deps.md) | Installation des paquets GStreamer natifs et PyGObject sur Jetson (L4T), x86 et ARM |
+
+### Fonctionnalités
+
+| Document | Description |
+|---|---|
+| [Filtre anti-faux positifs par keypoints](docs/features/keypoint-filter.md) | Fonctionnement du filtre YOLO-Pose : seuils, bypass par zone, cas limites |
+| [Mode Fail-Safe](docs/features/failsafe-mode.md) | Comportement du système en cas de défaillance : relais ON au démarrage, watchdog, timer minimum |
+| [Détection de mouvement](docs/features/motion-detection.md) | Configuration et fonctionnement du déclencheur MOG2 |
+| [Système de cache de frames](docs/features/cache-frames.md) | Architecture du cache et pipeline de frames |
+| [Détection de posture](docs/features/pose-detection.md) | Analyse des keypoints COCO-17 pour la classification de stature |
+
+### Sécurité & Conformité
+
+| Document | Description |
+|---|---|
+| [Rapport d'audit cybersécurité](docs/security/rapport-cybersec.md) | Audit de maturité complet : OWASP, exposition réseau, gestion des secrets |
+| [Analyse des risques cyber](docs/security/analyse-risques-cyber.md) | Matrice de risques et surfaces d'attaque identifiées |
+| [Plan d'implémentation cybersécurité](docs/security/cybersec-implementation-plan.md) | Corrections priorisées avec statut d'avancement |
+| [Registre RGPD — Art. 30](docs/compliance/registre-traitements-rgpd.md) | Registre des activités de traitement des données personnelles |
+
+### Build & CI/CD
+
+| Document | Description |
+|---|---|
+| [Compilation automatique — GitHub Actions](docs/build/github-actions-build.md) | Pipeline CI/CD GitHub Actions pour build et release de l'APK |
+| [Compilation automatique — GitLab CI/CD](docs/build/gitlab-ci-build.md) | Équivalent GitLab CI/CD |
+| [Comparaison GitHub Actions ↔ GitLab CI](docs/build/cicd-comparison.md) | Tableau comparatif des deux approches |
+| [Protection du code avec Cython](docs/build/cython-readme.md) | Compilation Cython pour obfuscation du code source Python |
+
+---
 
 ## Pipeline de détection
 
@@ -203,7 +252,10 @@ Un relais câblé en **NC (Normally Closed)** présente un état de contact ferm
 
 ### Prérequis
 
-Le PC jetson doit être flashé avec la [méthode 1](https://wiki.seeedstudio.com/reServer_Industrial_Getting_Started/) avec le JetPack 6.1 L4T 36.4 (Attention : le flash doit se faire avec un PC Ubuntu 22.04 (la même identique à celle du JetPack)) 
+Le Jetson doit être flashé avec **JetPack 6.2** (L4T 36.4.3). Suivre le guide complet :
+👉 [Flash JetPack 6.2 — reServer Industrial J4012](docs/deployment/flash-jetson-reserver-j4012-jetpack62.md)
+
+> Le flash doit obligatoirement être effectué depuis un **PC Ubuntu 22.04** (version identique à celle embarquée dans le JetPack).
 
 Le serveur d'inférence doit être installé dans un docker [inf_jetson_rf-detr](https://github.com/4itec-org/inf_jetson_rf-detr)
 
@@ -303,128 +355,26 @@ docker build -t 4isafecross .
 docker run -p 5000:5000 --env-file .env 4isafecross
 ```
 
-## Services systemd et scripts Bash associés
+## Scripts et services systemd
 
-Le projet fournit plusieurs fichiers `.service` pour automatiser le lancement de l’application et la configuration de l’environnement au démarrage du système, ainsi que des scripts Bash associés :
+Le projet fournit des fichiers `.service` et des scripts Bash pour automatiser
+le démarrage, la configuration matérielle et la maintenance du boîtier Jetson.
 
-### Fichiers systemd
+| Fichier | Rôle |
+|---|---|
+| [`4isafecross.service`](scripts/4isafecross.service) | Démarre l’application au boot (binaire ou Python) |
+| [`set-poe-gpio.service`](scripts/set-poe-gpio.service) | Active l’alimentation PoE (GPIO) au boot |
+| [`check-dummy-display.service`](scripts/check-dummy-display.service) | Bascule écran réel / virtuel selon présence HDMI |
+| [`4isafecross.sh`](scripts/4isafecross.sh) | Lance l’app manuellement (waitress-serve + uv) |
+| [`deploy-jetson.sh`](scripts/deploy-jetson.sh) | Déploie l’image Docker depuis le registry GitLab |
+| [`disable-autosuspend.sh`](scripts/disable-autosuspend.sh) | Désactive USB autosuspend (Yoctopuce) — 1 fois post-flash |
+| [`set_poe_gpio.sh`](scripts/set_poe_gpio.sh) | GPIO PoE sur gpiochip2/ligne 15 |
+| [`switch-display.sh`](scripts/switch-display.sh) | Détection HDMI + activation dummy Xorg |
+| [`install_xrdp_jetson.sh`](scripts/install_xrdp_jetson.sh) | TigerVNC + XFCE + UFW + Fail2ban |
+| [`4isafecross.logrotate`](scripts/4isafecross.logrotate) | Rotation des logs (10 Mo × 5) |
 
-- **4isafecross.service** :
-  - Lance automatiquement l'application au démarrage.
-  - Charge les variables d'environnement depuis `.env` via `EnvironmentFile` (credentials Telegram, etc.).
-  - Gère les logs dans le dossier `logs/`.
-  - Exemple d'installation :
-    ```sh
-    # Créer et remplir le fichier .env AVANT de démarrer le service
-    cp .env.example /home/user-4itec/4iSafeCross/.env
-    nano /home/user-4itec/4iSafeCross/.env
-    chmod 600 /home/user-4itec/4iSafeCross/.env
-
-    sudo cp scripts/4isafecross.service /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable 4isafecross.service
-    sudo systemctl start 4isafecross.service
-    ```
-
-- **set-poe-gpio.service** :
-  - Exécute le script `set_poe_gpio.sh` au boot pour configurer les GPIO du POE.
-
-- **check-dummy-display.service** :
-  - Exécute le script `switch-display.sh` pour configurer un écran virtuel ou vérifier la présence d’un écran HDMI.
-
-### Scripts Bash
-
-- **4isafecross.sh** :
-  - Script principal de lancement de l’application avec `uv` et `waitress-serve`.
-  - Peut être utilisé manuellement ou via le service systemd.
-
-- **set_poe_gpio.sh** :
-  - Configure les GPIO nécessaires à l’alimentation POE.
-
-- **switch-display.sh** :
-  - Configure un écran virtuel (dummy) si aucun écran HDMI n’est détecté.
-
-- **scripts/install_xrdp_jetson.sh** :
-  - Installe et configure **TigerVNC + XFCE** sur Jetson Orin NX — configuration unique et validée sur JetPack/Ubuntu.
-  - Installe aussi **UFW**, applique les politiques par défaut (`deny incoming`, `allow outgoing`) puis active automatiquement le pare-feu.
-  - Installe et configure aussi **Fail2ban** pour bloquer les tentatives répétées d'authentification VNC (jail `tigervnc-auth`, backend systemd, action UFW).
-  - En exécution distante SSH, ajoute une règle anti-lockout pour autoriser l'IP SSH courante sur le port `22` avant activation de UFW.
-  - Applique les règles de pare-feu nécessaires au port VNC `5999`.
-  - Désactive `gnome-remote-desktop` et les règles xrdp existantes si présentes.
-  - Nettoie automatiquement les anciennes règles (`3389`, `5999` global, `tailscale0:5999`) avant d'appliquer les nouvelles règles.
-  - Sans option `--tailscale`, applique un blocage explicite `DENY` sur `tailscale0` pour le port `5999`, ainsi qu'un blocage des plages IP Tailscale (`100.64.0.0/10` et `fd7a:115c:a1e0::/48`).
-  - Si Tailscale est installé mais `--tailscale` n'est pas utilisé, active aussi `tailscale shields-up` pour bloquer toute connexion entrante depuis le tailnet.
-  - Crée un service systemd `vncserver@99` (port `5999`, display `:99`), robuste au redémarrage.
-  - Configure le clavier AZERTY via `setxkbmap fr` dans la session VNC.
-  - En mode `--tailscale`, le script tente d'afficher automatiquement l'IPv4 Tailscale et le nom MagicDNS en fin d'exécution.
-  - Options :
-    - `--subnet <CIDR>` : définit le sous-réseau autorisé pour le port VNC (par défaut `192.168.3.0/24`).
-    - `--tailscale` : autorise aussi le port VNC via `tailscale0` pour un accès distant sécurisé.
-  - Exemple :
-    ```sh
-    # Accès local RJ45 uniquement
-    sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24
-
-    # Recommandé : XFCE + VNC + accès Tailscale distant
-    sudo bash scripts/install_xrdp_jetson.sh --tailscale
-    ```
-  - Configuration réseau maintenance recommandée (NetworkManager GUI) :
-    - Ouvrir les paramètres réseau Ubuntu et éditer l'interface maintenance (eth2 / enP1p1s0 selon machine).
-    - IPv4 : `Manuel`
-    - Adresse : `192.168.3.122/24`
-    - Passerelle : vide
-    - DNS : vide
-    - Route par défaut : désactivée (`never-default`)
-  - Ordre recommandé pour Tailscale :
-    - Installer Tailscale d'abord, puis exécuter `sudo tailscale up`, puis lancer le script avec `--tailscale`.
-  - **Après installation** (obligatoire avant démarrage) :
-    ```sh
-    # 1. Définir le mot de passe VNC (en tant qu'utilisateur normal)
-    vncpasswd
-    # 2. Vérifier la politique UFW et les règles 5999/22
-    sudo ufw status numbered
-    # 3. Vérifier l'état Fail2ban
-    sudo fail2ban-client status tigervnc-auth
-    # 4. Démarrer le service VNC (display :99, port 5999)
-    sudo systemctl start vncserver@99.service
-    # 5. Vérifier le statut
-    sudo systemctl status vncserver@99.service
-    # 6. Connexion Remmina : VNC | hôte:5999
-    ```
-
-### Installation rapide de Tailscale (Jetson)
-
-Pour activer un accès distant sécurisé sans exposer le port VNC sur Internet :
-
-```sh
-# 1) Installer Tailscale
-sudo curl -fsSL https://tailscale.com/install.sh | sh
-
-# 2) Authentifier le Jetson dans votre tailnet
-sudo tailscale up
-
-# 3) Vérifier l'état et récupérer l'IP Tailscale
-tailscale status
-tailscale ip -4
-```
-
-Ensuite, lancez la configuration VNC avec l'option Tailscale :
-
-```sh
-sudo bash scripts/install_xrdp_jetson.sh --tailscale
-```
-
-Après l'installation, définir le mot de passe VNC puis démarrer le service :
-
-```sh
-vncpasswd
-sudo systemctl start vncserver@99.service
-```
-
-Connectez-vous ensuite via Remmina :
-- **VNC** sur `<IP_Tailscale>:5999` (XFCE + TigerVNC)
-
-Adaptez les chemins et utilisateurs dans les fichiers `.service` selon votre environnement.
+📌 **Documentation complète** (procédures d’installation, options, ordre déploiement) :
+[docs/deployment/scripts-deploiement.md](docs/deployment/scripts-deploiement.md)
 
 ## Schéma des ports RJ45, adresses IP et fonctions associées
 
@@ -478,34 +428,10 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l’arrière de 
 
 ## Gestion de la rotation des logs (logrotate)
 
-Pour éviter que les fichiers de logs ne saturent le disque, un fichier de configuration logrotate est fourni : `4isafecross.logrotate`.
-
-- Exemple de configuration (à adapter selon votre chemin d'installation) :
-
-```logrotate
-/home/user-4itec/github/4iSafeCross/logs/service_stdout.log
-/home/user-4itec/github/4iSafeCross/logs/service_stderr.log {
-    su root root
-    size 10M
-    rotate 5
-    compress
-    missingok
-    notifempty
-    copytruncate
-}
-```
-
-**Installation** :
-1. Copier le fichier dans `/etc/logrotate.d/` :
-   ```sh
-   sudo cp 4isafecross.logrotate /etc/logrotate.d/
-   ```
-2. Tester la rotation manuellement :
-   ```sh
-   sudo logrotate -f /etc/logrotate.d/4isafecross.logrotate
-   ```
-
-> Adaptez les chemins et droits selon votre environnement. Cette configuration garde 5 archives compressées de 10 Mo maximum chacune.
+Le fichier [`scripts/4isafecross.logrotate`](scripts/4isafecross.logrotate) conserve
+5 archives compressées de 10 Mo maximum. Voir la
+[documentation complète des scripts](docs/deployment/scripts-deploiement.md#logrotate--4isafecrosslogrotate)
+pour la configuration et la procédure d’installation.
 
 ## Zones de détection et masques
 
