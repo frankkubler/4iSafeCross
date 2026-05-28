@@ -66,7 +66,7 @@ class BotThread():
         # chat_id= "-4046288817"
         # message = "hello from your telegram bot"
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
-        self.logger.debug(requests.get(url).json())  # this sends the message
+        self.logger.debug(requests.get(url, timeout=10).json())  # this sends the message
 
     def send_detection_frame(self, frame, caption=None):
         """

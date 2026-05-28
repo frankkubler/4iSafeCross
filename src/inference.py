@@ -227,7 +227,8 @@ class InferenceServerThread(threading.Thread):
                         params={
                             "confidence": self.confidence_threshold,
                             "skip_pose": not self.pose_enabled,
-                        }
+                        },
+                        timeout=30,
                     )
                 if response.status_code == 200:
                     detections = response.json().get("detections", [])

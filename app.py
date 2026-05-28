@@ -1583,4 +1583,4 @@ if __name__ == '__main__':
     waitress_logger = logging.getLogger('waitress')
     waitress_logger.handlers.clear()
     waitress_logger.propagate = True  # hérite du root logger (stdout)
-    serve(app, host='0.0.0.0', port=5050)
+    serve(app, host='0.0.0.0', port=5050)  # nosec B104 — binding intentionnel pour conteneur
