@@ -60,9 +60,12 @@ RUN pip install --no-cache-dir cython setuptools wheel
 COPY pyproject.toml uv.lock ./
 
 # Installation des dependances Python
-# --no-build-isolation-package pycairo : pycairo 1.29+ utilise meson comme build backend ;
-# sans cette option, le sous-env de build isolé ne trouve pas libcairo2-dev (headers systeme)
-RUN uv sync --frozen --no-dev --no-build-isolation-package pycairo
+# pycairo et pygobject utilisent meson comme build backend (pycairo 1.29+, pygobject 3.x) ;
+# --no-build-isolation-package desactive l'env de build isole pour ces paquets afin qu'ils
+# trouvent les headers systeme (libcairo2-dev, libgirepository1.0-dev) installes via apt
+RUN uv sync --frozen --no-dev \
+    --no-build-isolation-package pycairo \
+    --no-build-isolation-package pygobject
 
 # Copie du code source
 COPY config/ ./config/
