@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = "==3.10.12"
 dependencies = [
     "aiogram>=3.20.0.post0",
+    "cryptography>=48.0.0",
     "flask>=3.1.1",
     "gunicorn>=23.0.0",
     "nuitka>=2.7.12",

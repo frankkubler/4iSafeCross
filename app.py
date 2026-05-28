@@ -73,6 +73,24 @@ def logs_settings():
 
 logs_settings()
 logger = logging.getLogger(__name__)
+
+# ── Vérification de la licence ────────────────────────────────────────────────
+from utils.license_validator import load_and_verify_license, get_machine_id
+
+_LIC_PATH = os.environ.get("SAFECROSS_LICENSE", "config/4isafecross.lic")
+try:
+    _lic_payload = load_and_verify_license(
+        _LIC_PATH,
+        required_features=["presence"],  # adapter selon les fonctionnalités requises
+    )
+    logger.info("Licence acceptée pour : %s", _lic_payload.get("client"))
+except (FileNotFoundError, ValueError) as _lic_err:
+    logger.critical("❌ Licence invalide : %s", _lic_err)
+    logger.critical("   Machine ID de cette machine : %s", get_machine_id())
+    logger.critical("   Placez un fichier de licence valide dans : %s", _LIC_PATH)
+    sys.exit(1)
+# ─────────────────────────────────────────────────────────────────────────────
+
 relays = YoctoMultiRelay()
 for i in range(len(relays.relays)):
     logger.debug(f"Relais {i} : {relays.get_relay_state(i)}")

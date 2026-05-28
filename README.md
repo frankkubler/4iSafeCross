@@ -15,6 +15,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 - **Interface web Flask** : flux vidéo en direct, éditeur de zones/masques graphique, galerie des détections, statistiques système
 - **Collecte automatique de dataset** intégrée (4 stratégies : temporel, événement, fond, hard-negatives)
 - **Base de données SQLite** des événements (détections + activations relais)
+- **LicenceCheck** : vérification cryptographique RSA à chaque démarrage (machine-id, expiration, fonctionnalités)
 
 ## Structure du projet
 
@@ -27,7 +28,9 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   ├── config.ini            # Configuration principale (RTSP, IA, Telegram, relais…)
 │   ├── zones.ini             # Zones de détection par caméra (polygones / rectangles)
 │   ├── masks.ini             # Masques d'exclusion (zones noircies avant traitement)
-│   └── relay_positions.ini   # Position des icônes de projecteurs sur le canvas web
+│   ├── relay_positions.ini   # Position des icônes de projecteurs sur le canvas web
+│   ├── public_key.pem        # Clé publique RSA pour vérification des licences
+│   └── 4isafecross.lic       # Fichier de licence (non versionné — à déployer sur site)
 ├── db/
 │   └── detections.db         # Base SQLite (détections + événements relais)
 ├── detections/               # Captures annotées lors des alertes
@@ -48,7 +51,8 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   ├── constants.py          # Chargement de config.ini → constantes Python
 │   ├── utils.py              # Fonctions génériques (IP, Docker, logs, sauvegarde frame)
 │   ├── zone_writer.py        # Sérialisation zones/masques vers INI
-│   └── coco_classes.py       # Correspondance ID → nom de classe COCO
+│   ├── coco_classes.py       # Correspondance ID → nom de classe COCO
+│   └── license_validator.py  # Vérification cryptographique des licences LicenceCheck
 ├── static/                   # Ressources web (CSS, JS, Fabric.js, icônes)
 ├── templates/                # Templates Jinja2 Flask (index, zone_editor, preview…)
 ├── scripts/                  # Scripts systemd, déploiement Jetson, logrotate
@@ -287,6 +291,52 @@ Modifiez les paramètres dans [`config/config.ini`](config/config.ini) :
 - Identifiants RTSP (`LOGIN`, `PASSWORD`, `HOST`, etc. dans la section `[RTSP]`)
 - Seuils de détection (`MOTIONTHRESHOLD`, `INF_THRESHOLD` dans la section `[APP]`)
 - Activation Telegram (`TELEGRAM_ENABLED` dans la section `[TELEGRAM]`)
+
+#### LicenceCheck
+
+L'application vérifie une licence RSA à chaque démarrage. Sans fichier valide, l'application s'arrête (`sys.exit(1)`).
+
+**Format du fichier de licence** (généré par [4icheck_license_manager](https://github.com/frankkubler/4icheck_license_manager)) :
+```
+base64url(payload_json).base64url(signature_RSA_PKCS1v15_SHA256)
+```
+
+**Procédure de génération d'une licence :**
+
+1. Sur la machine de développement, lancer le gestionnaire :
+   ```sh
+   cd 4icheck_license_manager
+   uv run streamlit run app.py
+   ```
+2. Générer les clés RSA depuis la barre latérale (une seule fois — à conserver précieusement).
+3. Récupérer le **machine ID** du boîtier cible :
+   ```sh
+   cat /etc/machine-id
+   ```
+4. Créer la licence avec les paramètres :
+   - **client** : nom du client / site
+   - **machine_id** : valeur obtenue à l'étape 3
+   - **expires** : date d'expiration souhaitée
+   - **features** : `["presence"]` (minimum requis)
+5. Copier les deux fichiers sur le boîtier :
+   ```sh
+   # Clé publique (une fois par paire de clés)
+   scp ~/.4icheck_licenses/public_key.pem user@jetson:/app/config/public_key.pem
+
+   # Fichier de licence
+   scp 4isafecross.lic user@jetson:/app/config/4isafecross.lic
+   ```
+
+**Chemin par défaut** : `config/4isafecross.lic`
+Override via variable d'environnement : `SAFECROSS_LICENSE=/chemin/vers/fichier.lic`
+
+**En cas d'échec au démarrage**, les logs affichent le machine ID attendu :
+```
+CRITICAL ❌ Licence invalide : Cette licence est destinée à la machine '...'
+CRITICAL    Machine ID de cette machine : <valeur>
+```
+
+> Le fichier `config/4isafecross.lic` est exclu du dépôt Git (`.gitignore`). Ne jamais versionner la **clé privée** (`~/.4icheck_licenses/private_key.pem`).
 
 #### Credentials sensibles — Token Telegram
 
