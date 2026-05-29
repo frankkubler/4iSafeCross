@@ -38,10 +38,11 @@ L'avantage est réel, l'inconvénient est nul.
 | **Docstrings** | ✅ supprimées (`-OO`) | ✅ supprimées | ✅ supprimées |
 | **String literals** | ⚠️ visibles | ⚠️ visibles | ✅ chiffrées |
 | **Logique algorithmique** | ✅ protégée | ✅ protégée | ✅ protégée |
-| **Temps de build ARM64** | ~2 min | ~30–60 min | ~30–60 min |
+| **Temps de build (QEMU x86→ARM64)** | ~2 min | ~30–60 min | ~30–60 min |
+| **Temps de build (natif Jetson)** | ~30 s | ~5–8 min | ~5–8 min |
 | **Compatibilité Python 3.10** | ⚠️ parser limité | ✅ native | ✅ native |
 | **Taille des binaires** | normale | +20–50% | +20–50% |
-| **Prix** | gratuit | gratuit | ~600€/an |
+| **Prix** | gratuit | gratuit | 250€/an |
 | **Complexité Docker** | faible | élevée | élevée |
 
 ## Détail des critères
@@ -63,6 +64,22 @@ code machine ARM64 non lisible et non décompilable. C'est la protection essenti
 ### Compatibilité Python 3.10
 Cython utilise son propre parser C qui ne supporte pas toutes les syntaxes Python 3.10+
 (ex: unions PEP 604 `X | None`). Nuitka utilise l'AST Python natif — aucune limitation syntaxique.
+
+### Compilation native sur Jetson vs QEMU
+
+Les temps de build indiqués avec QEMU supposent une compilation croisée x86→ARM64 via émulation.
+Si un GitLab Runner est installé directement sur le Jetson (executor `shell`), la compilation est native :
+les temps tombent à ~30 s pour Cython et ~5–8 min pour Nuitka — sans QEMU, sans Docker.
+
+```bash
+# Installer un Runner sur le Jetson
+curl -L "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-arm64" \
+    -o /usr/local/bin/gitlab-runner
+chmod +x /usr/local/bin/gitlab-runner
+gitlab-runner register --executor shell --tag-list arm64,jetson
+```
+
+Dans `.gitlab-ci.yml`, cibler ce runner avec `tags: [jetson]`.
 
 ## Conclusion
 
