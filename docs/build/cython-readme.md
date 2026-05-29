@@ -27,10 +27,11 @@ def process_data(data):
 
 ### setup_cython.py
 
-Configure la compilation de tous les fichiers dans `src/` et `utils/` :
+Configure la compilation de tous les fichiers dans `src/`, `utils/` et `app.py` :
 
 ```python
 SOURCE_DIRS = ["src", "utils"]  # Directories a compiler
+ROOT_FILES = ["app.py"]         # Fichiers racine a compiler individuellement
 ```
 
 ### Options de compilation
@@ -40,7 +41,14 @@ compiler_directives={
     'boundscheck': False,      # +10% performance
     'wraparound': False,       # +5% performance
     'cdivision': True,         # Division C (plus rapide)
+    'annotation_typing': False,  # Support syntaxe Python 3.10+ dans les annotations
 }
+```
+
+Le flag `-OO` est passé à Python lors de la compilation pour supprimer les docstrings des binaires :
+
+```dockerfile
+RUN python3 -OO setup_cython.py build_ext --inplace
 ```
 
 ## Build local (test)
@@ -50,14 +58,15 @@ compiler_directives={
 pip install cython
 
 # Compiler
-python setup_cython.py build_ext --inplace
+python3 -OO setup_cython.py build_ext --inplace
 
 # Verifier les .so generes
-ls src/**/*.so
+ls src/**/*.so app.cpython-*.so
 # src/handlers/camera.cpython-310-aarch64-linux-gnu.so
+# app.cpython-310-aarch64-linux-gnu.so
 
 # Tester
-python app.py
+python3 run.py
 ```
 
 ## Sécurité
@@ -120,7 +129,8 @@ tar -xf image.tar
 Le script compile automatiquement :
 - ✅ `src/**/*.py` → `src/**/*.so`
 - ✅ `utils/**/*.py` → `utils/**/*.so`
-- ⚠️ `app.py` : Point d'entrée (peut être compilé aussi si besoin)
+- ✅ `app.py` → `app.cpython-310-aarch64-linux-gnu.so`
+- ❌ `run.py` : Point d'entrée minimal (non compilé — importe `app` depuis le `.so`)
 - ❌ `config/` : Fichiers de config (non compilés)
 
 ## Désactiver la compilation (debug)
@@ -128,7 +138,7 @@ Le script compile automatiquement :
 Dans le Dockerfile, commenter la ligne de compilation :
 
 ```dockerfile
-# RUN python3 setup_cython.py build_ext --inplace
+# RUN python3 -OO setup_cython.py build_ext --inplace
 ```
 
 Le code Python restera en clair (pour développement).
