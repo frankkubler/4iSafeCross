@@ -1,96 +1,91 @@
-# Pipeline GitLab CI/CD pour image Docker ARM64 (Jetson Orin NX)
-# Code protege par conteneur signe
-
+# You can override the included template(s) by including variable overrides
+# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
+# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure
+# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
+# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
+# Note that environment variables can be set in several places
+# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
 stages:
-  - security   # fail fast : scan SAST + audit dependances avant tout build
-  - build
-  - release
-
+- test
 variables:
   DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""
+  DOCKER_TLS_CERTDIR: ''
   IMAGE_NAME: "${CI_REGISTRY_IMAGE}"
   IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
-
-# ─── Stage security : SAST (Bandit) + audit dependances (pip-audit) ──────────
 security:sast:
   stage: security
   image: python:3.10-slim
   before_script:
-    - pip install bandit pip-audit --quiet
+  - pip install bandit pip-audit --quiet
   script:
-    - echo "=== Analyse SAST avec Bandit ==="
-    - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
-    - bandit -r src/ utils/ app.py -ll
-    - echo "=== Audit des dependances avec pip-audit ==="
-    # pygobject est un binding GTK natif (requiert gcc/libgirepository) absent de python:3.10-slim
-    # Son audit releve de la securite systeme (apt), pas de pip — on l'exclut
-    - grep -v "^pygobject" requirements.txt > /tmp/audit-requirements.txt
-    - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json || true
-    - pip-audit -r /tmp/audit-requirements.txt
+  - echo "=== Analyse SAST avec Bandit ==="
+  - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
+  - bandit -r src/ utils/ app.py -ll
+  - echo "=== Audit des dependances avec pip-audit ==="
+  - grep -v "^pygobject" requirements.txt > /tmp/audit-requirements.txt
+  - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json || true
+  - pip-audit -r /tmp/audit-requirements.txt
   artifacts:
     when: always
     paths:
-      - bandit-report.json
-      - pip-audit-report.json
+    - bandit-report.json
+    - pip-audit-report.json
     expire_in: 30 days
-  allow_failure: true  # integration progressive — passer a false apres stabilisation
+  allow_failure: true
   only:
-    - main
-    - merge_requests
-
-# Build image Docker ARM64
+  - main
+  - merge_requests
 build:docker:arm64:
   stage: build
   image: docker:25-cli
   services:
-    - docker:25-dind
+  - docker:25-dind
   before_script:
-    - echo "Nettoyage de l'espace disque..."
-    - docker system prune -af --volumes || true
-    - df -h
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+  - echo "Nettoyage de l'espace disque..."
+  - docker system prune -af --volumes || true
+  - df -h
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
   script:
-    - echo "Construction de l'image Docker ARM64..."
-    - docker buildx create --use --name multiarch || docker buildx use multiarch
-    - docker buildx build --platform linux/arm64 --build-arg PYTHON_VERSION=3.10 --tag ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest --push --progress=plain .
-    - echo "Image creee':' ${IMAGE_NAME}:${IMAGE_TAG}"
+  - echo "Construction de l'image Docker ARM64..."
+  - docker buildx create --use --name multiarch || docker buildx use multiarch
+  - docker buildx build --platform linux/arm64 --build-arg PYTHON_VERSION=3.10 --tag
+    ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest --push --progress=plain
+    .
+  - echo "Image creee':' ${IMAGE_NAME}:${IMAGE_TAG}"
   after_script:
-    - docker system prune -f || true
+  - docker system prune -f || true
   only:
-    - main
-    - jetson_gpu
-    - tags
-
-# Release avec instructions de deploiement
+  - main
+  - jetson_gpu
+  - tags
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   dependencies: []
   script:
-    - echo "Creation de la release ${CI_COMMIT_TAG}"
+  - echo "Creation de la release ${CI_COMMIT_TAG}"
   release:
-    tag_name: '$CI_COMMIT_TAG'
-    name: 'Release $CI_COMMIT_TAG'
+    tag_name: "$CI_COMMIT_TAG"
+    name: Release $CI_COMMIT_TAG
     description: |
       ## Release Docker ARM64 $CI_COMMIT_TAG
-      
+
       ### Image Docker pour Nvidia Jetson Orin NX
-      
+
       **Image:**
       ```
       ${IMAGE_NAME}:${CI_COMMIT_TAG}
       ```
-      
+
       **Deploiement sur Jetson:**
       ```bash
       # Connexion au registry
       docker login gitlab.4itec.ddns.net
-      
+
       # Telecharger l'image
       docker pull ${IMAGE_NAME}:${CI_COMMIT_TAG}
-      
+
       # Lancer le conteneur
       docker run -d \
         --name 4isafecross \
@@ -101,12 +96,16 @@ release:
         -v /data/4isafecross:/app/data \
         ${IMAGE_NAME}:${CI_COMMIT_TAG}
       ```
-      
+
       **Verifier les logs:**
       ```bash
       docker logs -f 4isafecross
       ```
   only:
-    - tags
+  - tags
   except:
-    - branches
+  - branches
+sast:
+  stage: test
+include:
+- template: Security/SAST.gitlab-ci.yml
