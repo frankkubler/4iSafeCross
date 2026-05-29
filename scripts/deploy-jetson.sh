@@ -7,7 +7,7 @@
 set -e
 
 # Configuration
-REGISTRY="gitlab.4itec.ddns.net"
+REGISTRY="registry.gitlab.4itec.ddns.net"
 IMAGE_NAME="frank-k/4isafecross"
 CONTAINER_NAME="4isafecross"
 TAG="${1:-latest}"
@@ -40,6 +40,7 @@ fi
 
 # Telecharger la nouvelle image
 echo "📥 Telechargement de l'image..."
+docker login ${REGISTRY} -u frank-k
 docker pull ${FULL_IMAGE}
 
 # Lancer le nouveau conteneur
