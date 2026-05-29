@@ -304,13 +304,12 @@ gitlab-runner register \
 
 Puis dans `.gitlab-ci.yml`, utilisez ce runner :
 ```yaml
-build:arm64:
+build:docker:arm64:
   tags:
     - arm64
     - jetson
   script:
-    - uv sync
-    - uv run nuitka ...  # Compilation native, beaucoup plus rapide !
+    - docker buildx build --platform linux/arm64 ...  # Compilation native, beaucoup plus rapide !
 ```
 
 **Avantage :** Compilation **5-10x plus rapide** (pas d'émulation).
