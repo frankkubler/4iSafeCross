@@ -62,10 +62,15 @@ COPY pyproject.toml uv.lock ./
 # (requis pour que --no-build-isolation-package trouve meson-python lors du build de pycairo)
 RUN uv venv --system-site-packages --python python3.10
 
-# Installation des dependances Python
-# pycairo et pygobject utilisent meson comme build backend (pycairo 1.29+, pygobject 3.x) ;
-# --no-build-isolation-package desactive l'env de build isole pour ces paquets afin qu'ils
-# trouvent les headers systeme (libcairo2-dev, libgirepository1.0-dev) et meson-python installes
+# Pre-installation sequentielle de pycairo avant pygobject
+# uv sync construit pycairo et pygobject en parallele : pygobject demarre sa config meson
+# avant que pycairo soit installe, donc py3cairo.h est introuvable -> ninja echoue.
+# La pre-installation force pycairo a etre entierement compile et installe en premier.
+# uv sync detecte ensuite pycairo==1.29.0 deja present et le saute.
+RUN uv pip install --no-build-isolation pycairo==1.29.0
+
+# Installation des dependances Python restantes
+# pycairo est deja installe ; pygobject le trouve pour sa compilation Cairo
 RUN uv sync --frozen --no-dev \
     --no-build-isolation-package pycairo \
     --no-build-isolation-package pygobject
