@@ -41,7 +41,7 @@ import threading
 import time
 from datetime import datetime, time as dtime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import cv2
 import numpy as np
@@ -126,8 +126,8 @@ class DatasetCollectionThread(threading.Thread):
         get_frame_func: Callable,
         shared_detections: dict,
         shared_detections_lock: threading.Lock,
-        shared_motion_roi: dict | None = None,
-        shared_motion_roi_lock: threading.Lock | None = None,
+        shared_motion_roi: Optional[dict] = None,
+        shared_motion_roi_lock: Optional[threading.Lock] = None,
         output_dir: str = "dataset",
         interval_minutes: int = 10,
         start_hour: int = 7,
@@ -138,8 +138,8 @@ class DatasetCollectionThread(threading.Thread):
         bg_enabled: bool = True,
         hard_neg_enabled: bool = True,
         inf_url: str = "http://127.0.0.1:8004/predict_frame/",
-        stop_event: threading.Event | None = None,
-        masks: list | None = None,
+        stop_event: Optional[threading.Event] = None,
+        masks: Optional[list] = None,
     ):
         super().__init__(daemon=True, name=f"DatasetCollector-cam{cam_idx}")
         self.cam_idx = cam_idx
@@ -338,7 +338,7 @@ class DatasetCollectionThread(threading.Thread):
         frame: np.ndarray,
         detections: list[dict],
         strategy: str,
-    ) -> str | None:
+    ) -> Optional[str]:
         """Sauvegarde une frame JPEG + son fichier label YOLO."""
         h, w = frame.shape[:2]
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
@@ -642,7 +642,7 @@ class DatasetCollector:
         detections: list[dict],
         strategy: str,
         motion_pixels: int = 0,
-    ) -> str | None:
+    ) -> Optional[str]:
         """
         Sauvegarde une frame JPEG et son fichier label YOLO (.txt).
 

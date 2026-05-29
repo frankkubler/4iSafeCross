@@ -25,6 +25,7 @@ import subprocess
 import uuid
 from datetime import date
 from pathlib import Path
+from typing import Optional, Union
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -75,7 +76,7 @@ def get_machine_id() -> str:
 
 def verify_license(
     lic_content: str,
-    required_features: list[str] | None = None,
+    required_features: Optional[list[str]] = None,
     check_machine_id: bool = True,
 ) -> dict:
     """
@@ -159,8 +160,8 @@ def verify_license(
 
 
 def load_and_verify_license(
-    lic_path: str | Path,
-    required_features: list[str] | None = None,
+    lic_path: Union[str, Path],
+    required_features: Optional[list[str]] = None,
     check_machine_id: bool = True,
 ) -> dict:
     """
