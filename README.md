@@ -398,7 +398,17 @@ L’interface web sera accessible sur [http://localhost:5050](http://localhost:5
 
 ## Déploiement Docker
 
-Un exemple de `Dockerfile` est fourni pour un déploiement en conteneur.
+### Sur le Jetson (production)
+
+```sh
+# Déployer depuis le registry GitLab (demande le mot de passe GitLab)
+bash scripts/deploy-jetson.sh latest
+
+# Déployer un tag spécifique
+bash scripts/deploy-jetson.sh v1.2.0
+```
+
+### Build local (développement)
 
 ```sh
 docker build -t 4isafecross .
