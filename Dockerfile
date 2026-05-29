@@ -83,6 +83,7 @@ COPY db/ ./db/
 COPY src/ ./src/
 COPY utils/ ./utils/
 COPY app.py .
+COPY run.py .
 COPY setup_cython.py .
 
 # Compilation avec Cython
@@ -91,8 +92,10 @@ RUN python3 -OO setup_cython.py build_ext --inplace && \
     # Nettoyer les fichiers .py originaux (garder uniquement les .so)
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
+    rm -f app.py && \
     # Nettoyer les fichiers de build intermediaires (src/**/*.c ne fonctionne pas en sh)
     find src/ utils/ -name "*.c" -type f -delete && \
+    find . -maxdepth 1 -name "app.c" -type f -delete && \
     rm -rf build/
 
 # Stage final - Image NVIDIA JetPack minimale avec GStreamer
@@ -140,7 +143,8 @@ COPY --from=builder /app/static/ ./static/
 COPY --from=builder /app/db/ ./db/
 COPY --from=builder /app/src/ ./src/
 COPY --from=builder /app/utils/ ./utils/
-COPY --from=builder /app/app.py .
+COPY --from=builder /app/app.cpython-310-aarch64-linux-gnu.so ./
+COPY --from=builder /app/run.py ./
 
 # Creation des repertoires necessaires
 RUN mkdir -p /app/logs /app/data
@@ -158,4 +162,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
 
 # Demarrage de l'application
-CMD ["python3", "app.py"]
+CMD ["python3", "run.py"]

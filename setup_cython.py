@@ -11,6 +11,9 @@ from pathlib import Path
 # Directories a compiler
 SOURCE_DIRS = ["src", "utils"]
 
+# Fichiers racine a compiler individuellement
+ROOT_FILES = ["app.py"]
+
 # Trouver tous les fichiers .py a compiler
 def find_python_files(directories):
     """Trouve tous les fichiers .py dans les repertoires specifies"""
@@ -22,6 +25,9 @@ def find_python_files(directories):
                     if file.endswith('.py') and not file.startswith('__'):
                         filepath = os.path.join(root, file)
                         python_files.append(filepath)
+    for f in ROOT_FILES:
+        if os.path.exists(f):
+            python_files.append(f)
     return python_files
 
 # Creer les extensions Cython
