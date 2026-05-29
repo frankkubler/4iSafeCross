@@ -139,13 +139,14 @@ bash 4isafecross.sh
 ### `deploy-jetson.sh`
 
 Déploiement automatisé de l'image Docker depuis le registry GitLab privé
-`gitlab.4itec.ddns.net/frank-k/4isafecross`.
+`registry.gitlab.4itec.ddns.net/frank-k/4isafecross`.
 
 **Fonctionnement :**
 1. Vérifie la présence de Docker et du runtime NVIDIA.
 2. Arrête et supprime l'ancien conteneur `4isafecross` s'il existe.
-3. Télécharge la nouvelle image (`docker pull`).
-4. Lance le conteneur avec les options de production.
+3. Se connecte au registry GitLab (`docker login`).
+4. Télécharge la nouvelle image (`docker pull`).
+5. Lance le conteneur avec les options de production.
 
 **Options de lancement du conteneur :**
 
@@ -163,7 +164,7 @@ Déploiement automatisé de l'image Docker depuis le registry GitLab privé
 
 ```sh
 # Déployer le tag latest
-bash scripts/deploy-jetson.sh
+bash scripts/deploy-jetson.sh latest
 
 # Déployer un tag spécifique
 bash scripts/deploy-jetson.sh v1.2.0
