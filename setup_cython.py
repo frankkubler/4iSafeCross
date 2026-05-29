@@ -56,6 +56,8 @@ setup(
         extensions,
         compiler_directives={
             'language_level': "3",           # Python 3
+            'annotation_typing': False,      # Ne pas interpreter les annotations comme types Cython
+                                             # (requis pour les unions PEP 604 : X | None, Python 3.10+)
             'embedsignature': False,         # Ne pas inclure la signature (protection)
             'always_allow_keywords': True,   # Support kwargs
             'boundscheck': False,            # Desactiver verif bounds (performance)
