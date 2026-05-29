@@ -27,7 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libcairo2-dev \
-    libgirepository1.0-dev \
     python3-dev \
     libsm6 \
     libxrender1 \
@@ -53,16 +52,20 @@ RUN set -eux \
     && rm uv-aarch64-unknown-linux-gnu.tar.gz uv-aarch64-unknown-linux-gnu.tar.gz.sha256
 ENV PATH="/root/.local/bin:$PATH"
 
-# Installation de Cython
-RUN pip install --no-cache-dir cython setuptools wheel
+# Installation de Cython et outils de build dans Python systeme
+RUN pip install --no-cache-dir cython setuptools wheel meson-python meson
 
 # Copie des fichiers de dependances
 COPY pyproject.toml uv.lock ./
 
+# Creation du venv avec acces aux packages systeme
+# (requis pour que --no-build-isolation-package trouve meson-python lors du build de pycairo)
+RUN uv venv --system-site-packages --python python3.10
+
 # Installation des dependances Python
 # pycairo et pygobject utilisent meson comme build backend (pycairo 1.29+, pygobject 3.x) ;
 # --no-build-isolation-package desactive l'env de build isole pour ces paquets afin qu'ils
-# trouvent les headers systeme (libcairo2-dev, libgirepository1.0-dev) installes via apt
+# trouvent les headers systeme (libcairo2-dev, libgirepository1.0-dev) et meson-python installes
 RUN uv sync --frozen --no-dev \
     --no-build-isolation-package pycairo \
     --no-build-isolation-package pygobject
@@ -83,8 +86,9 @@ RUN python3 setup_cython.py build_ext --inplace && \
     # Nettoyer les fichiers .py originaux (garder uniquement les .so)
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
-    # Nettoyer les fichiers de build intermediaires
-    rm -rf build/ *.c src/**/*.c utils/**/*.c
+    # Nettoyer les fichiers de build intermediaires (src/**/*.c ne fonctionne pas en sh)
+    find src/ utils/ -name "*.c" -type f -delete && \
+    rm -rf build/
 
 # Stage final - Image NVIDIA JetPack minimale avec GStreamer
 FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
