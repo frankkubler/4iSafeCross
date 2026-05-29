@@ -86,8 +86,8 @@ COPY app.py .
 COPY setup_cython.py .
 
 # Compilation avec Cython
-# Compile tous les fichiers .py en .so (binaires)
-RUN python3 setup_cython.py build_ext --inplace && \
+# -OO : supprime les docstrings des binaires (obfuscation + taille reduite)
+RUN python3 -OO setup_cython.py build_ext --inplace && \
     # Nettoyer les fichiers .py originaux (garder uniquement les .so)
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
