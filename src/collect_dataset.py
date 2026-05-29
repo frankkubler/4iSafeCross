@@ -727,7 +727,7 @@ class DatasetCollector:
 
         # Initialisation d'un MotionDetector par caméra
         for i in range(n_cams):
-            self.motion_detectors[i] = MotionDetector()
+            self.motion_detectors[i] = self._MotionDetector()
 
         interval_sec = self.interval_minutes * 60
 
@@ -947,6 +947,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Point d'entrée principal."""
+    from src.camera_manager import CameraManager
     # Changer le répertoire courant à la racine du projet pour que
     # les imports relatifs (config.ini, etc.) fonctionnent correctement.
     os.chdir(PROJECT_ROOT)
