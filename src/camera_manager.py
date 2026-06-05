@@ -123,12 +123,42 @@ class CameraManager:
 
         return f"{source} ! {decode} ! {tail}"
 
+    def _poll_bus_messages(self, bus, cid, eos_or_error):
+        """Lit les messages du bus GStreamer sans boucle GLib externe.
+
+        Cette approche évite ``bus.add_signal_watch()`` qui nécessite un
+        ``GLib.MainLoop`` actif et peut produire des assertions critiques
+        selon la plateforme/pilotes.
+        """
+        message_types = (
+            Gst.MessageType.ERROR
+            | Gst.MessageType.WARNING
+            | Gst.MessageType.EOS
+        )
+        while True:
+            message = bus.timed_pop_filtered(0, message_types)
+            if message is None:
+                break
+
+            message_type = message.type
+            if message_type == Gst.MessageType.ERROR:
+                err, debug = message.parse_error()
+                self.logger.error(f"GStreamer ERROR: {err}, debug: {debug}")
+                eos_or_error.set()
+            elif message_type == Gst.MessageType.WARNING:
+                err, debug = message.parse_warning()
+                self.logger.warning(f"GStreamer WARNING: {err}, debug: {debug}")
+            elif message_type == Gst.MessageType.EOS:
+                self.logger.warning(f"GStreamer EOS (fin de flux) pour {cid}")
+                eos_or_error.set()
+
     def update(self, cid):
         # Gst.init() est appelé une seule fois dans __init__
         reconnect_delay = 3  # secondes entre tentatives
         while self.running:
             # Boucle de tentative de connexion au flux RTSP
             pipeline = None
+            bus = None
             while self.running:
                 pipeline_str = self._build_pipeline_str(cid)
                 self.logger.info(f"Pipeline GStreamer [{self.backend}]: {pipeline_str}")
@@ -136,22 +166,7 @@ class CameraManager:
                     pipeline = Gst.parse_launch(pipeline_str)
                     appsink = pipeline.get_by_name('sink')
                     bus = pipeline.get_bus()
-                    bus.add_signal_watch()
                     eos_or_error = threading.Event()
-
-                    def on_message(bus, message):
-                        t = message.type
-                        if t == Gst.MessageType.ERROR:
-                            err, debug = message.parse_error()
-                            self.logger.error(f"GStreamer ERROR: {err}, debug: {debug}")
-                            eos_or_error.set()
-                        elif t == Gst.MessageType.WARNING:
-                            err, debug = message.parse_warning()
-                            self.logger.warning(f"GStreamer WARNING: {err}, debug: {debug}")
-                        elif t == Gst.MessageType.EOS:
-                            self.logger.warning(f"GStreamer EOS (fin de flux) pour {cid}")
-                            eos_or_error.set()
-                    bus.connect('message', on_message)
                     ret = pipeline.set_state(Gst.State.PLAYING)
                     self.logger.info(f"Mise en PLAYING, retour: {ret.value_nick}")
                     if ret != Gst.StateChangeReturn.FAILURE:
@@ -166,11 +181,19 @@ class CameraManager:
                         pipeline.set_state(Gst.State.NULL)
                     self.cams_status[cid] = 'offline'
                     time.sleep(reconnect_delay)
+
+            if not self.running or pipeline is None:
+                break
+
             # Pipeline initialisé avec succès, on traite les frames
             fail_count = 0
             self.cams_status[cid] = 'online'  # flux ok au lancement
             while self.running and not eos_or_error.is_set():
-                sample = appsink.emit('pull-sample')
+                self._poll_bus_messages(bus, cid, eos_or_error)
+                if eos_or_error.is_set():
+                    break
+
+                sample = appsink.emit('try-pull-sample', 1_000_000_000)
                 if sample:
                     buf = sample.get_buffer()
                     caps = sample.get_caps()
@@ -207,6 +230,8 @@ class CameraManager:
             else:
                 # Si on sort de la boucle sans erreur, c'est que le flux est ok
                 self.cams_status[cid] = 'online'
+            if bus is not None:
+                self._poll_bus_messages(bus, cid, eos_or_error)
             pipeline.set_state(Gst.State.NULL)
             if not self.running:
                 break
