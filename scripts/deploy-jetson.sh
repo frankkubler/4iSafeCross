@@ -11,6 +11,12 @@ REGISTRY="registry.gitlab.4itec.ddns.net"
 IMAGE_NAME="frank-k/4isafecross"
 CONTAINER_NAME="4isafecross"
 TAG="${1:-latest}"
+
+# Permet la surcharge depuis l'environnement (ex: .bashrc)
+REGISTRY="${PACKAGE_REGISTRY_HOST:-${REGISTRY}}"
+REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
+REGISTRY_TOKEN="${REGISTRY_TOKEN:-}"
+
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
 
 echo "==================================="
@@ -40,7 +46,13 @@ fi
 
 # Telecharger la nouvelle image
 echo "📥 Telechargement de l'image..."
-docker login ${REGISTRY} -u frank-k
+if [ -n "${REGISTRY_USERNAME}" ] && [ -n "${REGISTRY_TOKEN}" ]; then
+    echo "🔐 Connexion au registry avec les variables d'environnement..."
+    echo "${REGISTRY_TOKEN}" | docker login ${REGISTRY} -u "${REGISTRY_USERNAME}" --password-stdin
+else
+    echo "🔐 Connexion interactive au registry (variables REGISTRY_USERNAME/REGISTRY_TOKEN non definies)..."
+    docker login ${REGISTRY}
+fi
 docker pull ${FULL_IMAGE}
 
 # Lancer le nouveau conteneur
