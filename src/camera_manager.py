@@ -123,7 +123,7 @@ class CameraManager:
 
         return f"{source} ! {decode} ! {tail}"
 
-    def _poll_bus_messages(self, bus, cid, eos_or_error):
+    def _poll_bus_messages(self, bus, cid, eos_or_error, bus_state):
         """Lit les messages du bus GStreamer sans boucle GLib externe.
 
         Cette approche évite ``bus.add_signal_watch()`` qui nécessite un
@@ -144,6 +144,10 @@ class CameraManager:
             if message_type == Gst.MessageType.ERROR:
                 err, debug = message.parse_error()
                 self.logger.error(f"GStreamer ERROR: {err}, debug: {debug}")
+                err_text = str(err)
+                debug_text = debug or ""
+                if "Unauthorized" in err_text or "401" in debug_text:
+                    bus_state['auth_error'] = True
                 eos_or_error.set()
             elif message_type == Gst.MessageType.WARNING:
                 err, debug = message.parse_warning()
@@ -167,6 +171,7 @@ class CameraManager:
                     appsink = pipeline.get_by_name('sink')
                     bus = pipeline.get_bus()
                     eos_or_error = threading.Event()
+                    bus_state = {'auth_error': False}
                     ret = pipeline.set_state(Gst.State.PLAYING)
                     self.logger.info(f"Mise en PLAYING, retour: {ret.value_nick}")
                     if ret != Gst.StateChangeReturn.FAILURE:
@@ -189,7 +194,7 @@ class CameraManager:
             fail_count = 0
             self.cams_status[cid] = 'online'  # flux ok au lancement
             while self.running and not eos_or_error.is_set():
-                self._poll_bus_messages(bus, cid, eos_or_error)
+                self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
                 if eos_or_error.is_set():
                     break
 
@@ -215,6 +220,10 @@ class CameraManager:
                     else:
                         self.logger.warning(f"Impossible de mapper le buffer GStreamer pour {cid}")
                 else:
+                    self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
+                    if eos_or_error.is_set():
+                        break
+
                     fail_count += 1
                     self.logger.warning(f"Aucune frame reçue via GStreamer pour {cid} (compteur: {fail_count})")
                     self.cams_status[cid] = 'offline'  # perte du flux
@@ -231,12 +240,21 @@ class CameraManager:
                 # Si on sort de la boucle sans erreur, c'est que le flux est ok
                 self.cams_status[cid] = 'online'
             if bus is not None:
-                self._poll_bus_messages(bus, cid, eos_or_error)
+                self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
             pipeline.set_state(Gst.State.NULL)
             if not self.running:
                 break
-            self.logger.warning(f"Redémarrage du pipeline pour {cid} dans {reconnect_delay}s...")
-            time.sleep(reconnect_delay)
+            if bus_state.get('auth_error'):
+                self.cams_status[cid] = 'offline'
+                auth_reconnect_delay = 15
+                self.logger.error(
+                    f"Échec d'authentification RTSP (401) pour {cid}. "
+                    f"Vérifiez login/mot de passe. Nouvelle tentative dans {auth_reconnect_delay}s..."
+                )
+                time.sleep(auth_reconnect_delay)
+            else:
+                self.logger.warning(f"Redémarrage du pipeline pour {cid} dans {reconnect_delay}s...")
+                time.sleep(reconnect_delay)
         # Sortie définitive
         self.logger.info(f"Thread update caméra {cid} terminé.")
         self.cams_status[cid] = 'offline'
