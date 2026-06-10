@@ -78,6 +78,46 @@ logger = logging.getLogger(__name__)
 from utils.license_validator import load_and_verify_license, get_machine_id
 
 _LIC_PATH = os.environ.get("SAFECROSS_LICENSE", "config/4isafecross.lic")
+
+
+def _log_license_boot_failure(err: Exception) -> None:
+    """Journalise une erreur de licence avec un diagnostic orienté exploitation."""
+    err_msg = str(err)
+    err_msg_low = err_msg.lower()
+
+    if "rollback d'horloge" in err_msg_low:
+        logger.critical("   Cause : rollback d'horloge détecté sur la machine")
+        logger.critical("   Action : corriger l'horloge système puis redémarrer l'application")
+        return
+
+    if "hmac invalide" in err_msg_low:
+        logger.critical("   Cause : intégrité du state licence compromise (HMAC invalide)")
+        logger.critical("   Action : vérifier les fichiers config/license_state.*")
+        return
+
+    if "state de licence" in err_msg_low:
+        logger.critical("   Cause : state local de licence absent/invalide/incompatible")
+        logger.critical("   Action : vérifier les fichiers config/license_state.*")
+        return
+
+    if "signature de licence invalide" in err_msg_low:
+        logger.critical("   Cause : signature RSA invalide")
+        logger.critical("   Action : vérifier config/public_key.pem et le fichier .lic")
+        return
+
+    if "expirée" in err_msg_low:
+        logger.critical("   Cause : licence expirée")
+        logger.critical("   Action : générer et déployer une nouvelle licence")
+        return
+
+    if "destinée à la machine" in err_msg_low:
+        logger.critical("   Cause : machine_id non correspondant")
+        logger.critical("   Action : régénérer la licence avec le machine-id de la cible")
+        return
+
+    logger.critical("   Cause : échec de validation de licence non catégorisé")
+
+
 try:
     _lic_payload = load_and_verify_license(
         _LIC_PATH,
@@ -86,6 +126,7 @@ try:
     logger.info("Licence acceptée pour : %s", _lic_payload.get("client"))
 except (FileNotFoundError, ValueError) as _lic_err:
     logger.critical("❌ Licence invalide : %s", _lic_err)
+    _log_license_boot_failure(_lic_err)
     logger.critical("   Machine ID de cette machine : %s", get_machine_id())
     logger.critical("   Placez un fichier de licence valide dans : %s", _LIC_PATH)
     sys.exit(1)

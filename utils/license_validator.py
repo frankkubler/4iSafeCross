@@ -10,7 +10,7 @@ Payload JSON :
         "machine_id": "identifiant machine",
         "issued":     "YYYY-MM-DD",
         "expires":    "YYYY-MM-DD",
-        "features":   ["presence", "absence", "cls"]
+        "features":   ["presence", "absence", "cls", "full"] # liste des fonctionnalités autorisées
     }
 
 La clé publique (PUBLIC_KEY_PEM ci-dessous) doit correspondre à la paire de clés
@@ -19,11 +19,14 @@ Pour l'obtenir :  cat ~/.4icheck_licenses/public_key.pem
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import logging
-import subprocess
+import os
+import secrets
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional, Union
 
@@ -43,15 +46,135 @@ REMPLACER_PAR_VOTRE_CLE_PUBLIQUE
 
 # Chemin alternatif : fichier public_key.pem déployé à côté de l'application
 _KEY_FILE = Path(__file__).parent.parent / "config" / "public_key.pem"
+_STATE_FILE = Path(__file__).parent.parent / "config" / "license_state.json"
+_STATE_KEY_FILE = Path(__file__).parent.parent / "config" / "license_state.key"
+
+_STATE_SCHEMA_VERSION = 1
+_CLOCK_ROLLBACK_TOLERANCE_SEC = 5
+
+
+def _get_public_key_pem_bytes() -> bytes:
+    """Retourne la clé publique PEM brute (fichier prioritaire, sinon constante)."""
+    if _KEY_FILE.exists():
+        return _KEY_FILE.read_bytes()
+    return PUBLIC_KEY_PEM.strip().encode()
 
 
 def _load_public_key():
     """Charge la clé publique depuis le fichier config/ ou depuis la constante PEM."""
-    if _KEY_FILE.exists():
-        pem = _KEY_FILE.read_bytes()
-    else:
-        pem = PUBLIC_KEY_PEM.strip().encode()
+    pem = _get_public_key_pem_bytes()
     return serialization.load_pem_public_key(pem, backend=default_backend())
+
+
+def _canonicalize_state_payload(payload: dict) -> bytes:
+    """Sérialise un payload de façon déterministe pour le calcul du HMAC."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _read_or_create_state_key() -> bytes:
+    """Lit la clé HMAC locale ou la crée au premier lancement."""
+    if _STATE_KEY_FILE.exists():
+        return _STATE_KEY_FILE.read_bytes()
+
+    _STATE_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    key = secrets.token_bytes(32)
+    _STATE_KEY_FILE.write_bytes(key)
+
+    try:
+        os.chmod(_STATE_KEY_FILE, 0o600)
+    except OSError:
+        logger.warning("Impossible de restreindre les permissions de %s", _STATE_KEY_FILE)
+
+    return key
+
+
+def _compute_state_hmac(payload_without_hmac: dict) -> str:
+    """Calcule un HMAC SHA-256 (base64url) du state local de licence."""
+    key = _read_or_create_state_key()
+    mac = hmac.new(key, _canonicalize_state_payload(payload_without_hmac), hashlib.sha256)
+    return base64.urlsafe_b64encode(mac.digest()).decode("ascii")
+
+
+def _load_state() -> Optional[dict]:
+    """Charge le state local JSON si présent, sinon retourne None."""
+    if not _STATE_FILE.exists():
+        return None
+
+    try:
+        return json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(f"Fichier state de licence invalide: {exc}") from exc
+
+
+def _save_state(state: dict) -> None:
+    """Écrit le state local de façon atomique pour éviter les corruptions."""
+    _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp_file = _STATE_FILE.with_suffix(".json.tmp")
+    tmp_file.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_file.replace(_STATE_FILE)
+
+
+def _verify_and_update_local_clock_state(machine_id: str) -> None:
+    """
+    Vérifie l'intégrité du state local et détecte un rollback d'horloge.
+
+    En cas de succès, met à jour `timestamp` et `last_seen_time` à l'instant courant.
+    """
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    tolerance_ms = _CLOCK_ROLLBACK_TOLERANCE_SEC * 1000
+
+    state = _load_state()
+    if state is not None:
+        try:
+            version = int(state["version"])
+            saved_machine_id = str(state["machine_id"])
+            saved_last_seen = int(state["last_seen_time"])
+            saved_timestamp = int(state["timestamp"])
+            saved_hmac = str(state["hmac"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"State de licence incomplet ou invalide: {exc}") from exc
+
+        if version != _STATE_SCHEMA_VERSION:
+            raise ValueError(
+                f"Version de state de licence non supportée: {version} "
+                f"(attendu: {_STATE_SCHEMA_VERSION})"
+            )
+
+        expected_hmac = _compute_state_hmac(
+            {
+                "version": version,
+                "machine_id": saved_machine_id,
+                "timestamp": saved_timestamp,
+                "last_seen_time": saved_last_seen,
+            }
+        )
+        if not hmac.compare_digest(saved_hmac, expected_hmac):
+            raise ValueError("State de licence falsifié: HMAC invalide")
+
+        if saved_machine_id != machine_id:
+            raise ValueError(
+                "State de licence incompatible avec cette machine "
+                f"('{saved_machine_id}' != '{machine_id}')"
+            )
+
+        if now_ms + tolerance_ms < saved_last_seen:
+            delta_sec = (saved_last_seen - now_ms) // 1000
+            raise ValueError(
+                "Rollback d'horloge détecté: "
+                f"heure locale en retard de {delta_sec} seconde(s)"
+            )
+
+    new_payload = {
+        "version": _STATE_SCHEMA_VERSION,
+        "machine_id": machine_id,
+        "timestamp": now_ms,
+        "last_seen_time": now_ms,
+    }
+    new_state = {
+        **new_payload,
+        "hmac": _compute_state_hmac(new_payload),
+    }
+    _save_state(new_state)
 
 
 def get_machine_id() -> str:
@@ -78,6 +201,7 @@ def verify_license(
     lic_content: str,
     required_features: Optional[list[str]] = None,
     check_machine_id: bool = True,
+    check_clock_rollback: bool = True,
 ) -> dict:
     """
     Vérifie une licence LicenceCheck.
@@ -87,12 +211,14 @@ def verify_license(
         required_features: Liste des fonctionnalités requises, ex. ["presence"].
                            None = pas de vérification des features.
         check_machine_id:  Si True, vérifie que machine_id correspond à la machine actuelle.
+        check_clock_rollback: Si True, active la protection locale anti-retour d'horloge.
 
     Returns:
         Le payload dict si la licence est valide.
 
     Raises:
-        ValueError:  Licence invalide (format, signature, expirée, machine, feature).
+        ValueError:  Licence invalide (format, signature, expirée, machine,
+                 feature, rollback d'horloge, state local falsifié).
     """
     # ── 1. Décodage ──────────────────────────────────────────────────────────
     parts = lic_content.strip().split(".")
@@ -133,15 +259,20 @@ def verify_license(
         )
 
     # ── 5. Machine ID ─────────────────────────────────────────────────────────
+    current_mid = get_machine_id()
+
     if check_machine_id:
-        current_mid = get_machine_id()
         if payload.get("machine_id") != current_mid:
             raise ValueError(
                 f"Cette licence est destinée à la machine '{payload.get('machine_id')}', "
                 f"machine actuelle : '{current_mid}'"
             )
 
-    # ── 6. Fonctionnalités ────────────────────────────────────────────────────
+    # ── 6. Anti-retour d'horloge locale (JSON + last_seen_time + HMAC) ─────
+    if check_clock_rollback:
+        _verify_and_update_local_clock_state(current_mid)
+
+    # ── 7. Fonctionnalités ────────────────────────────────────────────────────
     if required_features:
         licensed_features = set(payload.get("features", []))
         missing = set(required_features) - licensed_features
@@ -163,6 +294,7 @@ def load_and_verify_license(
     lic_path: Union[str, Path],
     required_features: Optional[list[str]] = None,
     check_machine_id: bool = True,
+    check_clock_rollback: bool = True,
 ) -> dict:
     """
     Charge un fichier .lic et le vérifie.
@@ -171,6 +303,7 @@ def load_and_verify_license(
         lic_path:          Chemin vers le fichier de licence (contient le token brut).
         required_features: Voir verify_license().
         check_machine_id:  Voir verify_license().
+        check_clock_rollback: Voir verify_license().
 
     Returns:
         Le payload dict si la licence est valide.
@@ -184,4 +317,9 @@ def load_and_verify_license(
         raise FileNotFoundError(f"Fichier de licence introuvable : {lic_path}")
 
     lic_content = lic_path.read_text().strip()
-    return verify_license(lic_content, required_features, check_machine_id)
+    return verify_license(
+        lic_content,
+        required_features,
+        check_machine_id,
+        check_clock_rollback,
+    )

@@ -3,6 +3,9 @@ __pycache__
 !logs/
 # Fichiers de configuration contenant des credentials sensibles
 .env
+config/4isafecross.lic
+config/license_state.json
+config/license_state.key
 /logs/*.log
 __pycache__/app.cpython-312.pyc
 static/ffmpeg/bin/ffmpeg.exe

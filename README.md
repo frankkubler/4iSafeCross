@@ -15,7 +15,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 - **Interface web Flask** : flux vidéo en direct, éditeur de zones/masques graphique, galerie des détections, statistiques système
 - **Collecte automatique de dataset** intégrée (4 stratégies : temporel, événement, fond, hard-negatives)
 - **Base de données SQLite** des événements (détections + activations relais)
-- **LicenceCheck** : vérification cryptographique RSA à chaque démarrage (machine-id, expiration, fonctionnalités)
+- **LicenceCheck** : vérification RSA + protection anti-retour d'horloge (JSON + `last_seen_time` + HMAC)
 
 ## Structure du projet
 
@@ -30,7 +30,9 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   ├── masks.ini             # Masques d'exclusion (zones noircies avant traitement)
 │   ├── relay_positions.ini   # Position des icônes de projecteurs sur le canvas web
 │   ├── public_key.pem        # Clé publique RSA pour vérification des licences
-│   └── 4isafecross.lic       # Fichier de licence (non versionné — à déployer sur site)
+│   ├── 4isafecross.lic       # Fichier de licence (non versionné — à déployer sur site)
+│   ├── license_state.json    # State local de licence (timestamp, last_seen_time, hmac)
+│   └── license_state.key     # Clé locale HMAC du state licence
 ├── db/
 │   └── detections.db         # Base SQLite (détections + événements relais)
 ├── detections/               # Captures annotées lors des alertes
@@ -296,6 +298,17 @@ Modifiez les paramètres dans [`config/config.ini`](config/config.ini) :
 
 L'application vérifie une licence RSA à chaque démarrage. Sans fichier valide, l'application s'arrête (`sys.exit(1)`).
 
+Depuis la protection anti-retour d'horloge, l'application maintient aussi un state local signé :
+
+- `config/license_state.json` : contient `timestamp`, `last_seen_time`, `hmac`.
+- `config/license_state.key` : clé HMAC locale (créée automatiquement au premier démarrage).
+
+Ce mécanisme bloque le démarrage si :
+
+- l'horloge système recule au-delà de la tolérance,
+- le state JSON est modifié manuellement,
+- le HMAC du state ne correspond plus.
+
 **Format du fichier de licence** (généré par [4icheck_license_manager](https://github.com/frankkubler/4icheck_license_manager)) :
 ```
 base64url(payload_json).base64url(signature_RSA_PKCS1v15_SHA256)
@@ -336,7 +349,38 @@ CRITICAL ❌ Licence invalide : Cette licence est destinée à la machine '...'
 CRITICAL    Machine ID de cette machine : <valeur>
 ```
 
-> Le fichier `config/4isafecross.lic` est exclu du dépôt Git (`.gitignore`). Ne jamais versionner la **clé privée** (`~/.4icheck_licenses/private_key.pem`).
+Exemples d'erreurs de sécurité liées à la protection locale :
+
+```
+CRITICAL ❌ Licence invalide : Rollback d'horloge détecté: ...
+CRITICAL    Cause : rollback d'horloge détecté sur la machine
+
+CRITICAL ❌ Licence invalide : State de licence falsifié: HMAC invalide
+CRITICAL    Cause : intégrité du state licence compromise (HMAC invalide)
+```
+
+**Troubleshooting opérateur (rapide)**
+
+| Message de log | Cause probable | Action immédiate |
+|---|---|---|
+| `Rollback d'horloge détecté` | Horloge système reculée | Corriger date/heure, redémarrer le service |
+| `HMAC invalide` | `license_state.json` modifié/corrompu | Vérifier l'intégrité des fichiers dans `config/` |
+| `state local ... invalide` | Fichier state absent/incompatible | Restaurer un état cohérent ou regénérer le state |
+| `Signature de licence invalide` | `public_key.pem` et `.lic` non appariés | Redéployer la bonne clé publique et la bonne licence |
+| `licence expirée` | Date d'expiration atteinte | Générer et déployer une nouvelle licence |
+
+**Script de vérification manuelle**
+
+Un script est fourni pour valider le mécanisme local (baseline, HMAC invalide, rollback simulé) :
+
+```sh
+SAFECROSS_LICENSE=config/4isafecross.lic ./scripts/test-license-guard.sh
+```
+
+Le script restaure automatiquement l'état initial en fin d'exécution.
+
+> Les fichiers `config/4isafecross.lic`, `config/license_state.json` et `config/license_state.key` sont des artefacts sensibles de runtime et ne doivent pas être versionnés.
+> Ne jamais versionner la **clé privée** (`~/.4icheck_licenses/private_key.pem`).
 
 #### Credentials sensibles — Token Telegram
 
