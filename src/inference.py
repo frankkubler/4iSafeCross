@@ -33,7 +33,7 @@ class InferenceServerThread(threading.Thread):
         self.masks_lock = threading.Lock()
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         self.fonction = FONCTION_YOLO
-        self.url = rf"{URL_YOLO}/{self.fonction}"
+        self.url = rf"{URL_YOLO}/{self.fonction}/"
         self.is_detection = False
         self.white_pixels_threshold = white_pixels_threshold
         self._motion = False  # Attribut privé
@@ -367,12 +367,12 @@ class InferenceServerThread(threading.Thread):
         """Bascule entre YOLO (predict_frame) et RFDETR (predict_frame_rf_detr)."""
         if self.fonction == FONCTION_RFDETR:
             self.fonction = FONCTION_YOLO
-            self.url = rf"{URL_YOLO}/{self.fonction}"
+            self.url = rf"{URL_YOLO}/{self.fonction}/"
             # self.class_id = 1
         else:
             self.fonction = FONCTION_RFDETR
             # self.class_id = 0
-            self.url = rf"{URL_RFDETR}/{self.fonction}"
+            self.url = rf"{URL_RFDETR}/{self.fonction}/"
         self.logger.info(f"Mode d'inférence changé : {self.fonction}")
 
     @property
