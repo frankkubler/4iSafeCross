@@ -121,7 +121,7 @@ def _log_license_boot_failure(err: Exception) -> None:
 try:
     _lic_payload = load_and_verify_license(
         _LIC_PATH,
-        required_features=["presence"],  # adapter selon les fonctionnalités requises
+        required_features=["full"],  # adapter selon les fonctionnalités requises
     )
     logger.info("Licence acceptée pour : %s", _lic_payload.get("client"))
 except (FileNotFoundError, ValueError) as _lic_err:
