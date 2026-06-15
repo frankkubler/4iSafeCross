@@ -169,12 +169,14 @@ last_heartbeat = time.time()
 HEARTBEAT_TIMEOUT = 30  # Si pas de heartbeat pendant 30s, considérer comme dysfonctionnel
 application_healthy = True
 
+
 def update_heartbeat():
     """Appelé régulièrement pour indiquer que l'application fonctionne correctement."""
     global last_heartbeat, application_healthy
     with heartbeat_lock:
         last_heartbeat = time.time()
         application_healthy = True
+
 
 def failsafe_watchdog():
     """Thread surveillant la santé de l'application via heartbeat.
@@ -201,6 +203,7 @@ def failsafe_watchdog():
                 if not application_healthy:
                     application_healthy = True
                     logger.info(f"✅ Application de nouveau opérationnelle (heartbeat reçu)")
+
 
 # Démarrer le watchdog fail-safe
 failsafe_thread = threading.Thread(target=failsafe_watchdog, daemon=True)
@@ -230,6 +233,7 @@ cache_performance_stats = {
     'last_reset': time.time()
 }
 
+
 def cleanup_frame_cache():
     """Nettoie le cache des frames expirées"""
     current_time = time.time()
@@ -246,6 +250,7 @@ def cleanup_frame_cache():
         for cam_id in expired_cameras:
             frame_cache.pop(cam_id, None)
             frame_cache_timestamp.pop(cam_id, None)
+
 
 # Lancer le nettoyage du cache périodiquement
 def start_cache_cleanup():
@@ -270,6 +275,7 @@ def start_cache_cleanup():
     
     cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
     cleanup_thread.start()
+
 
 start_cache_cleanup()
 logger.info(f"✅ Cache de frames initialisé - Durée: {FRAME_CACHE_DURATION*1000:.0f}ms, Qualité JPEG: {FRAME_QUALITY_OPTIMIZED}%")
@@ -633,6 +639,7 @@ def get_frame_func_factory(cid):
 
         return manager.get_frame_array(cam_id)
     return get_frame
+
 
 app = Flask(__name__)
 
