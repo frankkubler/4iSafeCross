@@ -15,7 +15,7 @@ variables:
 # ─── Stage security : SAST (Bandit) + audit dependances (pip-audit) ──────────
 security:sast:
   stage: security
-  image: python:3.10-slim
+  image: python:3.10-bookworm  # Debian 12 stable (trixie testing avait des problèmes de packages)
   before_script:
     # Installation des dependances systeme pour compiler pycairo et pygobject
     - apt-get update && apt-get install -y --no-install-recommends build-essential libglib2.0-dev libgirepository1.0-dev pkg-config libffi-dev libcairo2-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
