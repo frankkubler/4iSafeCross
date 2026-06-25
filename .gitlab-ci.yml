@@ -23,11 +23,14 @@ security:sast:
     - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
     - bandit -r src/ utils/ app.py -ll
     - echo "=== Audit des dependances avec pip-audit ==="
-    # pygobject est un binding GTK natif (requiert gcc/libgirepository) absent de python:3.10-slim
-    # Son audit releve de la securite systeme (apt), pas de pip — on l'exclut
-    - grep -v "^pygobject" requirements.txt > /tmp/audit-requirements.txt
-    - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json || true
-    - pip-audit -r /tmp/audit-requirements.txt
+    # Installation de uv pour compiler les dependances depuis pyproject.toml
+    - pip install uv --quiet
+    # Générer requirements.txt depuis pyproject.toml en excluant pygobject
+    # (binding GTK natif, audit relève de la sécurité système apt, pas pip)
+    - uv pip compile pyproject.toml --output-file /tmp/audit-requirements.txt
+    - grep -v "^pygobject" /tmp/audit-requirements.txt > /tmp/audit-requirements-filtered.txt
+    - pip-audit -r /tmp/audit-requirements-filtered.txt -f json -o pip-audit-report.json || true
+    - pip-audit -r /tmp/audit-requirements-filtered.txt
   artifacts:
     when: always
     paths:
