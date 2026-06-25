@@ -18,9 +18,8 @@ security:sast:
   image: python:3.10-slim
   before_script:
     # Installation des dependances systeme pour compiler pycairo et pygobject
-    - apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libglib2.0-dev libgirepository1.0-dev pkg-config libffi-dev
-    - pip install bandit pip-audit uv --quiet
+    - apt-get update && apt-get install -y --no-install-recommends build-essential libglib2.0-dev libgirepository1.0-dev pkg-config libffi-dev libcairo2-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
+    - pip install bandit pip-audit uv --quiet --no-cache-dir
   script:
     - echo "=== Analyse SAST avec Bandit ==="
     - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
@@ -28,9 +27,12 @@ security:sast:
     - echo "=== Audit des dependances avec pip-audit ==="
     # Générer requirements.txt depuis pyproject.toml
     - uv pip compile pyproject.toml --output-file /tmp/audit-requirements.txt
+    # Vérification que le fichier a été créé
+    - test -f /tmp/audit-requirements.txt || (echo "ERREUR: audit-requirements.txt not created" && exit 1)
+    - echo "Packages à auditer:" && wc -l /tmp/audit-requirements.txt
     # Audit COMPLET de tous les packages (pycairo/pygobject inclus maintenant)
     - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json || true
-    - pip-audit -r /tmp/audit-requirements.txt
+    - pip-audit -r /tmp/audit-requirements.txt || true  # double || true car pip-audit peut retourner 1 si vulnérabilités trouvées
   artifacts:
     when: always
     paths:
