@@ -19,7 +19,6 @@ from src.motion import MotionDetector
 from src.pose_analyser import PoseAnalyzer
 
 
-
 class InferenceServerThread(threading.Thread):
     def __init__(self, home_dir, get_frame_func,
                  white_pixels_threshold=MOTIONTHRESHOLD,
@@ -73,14 +72,14 @@ class InferenceServerThread(threading.Thread):
             use_aspect_filter=MOTION_ASPECT_FILTER,
             min_single_contour=MOTION_MIN_SINGLE_CONTOUR,
         )
-        
+
         # 🚀 Optimisations pour réduire la charge IA (100ms par inférence)
         self.last_inference_time = 0
         self.min_inference_interval = 0.2  # 200ms minimum entre inférences (5 FPS max)
         self.last_sent_frame_hash = None
         self.inference_skip_count = 0
         self.total_frames_processed = 0
-        
+
         # 🚀 Optimisation sleep adaptatif
         self.consecutive_skips = 0
         self.last_motion_time = 0
@@ -281,7 +280,7 @@ class InferenceServerThread(threading.Thread):
                         #                 if trk_id in ctx:
                         #                     in_vehicle = bool(ctx[trk_id].get('is_in_vehicle', False))
                         #                 detection["personne_type"] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
-                                
+
                         #         # Fallback de sécurité
                         #         for detection in current_detections:
                         #             if detection["class_id"] == 1 and detection["personne_type"] in (None, "", "inconnu"):
@@ -351,11 +350,11 @@ class InferenceServerThread(threading.Thread):
             self.past_detections = self.detections
             self.detections = []
             # self.old_motion_bool = motion_bool
-            
+
             # 🚀 Réinitialiser les skips consécutifs après une inférence réussie
             self.consecutive_skips = 0
             self.last_motion_time = time.time()
-            
+
             # 🚀 Sleep adaptatif selon l'activité
             # Après inférence = sleep court pour traiter les prochaines frames rapidement
             if motion_bool and len(self.detections) > 0:
@@ -383,13 +382,13 @@ class InferenceServerThread(threading.Thread):
         """Retourne les statistiques d'optimisation de l'inférence."""
         if self.total_frames_processed == 0:
             return {"skip_rate": 0, "total_frames": 0, "skipped_frames": 0}
-        
+
         skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100
         avg_sleep = 0.01  # Valeur par défaut
         if hasattr(self, 'consecutive_skips'):
             # Estimation du sleep moyen basé sur les skips consécutifs
             avg_sleep = min(0.001 + (self.consecutive_skips * 0.002), 0.05)
-        
+
         return {
             "skip_rate": round(skip_rate, 1),
             "total_frames": self.total_frames_processed,
