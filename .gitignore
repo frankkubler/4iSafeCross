@@ -35,3 +35,4 @@ app.onefile-build/
 
 # Nuitka cache
 .nuitka/
+uv.toml

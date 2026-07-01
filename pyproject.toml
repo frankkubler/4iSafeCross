@@ -10,6 +10,7 @@ dependencies = [
     "cryptography>=48.0.0",
     "flask>=3.1.1",
     "gunicorn>=23.0.0",
+    "license-validator==0.1.1",
     "nuitka>=2.7.12",
     "opencv-python>=4.11.0.86",
     "psutil>=7.0.0",
@@ -21,3 +22,6 @@ dependencies = [
     "waitress>=3.0.2",
     "yoctopuce>=2.1.6320",
 ]
+
+[sources]
+license-validator = { index = "gitlab-license-validator" }

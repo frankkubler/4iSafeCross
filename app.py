@@ -75,7 +75,7 @@ logs_settings()
 logger = logging.getLogger(__name__)
 
 # ── Vérification de la licence ────────────────────────────────────────────────
-from utils.license_validator import load_and_verify_license, get_machine_id
+from license_validator import load_and_verify_license, get_machine_id
 
 _LIC_PATH = os.environ.get("SAFECROSS_LICENSE", "config/4isafecross.lic")
 
