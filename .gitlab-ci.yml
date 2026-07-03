@@ -63,6 +63,8 @@ build:docker:arm64:
       --platform linux/arm64
       --target final-arm64
       --build-arg PYTHON_VERSION=3.10
+      --build-arg UV_INDEX_USERNAME=${GITLAB_DEPLOY_USERNAME_38}
+      --secret id=uv_index_token,env=GITLAB_DEPLOY_TOKEN_38
       --tag ${IMAGE_NAME}:${IMAGE_TAG}-arm64
       --tag ${IMAGE_NAME}:latest-arm64
       --push --progress=plain .
@@ -84,19 +86,20 @@ build:docker:amd64:
     - echo "Nettoyage de l'espace disque..."
     - docker system prune -af --volumes || true
     - df -h
-    - echo "${GITLAB_DEPLOY_TOKEN_38}" > /tmp/uv_token.txt
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - echo "Construction de l'image Docker AMD64..."
     - docker buildx create --use --name multiarch || docker buildx use multiarch
     - >
-    - docker buildx build
-        --platform linux/amd64
-        --target final-amd64
-        --build-arg PYTHON_VERSION=3.10
-        --tag ${IMAGE_NAME}:${IMAGE_TAG}-amd64
-        --tag ${IMAGE_NAME}:latest-amd64
-        --push --progress=plain .
+      docker buildx build
+      --platform linux/amd64
+      --target final-amd64
+      --build-arg PYTHON_VERSION=3.10
+      --build-arg UV_INDEX_USERNAME=${GITLAB_DEPLOY_USERNAME_38}
+      --secret id=uv_index_token,env=GITLAB_DEPLOY_TOKEN_38
+      --tag ${IMAGE_NAME}:${IMAGE_TAG}-amd64
+      --tag ${IMAGE_NAME}:latest-amd64
+      --push --progress=plain .
     - echo "Image creee ${IMAGE_NAME}:${IMAGE_TAG}-amd64"
   after_script:
     - docker system prune -f || true
