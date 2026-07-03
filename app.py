@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 # ── Vérification de la licence ────────────────────────────────────────────────
 from license_validator import load_and_verify_license, get_machine_id
 
-_LIC_PATH = os.environ.get("SAFECROSS_LICENSE", "config/4isafecross.lic")
+_LIC_PATH = os.environ.get("SAFECROSS_LICENSE", "licenses/4isafecross.lic")
 
 
 def _log_license_boot_failure(err: Exception) -> None:
@@ -92,17 +92,17 @@ def _log_license_boot_failure(err: Exception) -> None:
 
     if "hmac invalide" in err_msg_low:
         logger.critical("   Cause : intégrité du state licence compromise (HMAC invalide)")
-        logger.critical("   Action : vérifier les fichiers config/license_state.*")
+        logger.critical("   Action : vérifier les fichiers licenses/license_state.*")
         return
 
     if "state de licence" in err_msg_low:
         logger.critical("   Cause : state local de licence absent/invalide/incompatible")
-        logger.critical("   Action : vérifier les fichiers config/license_state.*")
+        logger.critical("   Action : vérifier les fichiers licenses/license_state.*")
         return
 
     if "signature de licence invalide" in err_msg_low:
         logger.critical("   Cause : signature RSA invalide")
-        logger.critical("   Action : vérifier config/public_key.pem et le fichier .lic")
+        logger.critical("   Action : vérifier licenses/public_key.pem et le fichier .lic")
         return
 
     if "expirée" in err_msg_low:

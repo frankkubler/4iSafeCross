@@ -19,6 +19,7 @@ services:
 
     volumes:
       - /data/4isafecross:/app/data
+      - ./config:/app/config
 
     logging:
       driver: json-file

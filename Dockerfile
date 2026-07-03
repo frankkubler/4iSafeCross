@@ -5,7 +5,7 @@
 # ═══════════════════════════════════════════════════════════════════
 FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:0.11.16 AS uv-binary-amd64
 
-FROM ubuntu:22.04 AS builder-amd64
+FROM --platform=linux/amd64 ubuntu:22.04 AS builder-amd64
 
 WORKDIR /app
 
@@ -79,7 +79,7 @@ RUN python3.10 setup_cython.py build_ext --inplace && \
 # ═══════════════════════════════════════════════════════════════════
 FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:0.11.16 AS uv-binary-arm64
 
-FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS builder-arm64
+FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS builder-arm64
 
 WORKDIR /app
 
