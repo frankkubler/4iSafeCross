@@ -55,25 +55,16 @@ ENV PATH="/root/.local/bin:$PATH"
 # Installation de Cython et outils de build dans Python systeme
 RUN pip install --no-cache-dir cython setuptools wheel meson-python meson
 
-# Copie des fichiers de dependances
 COPY pyproject.toml uv.lock ./
-
-# Creation du venv avec acces aux packages systeme
-# (requis pour que --no-build-isolation-package trouve meson-python lors du build de pycairo)
 RUN uv venv --system-site-packages --python python3.10
-
-# Pre-installation sequentielle de pycairo avant pygobject
-# uv sync construit pycairo et pygobject en parallele : pygobject demarre sa config meson
-# avant que pycairo soit installe, donc py3cairo.h est introuvable -> ninja echoue.
-# La pre-installation force pycairo a etre entierement compile et installe en premier.
-# uv sync detecte ensuite pycairo==1.29.0 deja present et le saute.
 RUN uv pip install --no-build-isolation pycairo==1.29.0
 
-# Installation des dependances Python restantes
-# pycairo est deja installe ; pygobject le trouve pour sa compilation Cairo
-RUN uv sync --frozen --no-dev \
-    --no-build-isolation-package pycairo \
-    --no-build-isolation-package pygobject
+RUN --mount=type=secret,id=uv_index_token \
+    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="gitlab+deploy-token-10" && \
+    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_PASSWORD="$(cat /run/secrets/uv_index_token)" && \
+    uv sync --frozen --no-dev \
+      --no-build-isolation-package pycairo \
+      --no-build-isolation-package pygobject
 
 # Copie du code source
 COPY config/ ./config/

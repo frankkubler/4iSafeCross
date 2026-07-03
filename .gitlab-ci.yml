@@ -3,6 +3,7 @@
 
 stages:
   - security   # fail fast : scan SAST + audit dependances avant tout build
+  - fetch-deps   # nouveau
   - build
   - release
 
@@ -38,6 +39,23 @@ security:sast:
     - main
     - merge_requests
 
+fetch:license-validator-wheel:
+  stage: fetch-deps
+  image: python:3.10-bookworm
+  script:
+    - mkdir -p wheels/
+    - pip download --no-deps --dest wheels/
+        --index-url "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+        license-validator
+  artifacts:
+    paths:
+      - wheels/
+    expire_in: 1 hour
+  only:
+    - main
+    - jetson_gpu
+    - tags
+
 # Build image Docker ARM64
 build:docker:arm64:
   stage: build
@@ -48,12 +66,17 @@ build:docker:arm64:
     - echo "Nettoyage de l'espace disque..."
     - docker system prune -af --volumes || true
     - df -h
+    - echo "${GITLAB_DEPLOY_TOKEN_38}" > /tmp/uv_token.txt   # ajouté
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
   script:
     - echo "Construction de l'image Docker ARM64..."
     - docker buildx create --use --name multiarch || docker buildx use multiarch
-    - docker buildx build --platform linux/arm64 --build-arg PYTHON_VERSION=3.10 --tag ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest --push --progress=plain .
+    - docker buildx build --platform linux/arm64 \
+        --secret id=uv_index_token,src=/tmp/uv_token.txt \
+        --build-arg PYTHON_VERSION=3.10 \
+        --tag ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest \
+        --push --progress=plain .
     - echo "Image creee':' ${IMAGE_NAME}:${IMAGE_TAG}"
   after_script:
     - docker system prune -f || true
