@@ -23,7 +23,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 4iSafeCross/
 ├── app.py                    # Application Flask principale (point d'entrée)
 ├── pyproject.toml            # Métadonnées et dépendances (uv)
-├── uv.toml                   # Credentials index GitLab privé (non versionné — voir .gitignore)
+├── uv.toml                   # Credentials index GitLab privé (non versionné — dev local uniquement)
 ├── requirements.txt          # Dépendances Python
 ├── config/
 │   ├── config.ini            # Configuration principale (RTSP, IA, Telegram, relais…)
@@ -304,7 +304,9 @@ Dans GitLab, aller sur le projet `license-validator` :
 - **Scopes** : cocher uniquement `read_package_registry`
 - Copier le `username` (ex. `gitlab+deploy-token-12`) et le `token` générés
 
-#### 2. Créer `uv.toml` à la racine du projet
+> Un Deploy Token est limité à ce projet, indépendant de tout compte utilisateur, et révocable à tout moment.
+
+#### 2. Créer `uv.toml` à la racine du projet (développement local)
 
 ```toml
 # uv.toml — NE PAS COMMITER (déjà dans .gitignore)
@@ -319,8 +321,8 @@ license-validator = { index = "gitlab-license-validator" }
 
 Remplacer `<token-username>` et `<token>` par les valeurs obtenues à l'étape 1.
 
-> **Pourquoi `uv.toml` et non `pyproject.toml` ?**  
-> uv ne supporte pas l'interpolation `${VAR}` dans les URLs d'index (`pyproject.toml`), et les variables d'environnement `UV_INDEX_*` ne fonctionnent pas pour l'authentification (limitation connue, issue ouverte). Mettre le token dans `uv.toml` exclu du git est la seule méthode fiable documentée.
+> **Pourquoi `uv.toml` et non `pyproject.toml` ?**
+> uv ne supporte pas l'interpolation `${VAR}` dans les URLs d'index (`pyproject.toml`), et les variables d'environnement `UV_INDEX_*` ne fonctionnent pas de façon fiable pour l'authentification. Mettre le token dans `uv.toml` exclu du git est la méthode recommandée pour le développement local.
 
 #### 3. Vérifier que `uv.toml` est bien ignoré par git
 
@@ -329,23 +331,46 @@ grep uv.toml .gitignore
 # doit afficher : uv.toml
 ```
 
-#### Pour la CI GitLab de 4iSafeCross
+#### Pour la CI GitLab de 4iSafeCross (build Docker)
 
-Ajouter la variable `GITLAB_DEPLOY_TOKEN_38` dans **GitLab → Settings → CI/CD → Variables** avec le token, puis générer `uv.toml` dans le job :
+En **développement local**, `uv sync` et `uv run app.py` utilisent le fichier `uv.toml` local non versionné.
+
+En **CI/CD Docker**, le token GitLab n'est pas écrit dans `uv.toml`. Il est injecté au build via un **secret BuildKit**, ce qui évite de stocker un secret dans une couche d'image Docker.
+
+Ajouter la variable `GITLAB_DEPLOY_TOKEN_38` dans **GitLab → Settings → CI/CD → Variables** :
+- **Masked** : activé
+- **Protected** : activé
+
+Exemple dans `.gitlab-ci.yml` :
 
 ```yaml
 before_script:
-  - |
-    cat > uv.toml << EOF
-    [[index]]
-    name = "gitlab-license-validator"
-    url = "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
-    explicit = true
+  - echo "${GITLAB_DEPLOY_TOKEN_38}" > /tmp/uv_token.txt
 
-    [sources]
-    license-validator = { index = "gitlab-license-validator" }
-    EOF
+script:
+  - docker buildx build --platform linux/arm64 \
+      --secret id=uv_index_token,src=/tmp/uv_token.txt \
+      --build-arg PYTHON_VERSION=3.10 \
+      --tag ${IMAGE_NAME}:${IMAGE_TAG} \
+      --tag ${IMAGE_NAME}:latest \
+      --push --progress=plain .
 ```
+
+Exemple dans le `Dockerfile` :
+
+```dockerfile
+RUN --mount=type=secret,id=uv_index_token \
+    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="gitlab+deploy-token-10" && \
+    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_PASSWORD="$(cat /run/secrets/uv_index_token)" && \
+    uv sync --frozen --no-dev \
+      --no-build-isolation-package pycairo \
+      --no-build-isolation-package pygobject
+```
+
+Cette approche permet :
+- de garder `license-validator` dans `pyproject.toml` et `uv.lock`,
+- de conserver `uv.toml` uniquement pour les développeurs locaux,
+- de ne jamais embarquer le token GitLab dans l'image Docker finale.
 
 ---
 
@@ -520,6 +545,21 @@ bash scripts/deploy-jetson.sh v1.2.0
 docker build -t 4isafecross .
 docker run -p 5000:5000 --env-file .env 4isafecross
 ```
+
+> **Note :** si le build Docker doit résoudre `license-validator` depuis le registry GitLab privé, utiliser un secret BuildKit plutôt qu'un `uv.toml` commité.
+>
+> Exemple :
+>
+> ```sh
+> export GITLAB_DEPLOY_TOKEN_38="gldt-xxxxxxxxxxxxxxxxxxxx"
+> printf "%s" "$GITLAB_DEPLOY_TOKEN_38" > /tmp/uv_token.txt
+>
+> docker build \
+>   --secret id=uv_index_token,src=/tmp/uv_token.txt \
+>   -t 4isafecross .
+> ```
+>
+> Le `uv.toml` local reste utilisé pour `uv sync` et `uv run app.py`, mais pas pour le build Docker CI/CD.
 
 ## Scripts et services systemd
 
@@ -857,7 +897,7 @@ Quatre stratégies se déclenchent en cascade à chaque cycle :
 | 3 | `background` | Aucune détection **et** aucun mouvement MOG2 | Fichier label vide (fond pur) |
 | 4 | `hard_neg` | Mouvement MOG2 **sans** détection principale → ré-inférence à seuil bas | Fichier label vide (faux positif potentiel) |
 
-> **Stratégie 3 — `background`** : capture des scènes statiques (poteaux, dalles, clôtures) qui servent à apprendre ce qu'il ne faut pas détecter.  
+> **Stratégie 3 — `background`** : capture des scènes statiques (poteaux, dalles, clôtures) qui servent à apprendre ce qu'il ne faut pas détecter.
 > **Stratégie 4 — `hard_neg`** : capture les cas où MOG2 détecte un changement (variation de luminosité, reflet) mais sans objet réel — typiquement les faux positifs de poteaux en contre-jour.
 
 ### Correspondance des classes

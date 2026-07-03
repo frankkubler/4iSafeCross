@@ -19,6 +19,16 @@ security:sast:
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends build-essential libglib2.0-dev libgirepository1.0-dev pkg-config libffi-dev libcairo2-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
     - pip install bandit pip-audit uv --quiet --no-cache-dir
+    - |
+      cat > uv.toml << EOF
+      [[index]]
+      name = "gitlab-license-validator"
+      url = "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+      explicit = true
+
+      [sources]
+      license-validator = { index = "gitlab-license-validator" }
+      EOF
   script:
     - echo "=== Analyse SAST avec Bandit ==="
     - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json 2>&1 || echo "Bandit completed with warnings"
@@ -34,7 +44,7 @@ security:sast:
       - bandit-report.json
       - pip-audit-report.json
     expire_in: 30 days
-  allow_failure: true  # integration progressive — passer a false apres stabilisation
+  allow_failure: true
   only:
     - main
     - merge_requests
