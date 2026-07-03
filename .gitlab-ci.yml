@@ -1,4 +1,5 @@
-# Pipeline GitLab CI/CD pour image Docker ARM64 (Jetson Orin NX)
+# Pipeline GitLab CI/CD pour images Docker multi-arch
+# ARM64 (Jetson Orin NX) + AMD64 (Intel/x86_64 iGPU)
 # Code protege par conteneur signe
 
 stages:
@@ -41,24 +42,7 @@ security:sast:
     - main
     - merge_requests
 
-fetch:license-validator-wheel:
-  stage: fetch-deps
-  image: python:3.10-bookworm
-  script:
-    - mkdir -p wheels/
-    - pip download --no-deps --dest wheels/
-        --index-url "https://GITLAB_DEPLOY_USERNAME_38:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
-        license-validator
-  artifacts:
-    paths:
-      - wheels/
-    expire_in: 1 hour
-  only:
-    - main
-    - jetson_gpu
-    - tags
-
-# Build image Docker ARM64
+# ─── Build image Docker ARM64 (Jetson Orin NX) ───────────────────────────────
 build:docker:arm64:
   stage: build
   image: docker:25-cli
@@ -74,15 +58,50 @@ build:docker:arm64:
   script:
     - echo "Construction de l'image Docker ARM64..."
     - docker buildx create --use --name multiarch || docker buildx use multiarch
-    - docker buildx build --platform linux/arm64 --secret id=uv_index_token,src=/tmp/uv_token.txt --build-arg PYTHON_VERSION=3.10 --build-arg UV_INDEX_USERNAME=${GITLAB_DEPLOY_USERNAME_38} --tag ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest --push --progress=plain .
-    - echo "Image creee':' ${IMAGE_NAME}:${IMAGE_TAG}"
+    - docker buildx build
+        --platform linux/arm64
+        --target final-arm64
+        --build-arg PYTHON_VERSION=3.10
+        --tag ${IMAGE_NAME}:${IMAGE_TAG}-arm64
+        --tag ${IMAGE_NAME}:latest-arm64
+        --push --progress=plain .
+    - echo "Image creee: ${IMAGE_NAME}:${IMAGE_TAG}-arm64"
   after_script:
     - docker system prune -f || true
   only:
     - main
     - jetson_gpu
     - tags
-# Release avec instructions de deploiement
+
+# ─── Build image Docker AMD64 (Intel iGPU / x86_64) ──────────────────────────
+build:docker:amd64:
+  stage: build
+  image: docker:25-cli
+  services:
+    - docker:25-dind
+  before_script:
+    - echo "Nettoyage de l'espace disque..."
+    - docker system prune -af --volumes || true
+    - df -h
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - echo "Construction de l'image Docker AMD64..."
+    - docker buildx create --use --name multiarch || docker buildx use multiarch
+    - docker buildx build
+        --platform linux/amd64
+        --target final-amd64
+        --build-arg PYTHON_VERSION=3.10
+        --tag ${IMAGE_NAME}:${IMAGE_TAG}-amd64
+        --tag ${IMAGE_NAME}:latest-amd64
+        --push --progress=plain .
+    - echo "Image creee: ${IMAGE_NAME}:${IMAGE_TAG}-amd64"
+  after_script:
+    - docker system prune -f || true
+  only:
+    - main
+    - tags
+
+# ─── Release avec instructions de deploiement ────────────────────────────────
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
@@ -93,24 +112,19 @@ release:
     tag_name: '$CI_COMMIT_TAG'
     name: 'Release $CI_COMMIT_TAG'
     description: |
-      ## Release Docker ARM64 $CI_COMMIT_TAG
-      
-      ### Image Docker pour Nvidia Jetson Orin NX
-      
-      **Image:**
-      ```
-      ${IMAGE_NAME}:${CI_COMMIT_TAG}
-      ```
-      
-      **Deploiement sur Jetson:**
+      ## Release Docker Multi-Arch $CI_COMMIT_TAG
+
+      ### Images disponibles
+
+      | Architecture | Image |
+      |---|---|
+      | ARM64 (Jetson Orin NX) | `${IMAGE_NAME}:${CI_COMMIT_TAG}-arm64` |
+      | AMD64 (Intel iGPU)     | `${IMAGE_NAME}:${CI_COMMIT_TAG}-amd64` |
+
+      ### Deploiement ARM64 (Jetson)
       ```bash
-      # Connexion au registry
       docker login gitlab.4itec.ddns.net
-      
-      # Telecharger l'image
-      docker pull ${IMAGE_NAME}:${CI_COMMIT_TAG}
-      
-      # Lancer le conteneur
+      docker pull ${IMAGE_NAME}:${CI_COMMIT_TAG}-arm64
       docker run -d \
         --name 4isafecross \
         --runtime nvidia \
@@ -118,9 +132,22 @@ release:
         --privileged \
         -p 5000:5000 \
         -v /data/4isafecross:/app/data \
-        ${IMAGE_NAME}:${CI_COMMIT_TAG}
+        ${IMAGE_NAME}:${CI_COMMIT_TAG}-arm64
       ```
-      
+
+      ### Deploiement AMD64 (Intel iGPU)
+      ```bash
+      docker login gitlab.4itec.ddns.net
+      docker pull ${IMAGE_NAME}:${CI_COMMIT_TAG}-amd64
+      docker run -d \
+        --name 4isafecross \
+        --restart unless-stopped \
+        --device /dev/dri \
+        -p 5000:5000 \
+        -v /data/4isafecross:/app/data \
+        ${IMAGE_NAME}:${CI_COMMIT_TAG}-amd64
+      ```
+
       **Verifier les logs:**
       ```bash
       docker logs -f 4isafecross
