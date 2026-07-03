@@ -36,6 +36,7 @@ services:
     
     volumes:
       - /data/4isafecross:/app/data
+      - ./licenses:/app/licenses
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro
     
