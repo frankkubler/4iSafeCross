@@ -64,6 +64,8 @@ COPY utils/ ./utils/
 COPY app.py .
 COPY setup_cython.py .
 
+ENV TARGET_ARCH=amd64
+
 # Compilation Cython - build verbeux pour diagnostic en cas d'echec
 RUN python3.10 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
@@ -132,6 +134,8 @@ COPY utils/ ./utils/
 COPY app.py .
 COPY run.py .
 COPY setup_cython.py .
+
+ENV TARGET_ARCH=arm64
 
 RUN python3.10 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \

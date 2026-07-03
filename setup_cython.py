@@ -41,12 +41,21 @@ def create_extensions():
         # Ex: src/handlers/camera.py -> src.handlers.camera
         module_name = filepath.replace('/', '.').replace('.py', '')
         
+        import os
+
+        TARGET_ARCH = os.environ.get("TARGET_ARCH", "amd64")
+
+        if TARGET_ARCH == "arm64":
+            ARCH_FLAGS = ["-march=armv8-a"]
+        else:
+            ARCH_FLAGS = ["-march=x86-64-v2"]
+
         extensions.append(
             Extension(
                 module_name,
                 [filepath],
                 # Options de compilation pour optimisation
-                extra_compile_args=['-O3', '-march=armv8-a'],
+                extra_compile_args=['-O3'] + ARCH_FLAGS,
                 language='c'
             )
         )
