@@ -3,8 +3,7 @@
 # Code protege par conteneur signe
 
 stages:
-  - security   # fail fast : scan SAST + audit dependances avant tout build
-  - fetch-deps   # nouveau
+  - security
   - build
   - release
 
@@ -25,9 +24,10 @@ security:sast:
     - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json 2>&1 || echo "Bandit completed with warnings"
     - bandit -r src/ utils/ app.py -ll 2>&1 || echo "Bandit completed with warnings"
     - echo "=== Audit des dependances avec pip-audit ==="
-    - uv pip compile pyproject.toml
-        --extra-index-url "https://GITLAB_DEPLOY_USERNAME_38:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
-        --output-file /tmp/audit-requirements.txt
+    - >
+      uv pip compile pyproject.toml
+      --extra-index-url "https://${GITLAB_DEPLOY_USERNAME_38}:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+      --output-file /tmp/audit-requirements.txt
     - test -f /tmp/audit-requirements.txt && wc -l /tmp/audit-requirements.txt || echo "Failed to compile requirements"
     - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json 2>&1 || echo "Pip-audit found issues (see below)"
     - pip-audit -r /tmp/audit-requirements.txt 2>&1 || echo "Audit complete"
@@ -52,7 +52,6 @@ build:docker:arm64:
     - echo "Nettoyage de l'espace disque..."
     - docker system prune -af --volumes || true
     - df -h
-    - echo "${GITLAB_DEPLOY_TOKEN_38}" > /tmp/uv_token.txt
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
   script:

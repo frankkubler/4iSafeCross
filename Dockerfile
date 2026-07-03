@@ -45,7 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uv-binary-amd64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
 
-RUN pip install --no-cache-dir cython setuptools wheel
+RUN python3.10 -m pip install --no-cache-dir cython setuptools wheel
 
 ARG UV_INDEX_USERNAME
 COPY pyproject.toml uv.lock ./
@@ -64,7 +64,9 @@ COPY utils/ ./utils/
 COPY app.py .
 COPY setup_cython.py .
 
-RUN python3 setup_cython.py build_ext --inplace && \
+# Compilation Cython - build verbeux pour diagnostic en cas d'echec
+RUN python3.10 setup_cython.py build_ext --inplace 2>&1 | tee /tmp/cython-build.log; \
+    test ${PIPESTATUS[0]:-0} -eq 0 || (cat /tmp/cython-build.log && exit 1) && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
@@ -113,7 +115,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uv-binary-arm64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
 
-RUN pip install --no-cache-dir cython setuptools wheel
+RUN python3.10 -m pip install --no-cache-dir cython setuptools wheel
 
 ARG UV_INDEX_USERNAME
 COPY pyproject.toml uv.lock ./
@@ -133,7 +135,8 @@ COPY app.py .
 COPY run.py .
 COPY setup_cython.py .
 
-RUN python3 setup_cython.py build_ext --inplace && \
+RUN python3.10 setup_cython.py build_ext --inplace 2>&1 | tee /tmp/cython-build.log; \
+    test ${PIPESTATUS[0]:-0} -eq 0 || (cat /tmp/cython-build.log && exit 1) && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
@@ -202,7 +205,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
 
 CMD ["python3", "app.py"]
-
 
 # ═══════════════════════════════════════════════════════════════════
 # STAGE FINAL ARM64 (Jetson Orin NX - NVIDIA JetPack)
