@@ -14,21 +14,23 @@ SOURCE_DIRS = ["src", "utils"]
 # Fichiers racine a compiler individuellement
 ROOT_FILES = ["app.py"]
 
-# Trouver tous les fichiers .py a compiler
+EXCLUDE_FILES = ["constants.py"]
+
+
 def find_python_files(directories):
-    """Trouve tous les fichiers .py dans les repertoires specifies"""
     python_files = []
     for directory in directories:
         if os.path.exists(directory):
             for root, dirs, files in os.walk(directory):
                 for file in files:
-                    if file.endswith('.py') and not file.startswith('__'):
+                    if file.endswith('.py') and not file.startswith('__') and file not in EXCLUDE_FILES:
                         filepath = os.path.join(root, file)
                         python_files.append(filepath)
     for f in ROOT_FILES:
         if os.path.exists(f):
             python_files.append(f)
     return python_files
+
 
 # Creer les extensions Cython
 def create_extensions():

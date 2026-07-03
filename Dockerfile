@@ -69,8 +69,8 @@ ENV TARGET_ARCH=amd64
 
 # Compilation Cython - build verbeux pour diagnostic en cas d'echec
 RUN python3.10 setup_cython.py build_ext --inplace && \
-    find src/ -name "*.py" -type f -delete && \
-    find utils/ -name "*.py" -type f -delete && \
+    find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
+    find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
     rm -f app.py && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
@@ -141,8 +141,8 @@ COPY setup_cython.py .
 ENV TARGET_ARCH=arm64
 
 RUN python3.10 setup_cython.py build_ext --inplace && \
-    find src/ -name "*.py" -type f -delete && \
-    find utils/ -name "*.py" -type f -delete && \
+    find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
+    find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
     rm -f app.py && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
