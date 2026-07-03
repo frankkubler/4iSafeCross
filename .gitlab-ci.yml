@@ -19,19 +19,14 @@ security:sast:
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends build-essential libglib2.0-dev libgirepository1.0-dev pkg-config libffi-dev libcairo2-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
     - pip install bandit pip-audit uv --quiet --no-cache-dir
-    - |
-      cat > uv.toml << EOF
-      [[index]]
-      name = "gitlab-license-validator"
-      url = "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
-      explicit = true
-      EOF
   script:
     - echo "=== Analyse SAST avec Bandit ==="
     - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json 2>&1 || echo "Bandit completed with warnings"
     - bandit -r src/ utils/ app.py -ll 2>&1 || echo "Bandit completed with warnings"
     - echo "=== Audit des dependances avec pip-audit ==="
-    - uv pip compile pyproject.toml --output-file /tmp/audit-requirements.txt
+    - uv pip compile pyproject.toml
+        --extra-index-url "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+        --output-file /tmp/audit-requirements.txt
     - test -f /tmp/audit-requirements.txt && wc -l /tmp/audit-requirements.txt || echo "Failed to compile requirements"
     - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json 2>&1 || echo "Pip-audit found issues (see below)"
     - pip-audit -r /tmp/audit-requirements.txt 2>&1 || echo "Audit complete"
