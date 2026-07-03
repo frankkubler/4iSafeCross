@@ -23,6 +23,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 4iSafeCross/
 ├── app.py                    # Application Flask principale (point d'entrée)
 ├── pyproject.toml            # Métadonnées et dépendances (uv)
+├── uv.toml                   # Credentials index GitLab privé (non versionné — voir .gitignore)
 ├── requirements.txt          # Dépendances Python
 ├── config/
 │   ├── config.ini            # Configuration principale (RTSP, IA, Telegram, relais…)
@@ -274,7 +275,7 @@ Le serveur d'inférence doit être installé dans un docker [inf_jetson_yolo] (h
 
 ### Récupération du code
 
-Clonez le dépôt GitHub :
+Clonez le dépôt GitHub :
 
 ```sh
 git clone <url-du-depot-github>
@@ -287,9 +288,70 @@ cd 4iSafeCross
 uv sync
 ```
 
+> **`uv sync` requiert un fichier `uv.toml` local** contenant les credentials du registry GitLab privé pour télécharger `license-validator`. Ce fichier n'est pas versionné (`.gitignore`). Voir la section [Configuration du registry GitLab privé](#configuration-du-registry-gitlab-privé) ci-dessous.
+
+---
+
+### Configuration du registry GitLab privé
+
+`license-validator` est distribué via le **PyPI registry GitLab privé** de 4itec (projet ID 38). uv ne supporte pas l'interpolation de variables d'environnement dans les URLs d'index — les credentials doivent être dans un fichier local `uv.toml` **non versionné**.
+
+#### 1. Créer un Deploy Token (une fois par développeur / machine)
+
+Dans GitLab, aller sur le projet `license-validator` :
+**Settings → Repository → Deploy tokens → Add token**
+- **Name** : `<nom-machine>-read` (ex. `jetson-orin-01-read`)
+- **Scopes** : cocher uniquement `read_package_registry`
+- Copier le `username` (ex. `gitlab+deploy-token-12`) et le `token` générés
+
+#### 2. Créer `uv.toml` à la racine du projet
+
+```toml
+# uv.toml — NE PAS COMMITER (déjà dans .gitignore)
+[[index]]
+name = "gitlab-license-validator"
+url = "https://<token-username>:<token>@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+explicit = true
+
+[sources]
+license-validator = { index = "gitlab-license-validator" }
+```
+
+Remplacer `<token-username>` et `<token>` par les valeurs obtenues à l'étape 1.
+
+> **Pourquoi `uv.toml` et non `pyproject.toml` ?**  
+> uv ne supporte pas l'interpolation `${VAR}` dans les URLs d'index (`pyproject.toml`), et les variables d'environnement `UV_INDEX_*` ne fonctionnent pas pour l'authentification (limitation connue, issue ouverte). Mettre le token dans `uv.toml` exclu du git est la seule méthode fiable documentée.
+
+#### 3. Vérifier que `uv.toml` est bien ignoré par git
+
+```sh
+grep uv.toml .gitignore
+# doit afficher : uv.toml
+```
+
+#### Pour la CI GitLab de 4iSafeCross
+
+Ajouter la variable `GITLAB_DEPLOY_TOKEN_38` dans **GitLab → Settings → CI/CD → Variables** avec le token, puis générer `uv.toml` dans le job :
+
+```yaml
+before_script:
+  - |
+    cat > uv.toml << EOF
+    [[index]]
+    name = "gitlab-license-validator"
+    url = "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+    explicit = true
+
+    [sources]
+    license-validator = { index = "gitlab-license-validator" }
+    EOF
+```
+
+---
+
 ### Configuration
 
-Modifiez les paramètres dans [`config/config.ini`](config/config.ini) :
+Modifiez les paramètres dans [`config/config.ini`](config/config.ini) :
 - Identifiants RTSP (`LOGIN`, `PASSWORD`, `HOST`, etc. dans la section `[RTSP]`)
 - Seuils de détection (`MOTIONTHRESHOLD`, `INF_THRESHOLD` dans la section `[APP]`)
 - Activation Telegram (`TELEGRAM_ENABLED` dans la section `[TELEGRAM]`)
@@ -410,35 +472,35 @@ Le fichier `.env` est chargé automatiquement par le service systemd via `Enviro
 
 ### Rendre les scripts exécutables
 
-Avant d’exécuter les scripts `.sh`, pensez à leur donner les droits d’exécution :
+Avant d'exécuter les scripts `.sh`, pensez à leur donner les droits d'exécution :
 ```sh
 chmod +x *.sh
 ```
-Ou pour un script spécifique :
+Ou pour un script spécifique :
 ```sh
 chmod +x 4isafecross.sh 
 ```
 
 ### Lancement
 
-Pour lancer l'application en production avec Waitress :
+Pour lancer l'application en production avec Waitress :
 
 ```sh
 uv run waitress-serve --threads=4 --host=0.0.0.0 --port=5050 app:app
 ```
 
-Ou utilisez le script d'automatisation fourni :
+Ou utilisez le script d'automatisation fourni :
 
 ```sh
 bash 4isafecross.sh
 ```
 
-L’interface web sera accessible sur [http://localhost:5050](http://localhost:5050).
+L'interface web sera accessible sur [http://localhost:5050](http://localhost:5050).
 
 ## Utilisation
 
-- **Interface web** : contrôle des flux vidéo, activation/désactivation de la détection, réglage des seuils, consultation des alertes et galerie d’images.
-- **Bot Telegram** : recevez des alertes, demandez une capture en envoyant `/take` ou l’état du système avec `/status`.
+- **Interface web** : contrôle des flux vidéo, activation/désactivation de la détection, réglage des seuils, consultation des alertes et galerie d'images.
+- **Bot Telegram** : recevez des alertes, demandez une capture en envoyant `/take` ou l'état du système avec `/status`.
 
 ## Déploiement Docker
 
@@ -466,23 +528,23 @@ le démarrage, la configuration matérielle et la maintenance du boîtier Jetson
 
 | Fichier | Rôle |
 |---|---|
-| [`4isafecross.service`](scripts/4isafecross.service) | Démarre l’application au boot (binaire ou Python) |
-| [`set-poe-gpio.service`](scripts/set-poe-gpio.service) | Active l’alimentation PoE (GPIO) au boot |
+| [`4isafecross.service`](scripts/4isafecross.service) | Démarre l'application au boot (binaire ou Python) |
+| [`set-poe-gpio.service`](scripts/set-poe-gpio.service) | Active l'alimentation PoE (GPIO) au boot |
 | [`check-dummy-display.service`](scripts/check-dummy-display.service) | Bascule écran réel / virtuel selon présence HDMI |
-| [`4isafecross.sh`](scripts/4isafecross.sh) | Lance l’app manuellement (waitress-serve + uv) |
-| [`deploy-jetson.sh`](scripts/deploy-jetson.sh) | Déploie l’image Docker depuis le registry GitLab |
+| [`4isafecross.sh`](scripts/4isafecross.sh) | Lance l'app manuellement (waitress-serve + uv) |
+| [`deploy-jetson.sh`](scripts/deploy-jetson.sh) | Déploie l'image Docker depuis le registry GitLab |
 | [`disable-autosuspend.sh`](scripts/disable-autosuspend.sh) | Désactive USB autosuspend (Yoctopuce) — 1 fois post-flash |
 | [`set_poe_gpio.sh`](scripts/set_poe_gpio.sh) | GPIO PoE sur gpiochip2/ligne 15 |
 | [`switch-display.sh`](scripts/switch-display.sh) | Détection HDMI + activation dummy Xorg |
 | [`install_xrdp_jetson.sh`](scripts/install_xrdp_jetson.sh) | TigerVNC + XFCE + UFW + Fail2ban |
 | [`4isafecross.logrotate`](scripts/4isafecross.logrotate) | Rotation des logs (10 Mo × 5) |
 
-📌 **Documentation complète** (procédures d’installation, options, ordre déploiement) :
+📌 **Documentation complète** (procédures d'installation, options, ordre déploiement) :
 [docs/deployment/scripts-deploiement.md](docs/deployment/scripts-deploiement.md)
 
 ## Schéma des ports RJ45, adresses IP et fonctions associées
 
-Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec leur configuration IP et leur usage :
+Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec leur configuration IP et leur usage :
 
 ```
 +-----------+-------------------+------------------------------------------+
@@ -505,7 +567,7 @@ Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec
 
 ### Repérage visuel des ports RJ45
 
-Schéma simplifié pour repérer physiquement les ports RJ45 à l’arrière de la machine :
+Schéma simplifié pour repérer physiquement les ports RJ45 à l'arrière de la machine :
 
 ```
 +---------------------------------------------------+
@@ -521,21 +583,21 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l’arrière de 
    +------------------------------- Port le plus à gauche (eth0)
 ```
 
-- **eth0** est toujours le port le plus à gauche lorsque vous regardez l’arrière de la machine.
-- L’ordre des ports va de gauche à droite : eth0, eth1, eth2, eth3, eth4.
+- **eth0** est toujours le port le plus à gauche lorsque vous regardez l'arrière de la machine.
+- L'ordre des ports va de gauche à droite : eth0, eth1, eth2, eth3, eth4.
 - **eth0** DHCP pour l'accès internet et la supervision distante.(connecter à un routeur ou switch)
 - **eth1** Les adresses IP fixes des caméras utilisées par défaut sont :
 > - Caméra 0 : 192.168.2.156
 > - Caméra 1 : 192.168.2.157
 > Vous pouvez modifier ces adresses dans le fichier [`config/zones.ini`](config/zones.ini), variable `RTSP_HOST`.
-- **eth2** est réservé pour la connexion VNC de maintenance (port 5999), avec l’adresse IP 192.168.3.122. (masque 255.255.255.0) user : user-4itec / mdp : ***REMOVED-PASSWORD***
+- **eth2** est réservé pour la connexion VNC de maintenance (port 5999), avec l'adresse IP 192.168.3.122. (masque 255.255.255.0) user : user-4itec / mdp : ***REMOVED-PASSWORD***
 
 ## Gestion de la rotation des logs (logrotate)
 
 Le fichier [`scripts/4isafecross.logrotate`](scripts/4isafecross.logrotate) conserve
 5 archives compressées de 10 Mo maximum. Voir la
 [documentation complète des scripts](docs/deployment/scripts-deploiement.md#logrotate--4isafecrosslogrotate)
-pour la configuration et la procédure d’installation.
+pour la configuration et la procédure d'installation.
 
 ## Zones de détection et masques
 
@@ -681,7 +743,7 @@ Les masques sont rechargés à chaud sans redémarrage lorsqu'ils sont sauvegard
 
 ## Configuration du niveau de log
 
-Le niveau de log de l’application peut être modifié dans le fichier [`config/config.ini`](config/config.ini), sans toucher au code Python.
+Le niveau de log de l'application peut être modifié dans le fichier [`config/config.ini`](config/config.ini), sans toucher au code Python.
 
 **Exemple de section dans config.ini** :
 
@@ -699,13 +761,13 @@ Pour éviter les coupures intempestives des périphériques USB (caméras, clés
 
 ### Utilisation
 
-1. Exécutez le script avec les droits administrateur :
+1. Exécutez le script avec les droits administrateur :
    ```sh
    sudo bash disable-autosuspend.sh
    ```
 2. Redémarrez la machine pour que la modification prenne effet.
 
-Après redémarrage, vérifiez la prise en compte du paramètre avec :
+Après redémarrage, vérifiez la prise en compte du paramètre avec :
 ```sh
 cat /proc/cmdline
 ```
@@ -849,4 +911,3 @@ dataset/
 ## Licence
 
 Ce projet est privé et réservé à un usage exclusif.
-
