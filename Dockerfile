@@ -62,11 +62,12 @@ RUN uv pip install --no-build-isolation pycairo==1.29.0
 ARG UV_INDEX_USERNAME
 
 RUN --mount=type=secret,id=uv_index_token \
-    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="${UV_INDEX_USERNAME}" && \
-    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_PASSWORD="$(cat /run/secrets/uv_index_token)" && \
+    TOKEN="$(cat /run/secrets/uv_index_token)" && \
+    printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
     uv sync --frozen --no-dev \
       --no-build-isolation-package pycairo \
-      --no-build-isolation-package pygobject
+      --no-build-isolation-package pygobject && \
+    rm -f uv.toml
 
 # Copie du code source
 COPY config/ ./config/
