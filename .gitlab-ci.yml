@@ -25,9 +25,6 @@ security:sast:
       name = "gitlab-license-validator"
       url = "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
       explicit = true
-
-      [sources]
-      license-validator = { index = "gitlab-license-validator" }
       EOF
   script:
     - echo "=== Analyse SAST avec Bandit ==="
