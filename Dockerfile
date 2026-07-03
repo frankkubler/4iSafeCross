@@ -59,8 +59,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv venv --system-site-packages --python python3.10
 RUN uv pip install --no-build-isolation pycairo==1.29.0
 
+ARG UV_INDEX_USERNAME
+
 RUN --mount=type=secret,id=uv_index_token \
-    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="gitlab+deploy-token-10" && \
+    export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="${UV_INDEX_USERNAME}" && \
     export UV_INDEX_GITLAB_LICENSE_VALIDATOR_PASSWORD="$(cat /run/secrets/uv_index_token)" && \
     uv sync --frozen --no-dev \
       --no-build-isolation-package pycairo \
