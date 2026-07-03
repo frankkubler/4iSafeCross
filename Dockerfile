@@ -62,6 +62,7 @@ COPY db/ ./db/
 COPY src/ ./src/
 COPY utils/ ./utils/
 COPY app.py .
+COPY run.py .
 COPY setup_cython.py .
 
 ENV TARGET_ARCH=amd64
@@ -70,7 +71,9 @@ ENV TARGET_ARCH=amd64
 RUN python3.10 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
+    rm -f app.py && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
+
 # ═══════════════════════════════════════════════════════════════════
 # BUILDER ARM64 (Jetson Orin NX)
 # ═══════════════════════════════════════════════════════════════════
@@ -140,6 +143,7 @@ ENV TARGET_ARCH=arm64
 RUN python3.10 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
+    rm -f app.py && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
 # ═══════════════════════════════════════════════════════════════════
@@ -192,7 +196,8 @@ COPY --from=builder-amd64 /app/static/ ./static/
 COPY --from=builder-amd64 /app/db/ ./db/
 COPY --from=builder-amd64 /app/src/ ./src/
 COPY --from=builder-amd64 /app/utils/ ./utils/
-COPY --from=builder-amd64 /app/app.py .
+COPY --from=builder-amd64 /app/run.py .
+COPY --from=builder-amd64 /app/*.so .
 
 RUN mkdir -p /app/logs /app/data
 
@@ -200,12 +205,12 @@ ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-EXPOSE 5000
+EXPOSE 5050
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
+    CMD python3 -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
 
-CMD ["python3", "app.py"]
+CMD ["python3", "run.py"]
 
 # ═══════════════════════════════════════════════════════════════════
 # STAGE FINAL ARM64 (Jetson Orin NX - NVIDIA JetPack)
@@ -250,7 +255,8 @@ COPY --from=builder-arm64 /app/static/ ./static/
 COPY --from=builder-arm64 /app/db/ ./db/
 COPY --from=builder-arm64 /app/src/ ./src/
 COPY --from=builder-arm64 /app/utils/ ./utils/
-COPY --from=builder-arm64 /app/app.py .
+COPY --from=builder-amd64 /app/run.py .
+COPY --from=builder-amd64 /app/*.so .
 
 RUN mkdir -p /app/logs /app/data
 
@@ -258,9 +264,9 @@ ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-EXPOSE 5000
+EXPOSE 5050
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
+    CMD python3 -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
 
-CMD ["python3", "app.py"]
+CMD ["python3", "run.py"]
