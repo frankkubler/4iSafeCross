@@ -65,12 +65,10 @@ COPY app.py .
 COPY setup_cython.py .
 
 # Compilation Cython - build verbeux pour diagnostic en cas d'echec
-RUN python3.10 setup_cython.py build_ext --inplace 2>&1 | tee /tmp/cython-build.log; \
-    test ${PIPESTATUS[0]:-0} -eq 0 || (cat /tmp/cython-build.log && exit 1) && \
+RUN python3.10 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
-
 # ═══════════════════════════════════════════════════════════════════
 # BUILDER ARM64 (Jetson Orin NX)
 # ═══════════════════════════════════════════════════════════════════
@@ -135,8 +133,7 @@ COPY app.py .
 COPY run.py .
 COPY setup_cython.py .
 
-RUN python3.10 setup_cython.py build_ext --inplace 2>&1 | tee /tmp/cython-build.log; \
-    test ${PIPESTATUS[0]:-0} -eq 0 || (cat /tmp/cython-build.log && exit 1) && \
+RUN python3.10 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
