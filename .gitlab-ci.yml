@@ -25,7 +25,7 @@ security:sast:
     - bandit -r src/ utils/ app.py -ll 2>&1 || echo "Bandit completed with warnings"
     - echo "=== Audit des dependances avec pip-audit ==="
     - uv pip compile pyproject.toml
-        --extra-index-url "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+        --extra-index-url "https://GITLAB_DEPLOY_USERNAME_38:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
         --output-file /tmp/audit-requirements.txt
     - test -f /tmp/audit-requirements.txt && wc -l /tmp/audit-requirements.txt || echo "Failed to compile requirements"
     - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json 2>&1 || echo "Pip-audit found issues (see below)"
@@ -47,7 +47,7 @@ fetch:license-validator-wheel:
   script:
     - mkdir -p wheels/
     - pip download --no-deps --dest wheels/
-        --index-url "https://gitlab+deploy-token-10:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+        --index-url "https://GITLAB_DEPLOY_USERNAME_38:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
         license-validator
   artifacts:
     paths:
