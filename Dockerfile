@@ -3,6 +3,8 @@
 # ═══════════════════════════════════════════════════════════════════
 # BUILDER AMD64
 # ═══════════════════════════════════════════════════════════════════
+FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:0.11.16 AS uv-binary-amd64
+
 FROM ubuntu:22.04 AS builder-amd64
 
 WORKDIR /app
@@ -39,26 +41,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation de uv (binaire x86_64)
-ARG UV_VERSION=0.11.16
-RUN set -eux \
-    && cd /tmp \
-    && curl -LsSf \
-        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" \
-        -o uv.tar.gz \
-    && curl -LsSf \
-        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz.sha256" \
-        -o uv.tar.gz.sha256 \
-    && sha256sum --check uv.tar.gz.sha256 \
-    && mkdir -p /root/.local/bin \
-    && tar -xzf uv.tar.gz -C /root/.local/bin --strip-components=1 \
-    && rm uv.tar.gz uv.tar.gz.sha256
+# uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
+COPY --from=uv-binary-amd64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
 
 RUN pip install --no-cache-dir cython setuptools wheel
 
+ARG UV_INDEX_USERNAME
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN --mount=type=secret,id=uv_index_token \
+    TOKEN="$(cat /run/secrets/uv_index_token)" && \
+    printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
+    uv sync --frozen --no-dev && \
+    rm -f uv.toml
 
 COPY config/ ./config/
 COPY templates/ ./templates/
@@ -69,16 +64,16 @@ COPY utils/ ./utils/
 COPY app.py .
 COPY setup_cython.py .
 
-# Compilation Cython
 RUN python3 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
-
 # ═══════════════════════════════════════════════════════════════════
 # BUILDER ARM64 (Jetson Orin NX)
 # ═══════════════════════════════════════════════════════════════════
+FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:0.11.16 AS uv-binary-arm64
+
 FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS builder-arm64
 
 WORKDIR /app
@@ -114,26 +109,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation de uv (binaire aarch64)
-ARG UV_VERSION=0.11.16
-RUN set -eux \
-    && cd /tmp \
-    && curl -LsSf \
-        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-unknown-linux-gnu.tar.gz" \
-        -o uv-aarch64-unknown-linux-gnu.tar.gz \
-    && curl -LsSf \
-        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-unknown-linux-gnu.tar.gz.sha256" \
-        -o uv-aarch64-unknown-linux-gnu.tar.gz.sha256 \
-    && sha256sum --check uv-aarch64-unknown-linux-gnu.tar.gz.sha256 \
-    && mkdir -p /root/.local/bin \
-    && tar -xzf uv-aarch64-unknown-linux-gnu.tar.gz -C /root/.local/bin --strip-components=1 \
-    && rm uv-aarch64-unknown-linux-gnu.tar.gz uv-aarch64-unknown-linux-gnu.tar.gz.sha256
+# uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
+COPY --from=uv-binary-arm64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
 
 RUN pip install --no-cache-dir cython setuptools wheel
 
+ARG UV_INDEX_USERNAME
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN --mount=type=secret,id=uv_index_token \
+    TOKEN="$(cat /run/secrets/uv_index_token)" && \
+    printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
+    uv sync --frozen --no-dev && \
+    rm -f uv.toml
 
 COPY config/ ./config/
 COPY templates/ ./templates/
@@ -145,12 +133,10 @@ COPY app.py .
 COPY run.py .
 COPY setup_cython.py .
 
-# Compilation Cython
 RUN python3 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" -type f -delete && \
     find utils/ -name "*.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
-
 
 # ═══════════════════════════════════════════════════════════════════
 # STAGE FINAL AMD64 (Intel iGPU - VA-API)
