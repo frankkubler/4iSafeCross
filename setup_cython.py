@@ -37,20 +37,19 @@ def create_extensions():
     """Cree les extensions Cython pour chaque fichier Python"""
     extensions = []
     python_files = find_python_files(SOURCE_DIRS)
-    
+
+    import os
+    TARGET_ARCH = os.environ.get("TARGET_ARCH", "amd64")
+
+    if TARGET_ARCH == "arm64":
+        ARCH_FLAGS = ["-march=armv8-a"]
+    else:
+        ARCH_FLAGS = ["-march=x86-64-v2"]
+
     for filepath in python_files:
         # Convertir le chemin en nom de module
         # Ex: src/handlers/camera.py -> src.handlers.camera
         module_name = filepath.replace('/', '.').replace('.py', '')
-        
-        import os
-
-        TARGET_ARCH = os.environ.get("TARGET_ARCH", "amd64")
-
-        if TARGET_ARCH == "arm64":
-            ARCH_FLAGS = ["-march=armv8-a"]
-        else:
-            ARCH_FLAGS = ["-march=x86-64-v2"]
 
         extensions.append(
             Extension(
