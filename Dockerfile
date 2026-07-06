@@ -47,7 +47,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 
-# uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
 COPY --from=uv-binary-amd64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -78,7 +77,6 @@ COPY setup_cython.py .
 ENV TARGET_ARCH=amd64
 
 
-# Compilation Cython - build verbeux pour diagnostic en cas d'echec
 RUN python3.12 setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
@@ -130,7 +128,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 
-# uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
 COPY --from=uv-binary-arm64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -233,6 +230,7 @@ RUN mkdir -p /app/logs /app/data
 ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
 
 
 EXPOSE 5050
@@ -242,7 +240,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
 
 
-CMD ["python3", "run.py"]
+CMD ["/app/.venv/bin/python3", "run.py"]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -303,6 +301,7 @@ RUN mkdir -p /app/logs /app/data
 ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
 
 
 EXPOSE 5050
@@ -312,4 +311,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
 
 
-CMD ["python3", "run.py"]
+CMD ["/app/.venv/bin/python3", "run.py"]
