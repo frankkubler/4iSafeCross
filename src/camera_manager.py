@@ -58,8 +58,27 @@ class CameraManager:
         self.threads = []
         self.cams_status = {cid: 'unknown' for cid in filtered_cam_ids}  # online/offline/unknown
 
-        # Initialisation GStreamer une seule fois (pas dans chaque thread)
+        # ── Initialisation GStreamer ───────────────────────────────────────────
+        # Gst.init() seul ne déclenche PAS le scan complet du registre de plugins.
+        # Ce scan (et donc l'init du driver VA-API iHD) se produit au premier
+        # Gst.parse_launch() ou Gst.ElementFactory.find().
+        # Sur Intel iGPU Docker, le driver iHD >= 23.x est non thread-safe :
+        # si ce premier parse_launch() a lieu dans un thread secondaire (update()),
+        # le driver crashe avec SIGABRT.
+        #
+        # SOLUTION : forcer un parse_launch() factice ici, dans le thread principal
+        # (CameraManager est instancié depuis app.py avant tout spawn de thread),
+        # pour que le scan complet du registre — y compris le probe VA-API — ait lieu
+        # dans le thread principal. Les threads update() ne feront plus que réutiliser
+        # le registre déjà chargé, sans toucher au driver VA-API.
         Gst.init(None)
+        try:
+            _warmup = Gst.parse_launch("fakesrc num-buffers=0 ! fakesink")
+            _warmup.set_state(Gst.State.NULL)
+            self.logger.info("GStreamer plugin registry warmup OK (thread principal)")
+        except Exception as _e:
+            self.logger.warning(f"GStreamer warmup ignoré : {_e}")
+        # ─────────────────────────────────────────────────────────────────────
 
         # Détection automatique du backend GPU disponible
         # Peut être surchargé par la variable d'environnement GSTREAMER_BACKEND
