@@ -15,12 +15,17 @@ import numpy as np
 #   vaapi_new   — vah264dec + videoscale    (Intel iGPU, GStreamer ≥ 1.20,
 #                                            paquet gstreamer1.0-plugins-bad ≥ 1.20
 #                                            + intel-media-va-driver-non-free)
-#                 NOTE: vapostproc retiré (SIGSEGV DMA-BUF en Docker).
-#                       nv12_caps direct retiré (SIGABRT VA-API memory en Docker).
-#                       videoscale force le download VA→RAM avant caps.
+#                 ATTENTION : vah264dec crashe avec SIGABRT dans le driver
+#                 iHD >= 23.x quand le contexte VA-API est créé depuis un
+#                 thread secondaire. Utiliser GSTREAMER_BACKEND=software
+#                 comme workaround en attendant un fix driver.
 #   vaapi_legacy— vaapidecode + vaapipostproc (Intel iGPU, gstreamer1.0-vaapi
 #                                            + i965-va-driver ou intel-media-va-driver)
 #   software    — avdec_h264 (décodage CPU pur, fallback universel)
+#
+# Override manuel : variable d'environnement GSTREAMER_BACKEND
+#   Valeurs acceptées : jetson | vaapi_new | vaapi_legacy | software
+#   Exemple docker-compose : - GSTREAMER_BACKEND=software
 # ---------------------------------------------------------------------------
 
 
@@ -57,8 +62,20 @@ class CameraManager:
         Gst.init(None)
 
         # Détection automatique du backend GPU disponible
-        self.backend = CameraManager.detect_backend()
-        self.logger.info(f"Backend GStreamer sélectionné : {self.backend}")
+        # Peut être surchargé par la variable d'environnement GSTREAMER_BACKEND
+        env_backend = os.environ.get('GSTREAMER_BACKEND', '').strip().lower()
+        valid_backends = {'jetson', 'vaapi_new', 'vaapi_legacy', 'software'}
+        if env_backend in valid_backends:
+            self.backend = env_backend
+            self.logger.info(f"Backend GStreamer forcé via env GSTREAMER_BACKEND : {self.backend}")
+        else:
+            if env_backend:
+                self.logger.warning(
+                    f"GSTREAMER_BACKEND='{env_backend}' invalide "
+                    f"(valeurs acceptées : {sorted(valid_backends)}). Auto-détection."
+                )
+            self.backend = CameraManager.detect_backend()
+            self.logger.info(f"Backend GStreamer sélectionné : {self.backend}")
 
         for cid in filtered_cam_ids:
             t = threading.Thread(target=self.update, args=(cid,), daemon=True)
@@ -78,7 +95,6 @@ class CameraManager:
         Returns:
             Chaîne identifiant le backend sélectionné.
         """
-        # Gst.init doit avoir été appelé avant (fait dans __init__)
         probe_order = [
             ('nvv4l2decoder', 'jetson'),
             ('vah264dec',     'vaapi_new'),
@@ -102,7 +118,6 @@ class CameraManager:
         Returns:
             Chaîne décrivant le pipeline GStreamer complète.
         """
-        # Caps de conversion/rescale (optionnel si résolution non définie)
         if self.frame_width and self.frame_height:
             resize_caps = f"video/x-raw,format=BGRx,width={self.frame_width},height={self.frame_height}"
         else:
@@ -115,32 +130,25 @@ class CameraManager:
             # Décodage hardware Tegra + conversion GPU
             decode = f"nvv4l2decoder ! nvvidconv ! {resize_caps}"
         elif self.backend == 'vaapi_new':
-            # Intel iGPU — GStreamer ≥ 1.20 (gstreamer1.0-plugins-bad)
-            #
-            # Historique des tentatives :
-            #   v1 : vah264dec ! vapostproc ! NV12 caps
-            #        → SIGSEGV sur le chemin DMA-BUF/VAMemory en Docker
-            #   v2 : vah264dec ! video/x-raw,format=NV12,...
-            #        → SIGABRT : caps imposées directement sur VA-API memory
-            #          (surface GPU), GStreamer ne peut pas négocier → assertion
-            #   v3 (actuel) : vah264dec ! videoscale
-            #        videoscale force un download implicite VA-API→RAM
-            #        avant toute contrainte caps. videoconvert (dans tail)
-            #        se charge de la conversion BGR finale.
+            # Intel iGPU — GStreamer ≥ 1.20
+            # Historique :
+            #   v1 : vah264dec ! vapostproc ! NV12 caps → SIGSEGV DMA-BUF Docker
+            #   v2 : vah264dec ! video/x-raw,format=NV12,... → SIGABRT caps VA-API
+            #   v3 : vah264dec ! videoscale ! video/x-raw,w,h → SIGABRT iHD thread
+            # Root cause : iHD driver >= 23.x non thread-safe hors thread principal.
+            # Utiliser GSTREAMER_BACKEND=software comme workaround.
             if self.frame_width and self.frame_height:
                 decode = (
                     f"vah264dec ! videoscale ! "
                     f"video/x-raw,width={self.frame_width},height={self.frame_height}"
                 )
             else:
-                # Pas de resize : laisser vah264dec négocier librement,
-                # videoconvert dans le tail télécharge la surface et convertit.
                 decode = "vah264dec"
         elif self.backend == 'vaapi_legacy':
             # Intel iGPU — gstreamer1.0-vaapi (legacy)
             decode = f"vaapidecode ! vaapipostproc ! {resize_caps}"
         else:
-            # Fallback software CPU
+            # Fallback software CPU (avdec_h264)
             decode = f"avdec_h264 ! videoconvert ! {resize_caps}"
 
         return f"{source} ! {decode} ! {tail}"
@@ -179,10 +187,8 @@ class CameraManager:
                 eos_or_error.set()
 
     def update(self, cid):
-        # Gst.init() est appelé une seule fois dans __init__
         reconnect_delay = 3  # secondes entre tentatives
         while self.running:
-            # Boucle de tentative de connexion au flux RTSP
             pipeline = None
             bus = None
             while self.running:
@@ -197,7 +203,7 @@ class CameraManager:
                     ret = pipeline.set_state(Gst.State.PLAYING)
                     self.logger.info(f"Mise en PLAYING, retour: {ret.value_nick}")
                     if ret != Gst.StateChangeReturn.FAILURE:
-                        break  # Succès, on sort de la boucle de tentative
+                        break
                     else:
                         self.logger.error(f"Échec de mise en PLAYING pour {cid}, nouvelle tentative dans {reconnect_delay}s...")
                         pipeline.set_state(Gst.State.NULL)
@@ -212,9 +218,8 @@ class CameraManager:
             if not self.running or pipeline is None:
                 break
 
-            # Pipeline initialisé avec succès, on traite les frames
             fail_count = 0
-            self.cams_status[cid] = 'online'  # flux ok au lancement
+            self.cams_status[cid] = 'online'
             while self.running and not eos_or_error.is_set():
                 self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
                 if eos_or_error.is_set():
@@ -232,7 +237,7 @@ class CameraManager:
                         try:
                             frame = frame.reshape((height, width, 3))
                             fail_count = 0
-                            self.cams_status[cid] = 'online'  # flux ok
+                            self.cams_status[cid] = 'online'
                         except Exception as e:
                             self.logger.error(f"Erreur reshape frame: {e}, shape={frame.shape}, width={width}, height={height}")
                             frame = np.zeros((height, width, 3), dtype=np.uint8)
@@ -248,8 +253,7 @@ class CameraManager:
 
                     fail_count += 1
                     self.logger.warning(f"Aucune frame reçue via GStreamer pour {cid} (compteur: {fail_count})")
-                    self.cams_status[cid] = 'offline'  # perte du flux
-                    # Attente active de reconnexion réseau avant de relancer le pipeline
+                    self.cams_status[cid] = 'offline'
                     while self.running:
                         self.logger.info(f"Attente de reconnexion au flux RTSP {cid}...")
                         if self.test_rtsp_stream(cid):
@@ -257,9 +261,8 @@ class CameraManager:
                             time.sleep(20)
                             break
                         time.sleep(2)
-                    break  # On sort pour relancer le pipeline
+                    break
             else:
-                # Si on sort de la boucle sans erreur, c'est que le flux est ok
                 self.cams_status[cid] = 'online'
             if bus is not None:
                 self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
@@ -277,7 +280,6 @@ class CameraManager:
             else:
                 self.logger.warning(f"Redémarrage du pipeline pour {cid} dans {reconnect_delay}s...")
                 time.sleep(reconnect_delay)
-        # Sortie définitive
         self.logger.info(f"Thread update caméra {cid} terminé.")
         self.cams_status[cid] = 'offline'
 
@@ -307,16 +309,11 @@ class CameraManager:
         import subprocess
         logger = logging.getLogger(__name__).getChild('test_rtsp_stream')
         logger.info(f"Test du flux RTSP {cid} avec ping réseau...")
-        # Extraire l'adresse IP ou le host du flux RTSP
         match = re.match(r"rtsp://(?:[^@]+@)?([^/:]+)", cid)
         if not match:
             logger.warning(f"Impossible d'extraire le host du flux RTSP : {cid}")
             return False
         host = match.group(1)
-        # Test ping (1 paquet, timeout 1s)
-        # -c 1 : 1 paquet (Linux) / -n 1 (Windows)
-        # -W 1 : timeout 1 seconde par paquet (Linux, majuscule)
-        # -w 1000 : deadline en ms (Windows uniquement)
         try:
             if os.name == 'nt':
                 ping_cmd = ["ping", "-n", "1", "-w", "1000", host]

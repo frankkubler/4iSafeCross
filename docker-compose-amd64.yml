@@ -12,6 +12,12 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Europe/Paris
       - LICENSE_DIR=/app/licenses
+      # Forcer le décodage H.264 logiciel (CPU) sur Intel iGPU Docker.
+      # Le driver iHD >= 23.x crash (SIGABRT) quand vah264dec ouvre un
+      # contexte VA-API depuis un thread secondaire Python.
+      # Retirer cette ligne pour réactiver le décodage GPU (vaapi_new)
+      # si le driver est mis à jour et corrige ce bug.
+      - GSTREAMER_BACKEND=software
 
     devices:
       - /dev/dri:/dev/dri
