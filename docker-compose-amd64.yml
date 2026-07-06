@@ -10,6 +10,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Europe/Paris
+      - LICENSE_DIR=/app/licenses
 
     devices:
       - /dev/dri:/dev/dri

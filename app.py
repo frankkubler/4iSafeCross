@@ -78,7 +78,7 @@ logger = logging.getLogger(__name__)
 from license_validator import load_and_verify_license, get_machine_id
 
 _LIC_PATH = os.environ.get("SAFECROSS_LICENSE", "licenses/4isafecross.lic")
-
+logger.info(f"Vérification de la licence dans : {_LIC_PATH}")
 
 def _log_license_boot_failure(err: Exception) -> None:
     """Journalise une erreur de licence avec un diagnostic orienté exploitation."""

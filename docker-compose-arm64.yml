@@ -16,6 +16,7 @@ services:
       - TZ=Europe/Paris
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - LICENSE_DIR=/app/licenses
     
     deploy:
       resources:

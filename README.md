@@ -294,42 +294,78 @@ uv sync
 
 ### Configuration du registry GitLab privé
 
-`license-validator` est distribué via le **PyPI registry GitLab privé** de 4itec (projet ID 38). uv ne supporte pas l'interpolation de variables d'environnement dans les URLs d'index — les credentials doivent être dans un fichier local `uv.toml` **non versionné**.
+`license-validator` est distribué via le PyPI registry GitLab privé de 4itec (projet ID 38).
 
-#### 1. Créer un Deploy Token (une fois par développeur / machine)
+#### 1. Créer un Deploy Token (une fois par développeur/machine)
 
-Dans GitLab, aller sur le projet `license-validator` :
-**Settings → Repository → Deploy tokens → Add token**
-- **Name** : `<nom-machine>-read` (ex. `jetson-orin-01-read`)
-- **Scopes** : cocher uniquement `read_package_registry`
-- Copier le `username` (ex. `gitlab+deploy-token-12`) et le `token` générés
+Dans GitLab, aller sur le projet `license-validator` → Settings → Repository → Deploy tokens → Add token
+- Name : `nom-machine-read` (ex. `jetson-orin-01-read`)
+- Scopes : cocher uniquement `read_package_registry`
+- Copier le username (ex. `gitlab+deploy-token-14`) et le token générés
 
-> Un Deploy Token est limité à ce projet, indépendant de tout compte utilisateur, et révocable à tout moment.
+Un Deploy Token est limité à ce projet, indépendant de tout compte utilisateur, et révocable à tout moment.
 
-#### 2. Créer `uv.toml` à la racine du projet (développement local)
+#### 2. Déclarer l'index dans `pyproject.toml`
 
-```toml
-# uv.toml — NE PAS COMMITER (déjà dans .gitignore)
-[[index]]
-name = "gitlab-license-validator"
-url = "https://<token-username>:<token>@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
-explicit = true
+uv exige que tout index référencé via `tool.uv.sources` soit défini dans le **même** `pyproject.toml`
+(les fichiers `uv.toml` séparés, y compris au niveau utilisateur, sont ignorés dans ce cas précis).
+Cette section est déjà présente dans le dépôt et n'a pas besoin d'être modifiée :
 
-[sources]
+\`\`\`toml
+[tool.uv.sources]
 license-validator = { index = "gitlab-license-validator" }
-```
 
-Remplacer `<token-username>` et `<token>` par les valeurs obtenues à l'étape 1.
+[[tool.uv.index]]
+name = "gitlab-license-validator"
+url = "https://gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
+explicit = true
+\`\`\`
 
-> **Pourquoi `uv.toml` et non `pyproject.toml` ?**
-> uv ne supporte pas l'interpolation `${VAR}` dans les URLs d'index (`pyproject.toml`), et les variables d'environnement `UV_INDEX_*` ne fonctionnent pas de façon fiable pour l'authentification. Mettre le token dans `uv.toml` exclu du git est la méthode recommandée pour le développement local.
+#### 3. Fournir les identifiants via variables d'environnement (pass)
 
-#### 3. Vérifier que `uv.toml` est bien ignoré par git
+Aucun secret ne doit être écrit dans `pyproject.toml` (fichier versionné). Les identifiants sont
+fournis via les variables `UV_INDEX_<NOM_INDEX>_USERNAME` / `_PASSWORD`, récupérées depuis
+[`pass`](https://www.passwordstore.org/), le gestionnaire de mots de passe chiffré GPG.
 
-```sh
-grep uv.toml .gitignore
-# doit afficher : uv.toml
-```
+Stocker les deux valeurs une seule fois par machine :
+
+\`\`\`bash
+pass insert gitlab/license-validator/username
+pass insert gitlab/license-validator/token
+\`\`\`
+
+Puis, dans `~/.zshrc`, exporter les variables dynamiquement à chaque ouverture de shell :
+
+\`\`\`bash
+export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="$(pass gitlab/license-validator/username 2>/dev/null)"
+export UV_INDEX_GITLAB_LICENSE_VALIDATOR_PASSWORD="$(pass gitlab/license-validator/token 2>/dev/null)"
+\`\`\`
+
+Aucun secret n'apparaît ainsi en clair sur le disque ni dans le dépôt Git : les valeurs restent
+chiffrées dans le store `pass` et ne sont déchiffrées qu'en mémoire, à l'ouverture du shell.
+
+#### 4. Installer les dépendances
+
+\`\`\`bash
+uv sync
+\`\`\`
+
+#### Pour la CI GitLab de 4iSafeCross (build Docker)
+
+Le token GitLab n'est pas écrit en dur : il est injecté au build via les mêmes variables
+d'environnement `UV_INDEX_*`, exposées comme variables masquées et protégées dans
+GitLab → Settings → CI/CD → Variables (pas de `pass` disponible en CI, valeurs stockées
+directement comme secrets GitLab). Exemple dans `.gitlab-ci.yml` :
+
+\`\`\`yaml
+build-wheel:
+  script:
+    - export UV_INDEX_GITLAB_LICENSE_VALIDATOR_USERNAME="${GITLAB_DEPLOY_USERNAME_38}"
+    - export UV_INDEX_GITLAB_LICENSE_VALIDATOR_PASSWORD="${GITLAB_DEPLOY_TOKEN_38}"
+    - uv sync --frozen --no-dev
+\`\`\`
+
+Cette approche évite tout secret dans un fichier commité, en local comme en CI.
 
 #### Pour la CI GitLab de 4iSafeCross (build Docker)
 
