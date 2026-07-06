@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     curl \
     ca-certificates \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
