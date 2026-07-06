@@ -99,11 +99,10 @@ class CameraManager:
         Returns:
             Chaîne décrivant le pipeline GStreamer complète.
         """
-        # Caps de conversion/rescale (optionnel si résolution non définie)
         if self.frame_width and self.frame_height:
             resize_caps = f"video/x-raw,format=BGRx,width={self.frame_width},height={self.frame_height}"
             nv12_caps = f"video/x-raw,format=NV12,width={self.frame_width},height={self.frame_height}"
-            scale_stage = f"videoscale ! video/x-raw,width={self.frame_width},height={self.frame_height} ! "
+            scale_stage = f"videoscale ! video/x-raw,width={self.frame_width},height={self.frame_height}"
         else:
             resize_caps = "video/x-raw,format=BGRx"
             nv12_caps = "video/x-raw,format=NV12"
@@ -113,18 +112,15 @@ class CameraManager:
         tail = "videoconvert ! video/x-raw,format=BGR ! appsink name=sink"
 
         if self.backend == 'jetson':
-            # Décodage hardware Tegra + conversion GPU
             decode = f"nvv4l2decoder ! nvvidconv ! {resize_caps}"
         elif self.backend == 'vaapi_new':
-            # Intel iGPU — décodage GPU (vah264dec), conversion couleur CPU
-            # (vapostproc désactivé : crash SIGSEGV confirmé en conteneur Docker
-            # sur le chemin DMA-BUF/VAMemory, cf. diagnostic du 06/07/2026)
-            decode = f"vah264dec ! {nv12_caps} ! {scale_stage}"
+            if scale_stage:
+                decode = f"vah264dec ! {nv12_caps} ! {scale_stage}"
+            else:
+                decode = f"vah264dec ! {nv12_caps}"
         elif self.backend == 'vaapi_legacy':
-            # Intel iGPU — gstreamer1.0-vaapi (legacy)
             decode = f"vaapidecode ! vaapipostproc ! {resize_caps}"
         else:
-            # Fallback software CPU
             decode = f"avdec_h264 ! videoconvert ! {resize_caps}"
 
         return f"{source} ! {decode} ! {tail}"
