@@ -9,7 +9,8 @@ services:
     ipc: host
     tty: true
     stdin_open: true
-    
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
