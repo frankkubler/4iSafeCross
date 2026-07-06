@@ -1,16 +1,21 @@
-import multiprocessing
 import gunicorn.app.base
 import logging
 
-from app import app  # noqa: E402  — imports Flask app + initialises CameraManager
-
 
 class StandaloneApplication(gunicorn.app.base.BaseApplication):
-    """Embed gunicorn programmatically so we keep our logging setup."""
+    """Embed gunicorn programmatically so we keep our logging setup.
 
-    def __init__(self, flask_app, options=None):
+    preload_app=True est CRITIQUE ici :
+    - Sans preload : gunicorn importe app dans le worker forké
+      → CameraManager + Gst.init() s'exécutent dans le child
+      → GLib détecte le fork post-Gst.init() → GPF dans libc
+    - Avec preload : app est importé dans le master avant fork()
+      → le worker hérite du module via copy-on-write
+      → GStreamer/GLib ne sont jamais ré-initialisés dans le child
+    """
+
+    def __init__(self, options=None):
         self.options = options or {}
-        self.application = flask_app
         super().__init__()
 
     def load_config(self):
@@ -19,24 +24,26 @@ class StandaloneApplication(gunicorn.app.base.BaseApplication):
                 self.cfg.set(key.lower(), value)
 
     def load(self):
-        return self.application
+        # Importé ici : avec preload_app=True, gunicorn appelle load()
+        # dans le master avant fork() — pas dans le worker.
+        from app import app
+        return app
 
 
 if __name__ == '__main__':
-    # 1 worker pre-fork : GLib/GStreamer state reste dans le process principal,
-    # pas de duplication inter-worker. 4 threads pour les requêtes Flask.
     options = {
         'bind': '0.0.0.0:5050',
         'workers': 1,
         'threads': 4,
         'worker_class': 'gthread',
         'timeout': 120,
-        'accesslog': '-',    # stdout
-        'errorlog': '-',     # stderr
+        'preload_app': True,   # import app dans le master, pas dans le worker forké
+        'accesslog': '-',
+        'errorlog': '-',
         'loglevel': 'info',
         'forwarded_allow_ips': '*',
     }
     logging.getLogger('gunicorn.error').propagate = True
     logging.getLogger('gunicorn.access').propagate = True
 
-    StandaloneApplication(app, options).run()
+    StandaloneApplication(options).run()
