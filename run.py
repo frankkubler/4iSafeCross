@@ -1,49 +1,24 @@
-import gunicorn.app.base
+from waitress import serve
 import logging
-
-
-class StandaloneApplication(gunicorn.app.base.BaseApplication):
-    """Embed gunicorn programmatically so we keep our logging setup.
-
-    preload_app=True est CRITIQUE ici :
-    - Sans preload : gunicorn importe app dans le worker forké
-      → CameraManager + Gst.init() s'exécutent dans le child
-      → GLib détecte le fork post-Gst.init() → GPF dans libc
-    - Avec preload : app est importé dans le master avant fork()
-      → le worker hérite du module via copy-on-write
-      → GStreamer/GLib ne sont jamais ré-initialisés dans le child
-    """
-
-    def __init__(self, options=None):
-        self.options = options or {}
-        super().__init__()
-
-    def load_config(self):
-        for key, value in self.options.items():
-            if key in self.cfg.settings and value is not None:
-                self.cfg.set(key.lower(), value)
-
-    def load(self):
-        # Importé ici : avec preload_app=True, gunicorn appelle load()
-        # dans le master avant fork() — pas dans le worker.
-        from app import app
-        return app
+import sys
 
 
 if __name__ == '__main__':
-    options = {
-        'bind': '0.0.0.0:5050',
-        'workers': 1,
-        'threads': 4,
-        'worker_class': 'gthread',
-        'timeout': 120,
-        'preload_app': True,   # import app dans le master, pas dans le worker forké
-        'accesslog': '-',
-        'errorlog': '-',
-        'loglevel': 'info',
-        'forwarded_allow_ips': '*',
-    }
-    logging.getLogger('gunicorn.error').propagate = True
-    logging.getLogger('gunicorn.access').propagate = True
+    # waitress : serveur WSGI multi-thread sans fork.
+    # Compatible GStreamer/GLib : pas de fork() après Gst.init(),
+    # donc pas d'assertions GLib ni de GPF dans les threads daemon.
+    #
+    # Le crash originel (GPF pool-python3 dans libc) était causé par
+    # subprocess.run(ping) dans ThreadPoolExecutor — corrigé en ec070e0
+    # (remplacement par socket.create_connection TCP).
 
-    StandaloneApplication(options).run()
+    # waitress ajoute son propre StreamHandler(stderr) au démarrage.
+    # On le neutralise pour que tous les logs passent par le root logger
+    # (stdout) configuré dans app.py.
+    from app import app  # noqa: E402 — importe Flask app + initialise CameraManager
+
+    waitress_logger = logging.getLogger('waitress')
+    waitress_logger.handlers.clear()
+    waitress_logger.propagate = True
+
+    serve(app, host='0.0.0.0', port=5050, threads=8)  # nosec B104
