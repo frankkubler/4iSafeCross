@@ -12,9 +12,12 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Backends GStreamer H.264 supportés :
 #   jetson      — nvv4l2decoder + nvvidconv (NVIDIA Jetson L4T / JetPack ≥ 4.x)
-#   vaapi_new   — vah264dec + vapostproc    (Intel iGPU, GStreamer ≥ 1.20,
+#   vaapi_new   — vah264dec + videoscale    (Intel iGPU, GStreamer ≥ 1.20,
 #                                            paquet gstreamer1.0-plugins-bad ≥ 1.20
 #                                            + intel-media-va-driver-non-free)
+#                 NOTE: vapostproc retiré (SIGSEGV DMA-BUF en Docker).
+#                       nv12_caps direct retiré (SIGABRT VA-API memory en Docker).
+#                       videoscale force le download VA→RAM avant caps.
 #   vaapi_legacy— vaapidecode + vaapipostproc (Intel iGPU, gstreamer1.0-vaapi
 #                                            + i965-va-driver ou intel-media-va-driver)
 #   software    — avdec_h264 (décodage CPU pur, fallback universel)
@@ -102,10 +105,8 @@ class CameraManager:
         # Caps de conversion/rescale (optionnel si résolution non définie)
         if self.frame_width and self.frame_height:
             resize_caps = f"video/x-raw,format=BGRx,width={self.frame_width},height={self.frame_height}"
-            nv12_caps = f"video/x-raw,format=NV12,width={self.frame_width},height={self.frame_height}"
         else:
             resize_caps = "video/x-raw,format=BGRx"
-            nv12_caps = "video/x-raw,format=NV12"
 
         source = f"rtspsrc location={cid} latency=200 ! rtph264depay ! h264parse"
         tail = "videoconvert ! video/x-raw,format=BGR ! appsink name=sink"
@@ -115,10 +116,26 @@ class CameraManager:
             decode = f"nvv4l2decoder ! nvvidconv ! {resize_caps}"
         elif self.backend == 'vaapi_new':
             # Intel iGPU — GStreamer ≥ 1.20 (gstreamer1.0-plugins-bad)
-            # vapostproc retiré : SIGSEGV confirmé en conteneur Docker sur
-            # le chemin DMA-BUF/VAMemory. Conversion couleur déportée sur
-            # videoconvert (CPU) via le tail commun ci-dessus.
-            decode = f"vah264dec ! {nv12_caps}"
+            #
+            # Historique des tentatives :
+            #   v1 : vah264dec ! vapostproc ! NV12 caps
+            #        → SIGSEGV sur le chemin DMA-BUF/VAMemory en Docker
+            #   v2 : vah264dec ! video/x-raw,format=NV12,...
+            #        → SIGABRT : caps imposées directement sur VA-API memory
+            #          (surface GPU), GStreamer ne peut pas négocier → assertion
+            #   v3 (actuel) : vah264dec ! videoscale
+            #        videoscale force un download implicite VA-API→RAM
+            #        avant toute contrainte caps. videoconvert (dans tail)
+            #        se charge de la conversion BGR finale.
+            if self.frame_width and self.frame_height:
+                decode = (
+                    f"vah264dec ! videoscale ! "
+                    f"video/x-raw,width={self.frame_width},height={self.frame_height}"
+                )
+            else:
+                # Pas de resize : laisser vah264dec négocier librement,
+                # videoconvert dans le tail télécharge la surface et convertit.
+                decode = "vah264dec"
         elif self.backend == 'vaapi_legacy':
             # Intel iGPU — gstreamer1.0-vaapi (legacy)
             decode = f"vaapidecode ! vaapipostproc ! {resize_caps}"
@@ -297,8 +314,14 @@ class CameraManager:
             return False
         host = match.group(1)
         # Test ping (1 paquet, timeout 1s)
+        # -c 1 : 1 paquet (Linux) / -n 1 (Windows)
+        # -W 1 : timeout 1 seconde par paquet (Linux, majuscule)
+        # -w 1000 : deadline en ms (Windows uniquement)
         try:
-            ping_cmd = ["ping", "-n" if os.name == "nt" else "-c", "1", "-w", "1000", host]
+            if os.name == 'nt':
+                ping_cmd = ["ping", "-n", "1", "-w", "1000", host]
+            else:
+                ping_cmd = ["ping", "-c", "1", "-W", "1", host]
             ping_result = subprocess.run(ping_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2)
             if ping_result.returncode != 0:
                 logger.warning(f"Ping échoué pour {host} (flux {cid})")
