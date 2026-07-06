@@ -38,7 +38,6 @@ def create_extensions():
     extensions = []
     python_files = find_python_files(SOURCE_DIRS)
 
-    import os
     TARGET_ARCH = os.environ.get("TARGET_ARCH", "amd64")
 
     if TARGET_ARCH == "arm64":
@@ -55,35 +54,42 @@ def create_extensions():
             Extension(
                 module_name,
                 [filepath],
-                # Options de compilation pour optimisation
                 extra_compile_args=['-O3'] + ARCH_FLAGS,
                 language='c'
             )
         )
-    
+
     return extensions
+
 
 # Configuration
 extensions = create_extensions()
 
 setup(
     name="4isafecross-compiled",
+    # package_dir est requis pour que build_ext --inplace place correctement
+    # les .so sur setuptools >= 70 (Ubuntu 24.04 / Python 3.12).
+    # Sans ce mapping, setuptools double le prefixe du package et tente
+    # de copier src.foo.so dans src/src/ au lieu de src/.
+    package_dir={
+        'src': 'src',
+        'utils': 'utils',
+        '': '.',
+    },
     ext_modules=cythonize(
         extensions,
         compiler_directives={
-            'language_level': "3",           # Python 3
-            'annotation_typing': False,      # Ne pas interpreter les annotations comme types Cython
-                                             # (requis pour les unions PEP 604 : X | None, Python 3.10+)
-            'embedsignature': False,         # Ne pas inclure la signature (protection)
-            'always_allow_keywords': True,   # Support kwargs
-            'boundscheck': False,            # Desactiver verif bounds (performance)
-            'wraparound': False,             # Desactiver indices negatifs (performance)
-            'initializedcheck': False,       # Performance
-            'nonecheck': False,              # Performance
-            'cdivision': True,               # Division C (plus rapide)
+            'language_level': "3",
+            'annotation_typing': False,
+            'embedsignature': False,
+            'always_allow_keywords': True,
+            'boundscheck': False,
+            'wraparound': False,
+            'initializedcheck': False,
+            'nonecheck': False,
+            'cdivision': True,
         },
-        # Options de build
         build_dir='build',
-        annotate=False  # Ne pas generer les fichiers HTML d'annotation
+        annotate=False
     ),
 )
