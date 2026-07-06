@@ -3,6 +3,7 @@ services:
     image: registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest-amd64
     container_name: 4isafecross
     restart: unless-stopped
+    network_mode: host
     tty: true
     stdin_open: true
 
@@ -14,9 +15,6 @@ services:
 
     devices:
       - /dev/dri:/dev/dri
-
-    ports:
-      - "5000:5000"
 
     volumes:
       - /data/4isafecross:/app/data
