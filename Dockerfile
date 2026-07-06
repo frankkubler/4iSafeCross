@@ -39,7 +39,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     curl \
     ca-certificates \
-    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
@@ -113,7 +112,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     curl \
     ca-certificates \
-    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # uv copié depuis l'image officielle Astral (plus de téléchargement réseau manuel)
@@ -187,6 +185,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     intel-media-va-driver-non-free \
     i965-va-driver \
     vainfo \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -248,6 +247,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtbb-dev \
     libatlas-base-dev \
     libhdf5-dev \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -257,8 +257,8 @@ COPY --from=builder-arm64 /app/static/ ./static/
 COPY --from=builder-arm64 /app/db/ ./db/
 COPY --from=builder-arm64 /app/src/ ./src/
 COPY --from=builder-arm64 /app/utils/ ./utils/
-COPY --from=builder-amd64 /app/run.py .
-COPY --from=builder-amd64 /app/*.so .
+COPY --from=builder-arm64 /app/run.py .
+COPY --from=builder-arm64 /app/*.so .
 
 RUN mkdir -p /app/logs /app/data
 
