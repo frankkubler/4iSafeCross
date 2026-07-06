@@ -59,18 +59,6 @@ class CameraManager:
         self.cams_status = {cid: 'unknown' for cid in filtered_cam_ids}  # online/offline/unknown
 
         # ── Initialisation GStreamer ───────────────────────────────────────────
-        # Gst.init() seul ne déclenche PAS le scan complet du registre de plugins.
-        # Ce scan (et donc l'init du driver VA-API iHD) se produit au premier
-        # Gst.parse_launch() ou Gst.ElementFactory.find().
-        # Sur Intel iGPU Docker, le driver iHD >= 23.x est non thread-safe :
-        # si ce premier parse_launch() a lieu dans un thread secondaire (update()),
-        # le driver crashe avec SIGABRT.
-        #
-        # SOLUTION : forcer un parse_launch() factice ici, dans le thread principal
-        # (CameraManager est instancié depuis app.py avant tout spawn de thread),
-        # pour que le scan complet du registre — y compris le probe VA-API — ait lieu
-        # dans le thread principal. Les threads update() ne feront plus que réutiliser
-        # le registre déjà chargé, sans toucher au driver VA-API.
         Gst.init(None)
         try:
             _warmup = Gst.parse_launch("fakesrc num-buffers=0 ! fakesink")
@@ -80,8 +68,6 @@ class CameraManager:
             self.logger.warning(f"GStreamer warmup ignoré : {_e}")
         # ─────────────────────────────────────────────────────────────────────
 
-        # Détection automatique du backend GPU disponible
-        # Peut être surchargé par la variable d'environnement GSTREAMER_BACKEND
         env_backend = os.environ.get('GSTREAMER_BACKEND', '').strip().lower()
         valid_backends = {'jetson', 'vaapi_new', 'vaapi_legacy', 'software'}
         if env_backend in valid_backends:
@@ -131,31 +117,24 @@ class CameraManager:
     def _build_pipeline_str(self, cid: str) -> str:
         """Construit la chaîne de pipeline GStreamer adaptée au backend détecté.
 
-        Args:
-            cid: URL RTSP de la caméra.
-
-        Returns:
-            Chaîne décrivant le pipeline GStreamer complète.
+        protocols=tcp est obligatoire sur kernel ≥ 6.17 + glibc 2.35 (Ubuntu 22.04
+        en conteneur) : le thread pool UDP de rtspsrc (GLib GThreadPool) corrompt
+        un pthread_mutex_t à l'offset +0x898 dans libc.so.6 et provoque un GPF.
+        TCP n'utilise pas ce thread pool et élimine le crash.
         """
         if self.frame_width and self.frame_height:
             resize_caps = f"video/x-raw,format=BGRx,width={self.frame_width},height={self.frame_height}"
         else:
             resize_caps = "video/x-raw,format=BGRx"
 
-        source = f"rtspsrc location={cid} latency=200 ! rtph264depay ! h264parse"
+        # protocols=tcp : élimine le GPF causé par le thread pool UDP de rtspsrc
+        # sur kernel 6.17 + glibc 2.35 Docker (cf. commit message pour diagnostic complet)
+        source = f"rtspsrc location={cid} latency=200 protocols=tcp ! rtph264depay ! h264parse"
         tail = "videoconvert ! video/x-raw,format=BGR ! appsink name=sink"
 
         if self.backend == 'jetson':
-            # Décodage hardware Tegra + conversion GPU
             decode = f"nvv4l2decoder ! nvvidconv ! {resize_caps}"
         elif self.backend == 'vaapi_new':
-            # Intel iGPU — GStreamer ≥ 1.20
-            # Historique :
-            #   v1 : vah264dec ! vapostproc ! NV12 caps → SIGSEGV DMA-BUF Docker
-            #   v2 : vah264dec ! video/x-raw,format=NV12,... → SIGABRT caps VA-API
-            #   v3 : vah264dec ! videoscale ! video/x-raw,w,h → SIGABRT iHD thread
-            # Root cause : iHD driver >= 23.x non thread-safe hors thread principal.
-            # Utiliser GSTREAMER_BACKEND=software comme workaround.
             if self.frame_width and self.frame_height:
                 decode = (
                     f"vah264dec ! videoscale ! "
@@ -164,21 +143,14 @@ class CameraManager:
             else:
                 decode = "vah264dec"
         elif self.backend == 'vaapi_legacy':
-            # Intel iGPU — gstreamer1.0-vaapi (legacy)
             decode = f"vaapidecode ! vaapipostproc ! {resize_caps}"
         else:
-            # Fallback software CPU (avdec_h264)
             decode = f"avdec_h264 ! videoconvert ! {resize_caps}"
 
         return f"{source} ! {decode} ! {tail}"
 
     def _poll_bus_messages(self, bus, cid, eos_or_error, bus_state):
-        """Lit les messages du bus GStreamer sans boucle GLib externe.
-
-        Cette approche évite ``bus.add_signal_watch()`` qui nécessite un
-        ``GLib.MainLoop`` actif et peut produire des assertions critiques
-        selon la plateforme/pilotes.
-        """
+        """Lit les messages du bus GStreamer sans boucle GLib externe."""
         message_types = (
             Gst.MessageType.ERROR
             | Gst.MessageType.WARNING
@@ -206,7 +178,7 @@ class CameraManager:
                 eos_or_error.set()
 
     def update(self, cid):
-        reconnect_delay = 3  # secondes entre tentatives
+        reconnect_delay = 3
         while self.running:
             pipeline = None
             bus = None
