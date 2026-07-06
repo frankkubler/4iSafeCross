@@ -123,7 +123,7 @@ class CameraManager:
         logger = logging.getLogger(__name__).getChild('detect_backend')
         for element_name, backend_id in probe_order:
             if Gst.ElementFactory.find(element_name) is not None:
-            logger.info(f"Élément GStreamer '{element_name}' trouvé → backend '{backend_id}'")
+                logger.info(f"Élément GStreamer '{element_name}' trouvé → backend '{backend_id}'")
                 return backend_id
         logger.warning("Aucun décodeur H.264 GStreamer trouvé (jetson/vaapi/software). Fallback 'software'.")
         return 'software'
