@@ -123,7 +123,7 @@ class CameraManager:
         logger = logging.getLogger(__name__).getChild('detect_backend')
         for element_name, backend_id in probe_order:
             if Gst.ElementFactory.find(element_name) is not None:
-                logger.info(f"Élément GStreamer '{element_name}' trouvé → backend '{backend_id}'")
+            logger.info(f"Élément GStreamer '{element_name}' trouvé → backend '{backend_id}'")
                 return backend_id
         logger.warning("Aucun décodeur H.264 GStreamer trouvé (jetson/vaapi/software). Fallback 'software'.")
         return 'software'
@@ -322,30 +322,30 @@ class CameraManager:
 
     @staticmethod
     def test_rtsp_stream(cid, timeout=5):
-        """Teste la disponibilité d'un flux RTSP avec un ping réseau uniquement. Retourne True si le host répond au ping, False sinon."""
-        import logging
+        """Teste la disponibilité d'un flux RTSP via connexion TCP sur le port RTSP.
+
+        Remplace l'ancien ping subprocess (qui causait un GPF dans libc via
+        ThreadPoolExecutor en Docker) par un connect() TCP pur Python.
+        Retourne True si la connexion TCP aboutit, False sinon.
+        """
+        import socket
         import re
-        import subprocess
+        import logging
         logger = logging.getLogger(__name__).getChild('test_rtsp_stream')
-        logger.info(f"Test du flux RTSP {cid} avec ping réseau...")
-        match = re.match(r"rtsp://(?:[^@]+@)?([^/:]+)", cid)
+        logger.info(f"Test du flux RTSP {cid} avec connexion TCP...")
+        match = re.match(r"rtsp://(?:[^@]+@)?([^/:]+)(?::(\d+))?", cid)
         if not match:
             logger.warning(f"Impossible d'extraire le host du flux RTSP : {cid}")
             return False
         host = match.group(1)
+        port = int(match.group(2)) if match.group(2) else 554
         try:
-            if os.name == 'nt':
-                ping_cmd = ["ping", "-n", "1", "-w", "1000", host]
-            else:
-                ping_cmd = ["ping", "-c", "1", "-W", "1", host]
-            ping_result = subprocess.run(ping_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2)
-            if ping_result.returncode != 0:
-                logger.warning(f"Ping échoué pour {host} (flux {cid})")
-                return False
-            logger.info(f"Ping OK pour {host} (flux {cid})")
+            with socket.create_connection((host, port), timeout=timeout):
+                pass
+            logger.info(f"TCP OK pour {host}:{port} (flux {cid})")
             return True
         except Exception as e:
-            logger.error(f"Erreur lors du ping de {host} : {e}")
+            logger.warning(f"TCP échoué pour {host}:{port} (flux {cid}) : {e}")
             return False
 
     @staticmethod
