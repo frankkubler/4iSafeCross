@@ -18,10 +18,16 @@ services:
       # contexte VA-API depuis un thread secondaire Python.
       # Retirer cette ligne pour réactiver le décodage GPU (vaapi_new)
       # si le driver est mis à jour et corrige ce bug.
-      - GSTREAMER_BACKEND=software
+      - GSTREAMER_BACKEND=vaapi_new
+      - LIBVA_DRIVER_NAME=iHD
+      - GST_PLUGIN_FEATURE_RANK=vah264dec:MAX
+
 
     devices:
       - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - "992"
 
     volumes:
       - /data/4isafecross:/app/data

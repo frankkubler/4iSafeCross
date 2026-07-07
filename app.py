@@ -663,20 +663,20 @@ while not available_cam_ids:
     # Logger l'état de chaque caméra pour cette tentative
     for cid in CAM_IDS:
         if results.get(cid, False):
-            logger.info(f"Ping OK pour {cid} (tentative {attempt})")
+            logger.info(f"Ping RTSP OK pour {cid} (tentative {attempt})")
         else:
-            logger.warning(f"Ping échoué pour {cid} (tentative {attempt})")
+            logger.warning(f"Ping RTSP échoué pour {cid} (tentative {attempt})")
 
     if available_cam_ids:
         if WAIT_BEFORE_TEST_RTSP > 0:
             logger.info(
-                f"Au moins une caméra répond au ping ({available_cam_ids[0]}). Attente de {WAIT_BEFORE_TEST_RTSP}s avant démarrage des flux RTSP..."
+                f"Au moins une caméra répond au ping RTSP ({available_cam_ids[0]}). Attente de {WAIT_BEFORE_TEST_RTSP}s avant démarrage des flux RTSP..."
             )
             time.sleep(WAIT_BEFORE_TEST_RTSP)
         break
 
     logger.warning(
-        f"Aucune caméra ne répond au ping (tentative {attempt}). Nouvelle tentative dans {retry_delay}s..."
+        f"Aucune caméra ne répond au ping RTSP (tentative {attempt}). Nouvelle tentative dans {retry_delay}s..."
     )
     time.sleep(retry_delay)
 
