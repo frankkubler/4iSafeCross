@@ -49,17 +49,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=uv-binary-amd64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
-ENV UV_PYTHON=3.12
-
-RUN python3.12 -m pip install --no-cache-dir --break-system-packages cython setuptools wheel
 
 ARG UV_INDEX_USERNAME
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=secret,id=uv_index_token \
     TOKEN="$(cat /run/secrets/uv_index_token)" && \
     printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
-    uv venv --python 3.12 --clear && \
-    uv sync --frozen --no-dev --python 3.12 && \
+    uv sync --frozen --no-dev && \
+    /app/.venv/bin/python -m pip install --no-cache-dir cython setuptools wheel && \
     rm -f uv.toml
 
 
@@ -77,7 +74,7 @@ COPY setup_cython.py .
 ENV TARGET_ARCH=amd64
 
 
-RUN python3.12 setup_cython.py build_ext --inplace && \
+RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
     rm -f app.py && \
@@ -237,10 +234,9 @@ EXPOSE 5050
 
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
+    CMD /app/.venv/bin/python -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
 
-
-CMD ["/app/.venv/bin/python3", "run.py"]
+CMD ["/app/.venv/bin/python", "run.py"]
 
 
 # ═══════════════════════════════════════════════════════════════════
