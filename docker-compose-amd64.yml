@@ -32,6 +32,7 @@ services:
     volumes:
       - /data/4isafecross:/app/data
       - ./licenses:/app/licenses
+      - /etc/machine-id:/etc/machine-id:ro
 
     logging:
       driver: json-file

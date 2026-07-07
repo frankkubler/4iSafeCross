@@ -41,6 +41,7 @@ services:
       - ./licenses:/app/licenses
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro
+      - /etc/machine-id:/etc/machine-id:ro
     
     logging:
       driver: json-file
