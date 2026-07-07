@@ -49,17 +49,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=uv-binary-amd64 /uv /root/.local/bin/uv
 ENV PATH="/root/.local/bin:$PATH"
-
+ENV UV_PYTHON=3.12
 
 RUN python3.12 -m pip install --no-cache-dir --break-system-packages cython setuptools wheel
-
 
 ARG UV_INDEX_USERNAME
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=secret,id=uv_index_token \
     TOKEN="$(cat /run/secrets/uv_index_token)" && \
     printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
-    uv sync --frozen --no-dev && \
+    uv venv --python 3.12 --clear && \
+    uv sync --frozen --no-dev --python 3.12 && \
     rm -f uv.toml
 
 
