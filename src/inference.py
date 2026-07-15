@@ -101,20 +101,26 @@ class InferenceServerThread(threading.Thread):
         """Applique les masques polygonaux sur une copie de la frame.
 
         Les zones masquées sont noircies (pixels mis à 0) avant toute analyse.
-        Opère sur une copie pour ne pas corrompre le buffer partagé de CameraManager.
+        Opère sur une copie pour ne pas corrompre le buffer partagé de CameraManager,
+        UNIQUEMENT si des masques sont réellement définis. Sans masque, la frame
+        d'origine est retournée telle quelle (pas de copie mémoire inutile).
 
         Args:
             frame: Frame numpy BGR (H x W x 3).
 
         Returns:
-            Copie de la frame avec les zones masquées en noir.
+            Copie de la frame avec les zones masquées en noir, ou la frame
+            d'origine si aucun masque n'est configuré.
         """
         with self.masks_lock:
             current_masks = self.masks
-        # Toujours opérer sur une copie pour ne pas corrompre le buffer partagé de CameraManager
-        masked = frame.copy()
+
+        # 🚀 Optimisation : pas de copie si aucun masque n'est actif
         if not current_masks:
-            return masked
+            return frame
+
+        # Copie uniquement nécessaire quand on va réellement modifier la frame
+        masked = frame.copy()
         for mask in current_masks:
             polygon = mask.get('polygon')
             if not polygon or len(polygon) < 3:
@@ -126,18 +132,18 @@ class InferenceServerThread(threading.Thread):
     def _should_run_inference(self, frame):
         """Détermine si une inférence doit être lancée pour économiser les ressources IA."""
         current_time = time.time()
-        
+
         # 🚀 Limite de fréquence : max 5 FPS pour l'IA (200ms minimum)
         if current_time - self.last_inference_time < self.min_inference_interval:
             self.inference_skip_count += 1
             return False
-        
+
         # 🚀 Hash de frame pour éviter les inférences redondantes
         frame_hash = self.fast_frame_hash(frame)
         if frame_hash == self.last_sent_frame_hash:
             self.inference_skip_count += 1
             return False
-        
+
         self.last_sent_frame_hash = frame_hash
         self.last_inference_time = current_time
         return True
@@ -186,7 +192,7 @@ class InferenceServerThread(threading.Thread):
             if self.total_frames_processed % 100 == 0:
                 skip_rate = (self.inference_skip_count / self.total_frames_processed) * 100
                 self.logger.debug(f"📊 Inférence optimisée: {skip_rate:.1f}% frames sautées ({self.inference_skip_count}/{self.total_frames_processed})")
-            
+
             if (not motion_bool) or (w_pad <= 0 or h_pad <= 0):
                 # Appeler le callback avec une détection vide pour effacer l'affichage côté client
                 self._call_detection_callback([])
@@ -213,7 +219,7 @@ class InferenceServerThread(threading.Thread):
 
             # Inférence IA (100ms) - maintenant limitée à 5 FPS max
             current_detections = []
-            
+
             inference_start_time = time.time()
             try:
                 # Utiliser with pour fermer automatiquement le BytesIO et éviter les fuites mémoire
@@ -233,7 +239,7 @@ class InferenceServerThread(threading.Thread):
                     detections = response.json().get("detections", [])
                     inference_time = (time.time() - inference_start_time) * 1000  # en ms
                     self.logger.debug(f"⚡ Inférence IA: {inference_time:.1f}ms")
-                    
+
                     if detections:
                         # Remettre les coordonnées dans le repère image d'origine
                         current_detections = [
@@ -256,41 +262,8 @@ class InferenceServerThread(threading.Thread):
                             if d["class_id"] in self.class_id
                             and float(d["confidence"]) >= self.confidence_threshold
                         ]
-                        # # Si on a des personnes et des véhicules dans les détections actuelles, enrichir avec le contexte véhicule
-                        # try:
-                        #     if len(current_detections) > 0:
-                        #         # frame shape (h,w,3)
-                        #         h, w = frame.shape[:2]
-                        #         # Utiliser toutes les détections reçues (pas seulement self.class_id)
-                        #         all_dets = [
-                        #             [
-                        #                 float(d.get("x_min", 0)), float(d.get("y_min", 0)),
-                        #                 float(d.get("x_max", 0)), float(d.get("y_max", 0)),
-                        #                 float(d.get("confidence", 0)), int(d.get("class_id", -1)), int(d.get("tracker_id", -1)),
-                        #                 d.get("personne_type") if d.get("personne_type") is not None else "inconnu"
-                        #             ] for d in detections
-                        #         ]
-                        #         ctx = infer_in_vehicle_context(all_dets, (w, h))
-                        #         # Mettre à jour personne_type pour les personnes concernées dans current_detections
-                        #         for detection in current_detections:
-                        #             cls_id = detection["class_id"]
-                        #             trk_id = detection["tracker_id"] if detection["tracker_id"] is not None else -1
-                        #             if cls_id == 1:
-                        #                 in_vehicle = False
-                        #                 if trk_id in ctx:
-                        #                     in_vehicle = bool(ctx[trk_id].get('is_in_vehicle', False))
-                        #                 detection["personne_type"] = 'sitting_in_vehicle' if in_vehicle else 'pieton'
-
-                        #         # Fallback de sécurité
-                        #         for detection in current_detections:
-                        #             if detection["class_id"] == 1 and detection["personne_type"] in (None, "", "inconnu"):
-                        #                 detection["personne_type"] = 'pieton'
-                        # except Exception:
-                        #     pass
                         # Fallback de sécurité: si une personne a encore un label vide/inconnu, mettre 'pieton'
                         for detection in current_detections:
-                            # if detection["class_id"] == 1 and (detection["personne_type"] in (None, "", "inconnu")):
-                            #     detection["personne_type"] = 'pieton'
                             # Analyser la stature si pose est présente et label == "person"
                             if detection["label"] == "person" and detection["pose"]:
                                 detection["stature"] = self.pose_analyzer.analyze_stature(detection["pose"], debug=True)

@@ -138,7 +138,6 @@ for i in range(len(relays.relays)):
     relays.action_on(i)  # MODE FAIL-SAFE : Alertes ON par défaut au démarrage
     logger.debug(f"Relais {i} : {relays.get_relay_state(i)}")
 logger.warning(f"⚠️  MODE FAIL-SAFE ACTIVÉ : {len(relays.relays)} relais allumés par défaut")
-# logger.info(f"Relais initialisé : {relays.is_initialized}, état actuel : {relays.states}")
 # Lancer le bot Telegram au démarrage de l'app
 if TELEGRAM_ENABLED:
     telegram_bot = BotThread(overwrite_file=False)
@@ -183,13 +182,13 @@ def failsafe_watchdog():
     Si aucun heartbeat reçu pendant HEARTBEAT_TIMEOUT secondes, active le mode fail-safe."""
     global application_healthy
     logger.info("🔒 Watchdog fail-safe démarré - Surveillance active")
-    
+
     while True:
         time.sleep(5)  # Vérification toutes les 5 secondes
-        
+
         with heartbeat_lock:
             time_since_heartbeat = time.time() - last_heartbeat
-            
+
             if time_since_heartbeat > HEARTBEAT_TIMEOUT:
                 if application_healthy:
                     application_healthy = False
@@ -243,10 +242,10 @@ def cleanup_frame_cache():
             # Nettoyage plus conservateur : expire après 3x la durée du cache (450ms)
             if current_time - timestamp > FRAME_CACHE_DURATION * 3:
                 expired_cameras.append(cam_id)
-        
+
         if expired_cameras:
             logger.debug(f"🧹 Nettoyage cache: suppression de {len(expired_cameras)} entrées expirées (caméras: {expired_cameras})")
-        
+
         for cam_id in expired_cameras:
             frame_cache.pop(cam_id, None)
             frame_cache_timestamp.pop(cam_id, None)
@@ -259,7 +258,7 @@ def start_cache_cleanup():
         last_stats_log = time.time()
         while True:
             cleanup_frame_cache()
-            
+
             # Log des statistiques toutes les 30 secondes
             current_time = time.time()
             if current_time - last_stats_log > 30:
@@ -270,9 +269,9 @@ def start_cache_cleanup():
                     time_saved = cache_performance_stats['hits'] * avg_gen_time
                     logger.debug(f"📊 Stats cache (30s): {total_requests} requêtes, {hit_rate:.1f}% HIT, temps économisé: {time_saved:.0f}ms")
                 last_stats_log = current_time
-            
+
             time.sleep(3)  # Nettoyer toutes les 3 secondes au lieu de chaque seconde
-    
+
     cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
     cleanup_thread.start()
 
@@ -285,7 +284,7 @@ def create_zone_overlay(frame_shape, zones, cid):
     """Crée un overlay transparent avec les zones dessinées une seule fois"""
     h, w = frame_shape[:2]
     overlay = np.zeros((h, w, 3), dtype=np.uint8)
-    
+
     # Initialiser le cache des couleurs de zones pour cette caméra si nécessaire
     if cid not in zone_color_cache:
         zone_color_cache[cid] = {
@@ -316,7 +315,7 @@ def create_zone_overlay(frame_shape, zones, cid):
             y2 = max(0, min(h - 1, y2))
             cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 4)
             cv2.putText(overlay, zone["name"], (x1, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
-    
+
     return overlay
 
 
@@ -363,7 +362,7 @@ def get_zone_overlay(frame_shape, cid):
     """Récupère l'overlay des zones depuis le cache ou le crée si nécessaire"""
     with zone_overlay_lock:
         cache_key = f"{cid}_{frame_shape[0]}_{frame_shape[1]}"
-        
+
         # Limiter la taille du cache pour éviter les fuites mémoire
         if cache_key not in zone_overlay_cache:
             if len(zone_overlay_cache) >= MAX_ZONE_OVERLAY_CACHE_SIZE:
@@ -371,11 +370,11 @@ def get_zone_overlay(frame_shape, cid):
                 oldest_key = next(iter(zone_overlay_cache))
                 del zone_overlay_cache[oldest_key]
                 logger.debug(f"🗑️ Cache overlay plein, suppression de {oldest_key}")
-            
+
             zones = zones_by_camera.get(cid, [])
             zone_overlay_cache[cache_key] = create_zone_overlay(frame_shape, zones, cid)
             logger.debug(f"🎨 Overlay des zones créé pour caméra {cid} (résolution: {frame_shape[1]}x{frame_shape[0]})")
-        
+
         return zone_overlay_cache[cache_key]
 
 
@@ -488,10 +487,6 @@ def detection_callback_factory(cid, main_loop=None):
             shared_detections[cid] = detections_with_zone
 
             # Debounce : mise à jour des compteurs avec reset temporel par zone.
-            # Le counter reste stable tant que la dernière détection valide date de moins de
-            # debounce_reset_seconds (par zone, sinon PERSON_RESET_SECONDS global).
-            # Les frames sautées (is_skipped_frame=True) réutilisent past_detections et ne
-            # comptent PAS comme une nouvelle frame d'inférence : elles n'incrémentent pas le counter.
             now_ts = time.time()
             for zone_name in zone_names_list:
                 if zone_name not in person_consecutive_frames:
@@ -536,9 +531,8 @@ def detection_callback_factory(cid, main_loop=None):
                 }
         now = datetime.now()
         current_timestamp = now.timestamp()
-        
+
         # ===== HEARTBEAT FAIL-SAFE =====
-        # Mise à jour du heartbeat pour indiquer que l'application fonctionne
         update_heartbeat()
 
         # Correction asyncio event loop pour thread
@@ -554,19 +548,14 @@ def detection_callback_factory(cid, main_loop=None):
         for zone_name in zone_names_list:
             detected = zone_name in debounced_zones
             if detected and not previous_detection[zone_name]:
-                # Début d'une détection confirmée (N frames consécutives) dans cette zone
                 previous_detection[zone_name] = True
             elif not detected and previous_detection[zone_name]:
-                # Fin de détection dans cette zone
                 previous_detection[zone_name] = False
                 logger.info(f"Plus de détection sur la caméra {cid} dans la zone {zone_name}")
                 asyncio.run_coroutine_threadsafe(
                     alert_manager.on_no_more_detection(current_timestamp, zone_names=[zone_name]),
                     loop
                 )
-
-        # Filtrer pour l'alerte uniquement label == "person" (personne_type/posture non utilisé)
-        # Ce bloc est HORS de la boucle zones pour n'appeler on_detection qu'une seule fois par frame
 
         # Filtre IoU : exclure les personnes dont la bbox chevauche significativement
         # un chariot élévateur dans la même frame (pose=[] ou avec keypoints parasites).
@@ -795,7 +784,6 @@ def startup_relay_off():
         MAIN_LOOP
     )
     # Extinction explicite des relais physiques non couverts par les zones (ex : relais 3, 4…)
-    # À t=STARTUP_GRACE_PERIOD, les 11s de protection sont déjà dépassées → pas d'attente supplémentaire
     managed_relays = set(alert_manager.relay_on.keys())
     for i in range(len(relays.relays)):
         if i not in managed_relays and relays.get_relay_state(i):
@@ -811,70 +799,68 @@ def gen_frames(cid):
     last_frame_time = 0
     frame_interval = 0.2  # 5 FPS = 200ms entre frames
     logger.debug(f"🎬 Nouveau générateur de frames démarré pour caméra {cid}")
-    
+
     while True:
         current_time = time.time()
-        
+
         # On ne génère les frames que pour l'affichage vidéo
         if not stream_enabled.get(cid, True):
             # On attend que le stream soit réactivé, sans bloquer la détection
             logger.debug(f"⏸️  Stream désactivé pour caméra {cid}")
             time.sleep(0.2)
             continue
-            
+
         # Limiter la fréquence de génération des frames pour l'affichage
         if current_time - last_frame_time < frame_interval:
             time.sleep(0.01)
             continue
-            
+
         # Vérifier le cache de frame
         with frame_cache_lock:
             cached_frame = frame_cache.get(cid)
             cache_time = frame_cache_timestamp.get(cid, 0)
-            
-        # Debug détaillé du cache (réduit)
-        if cached_frame is not None:
-            cache_age_ms = (current_time - cache_time) * 1000
-            # Log seulement si on est proche de l'expiration ou si c'est un problème
-            # if cache_age_ms > FRAME_CACHE_DURATION * 800:  # 80% de la durée
-            #     logger.debug(f"🔍 Cache check caméra {cid}: âge={cache_age_ms:.1f}ms, limite={FRAME_CACHE_DURATION*1000:.0f}ms")
-        
+
         # Utiliser le cache si la frame est récente
         if cached_frame is not None and current_time - cache_time < FRAME_CACHE_DURATION:
-            cache_age_ms = (current_time - cache_time) * 1000
             cache_performance_stats['hits'] += 1
-            # Log moins verbeux des hits
-            # if cache_performance_stats['hits'] % 10 == 0:  # Log tous les 10 hits
-                # hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-                # logger.debug(f"📋 Cache HIT pour caméra {cid} - Taux: {hit_rate:.1f}% (dernier âge: {cache_age_ms:.1f}ms)")
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + cached_frame + b'\r\n')
             last_frame_time = current_time
             continue
-            
+
         frame = manager.get_frame_array(cam_id)
         if frame is not None:
             cache_performance_stats['misses'] += 1
-            # Log moins verbeux des misses
-            # if cache_performance_stats['misses'] % 5 == 0:  # Log tous les 5 misses
-                # logger.debug(f"🔄 Cache MISS pour caméra {cid} - Génération nouvelle frame...")
             generation_start_time = time.time()
-            
-            # Vérifier que la frame est valide avant de la copier
+
+            # Vérifier que la frame est valide (pas de copie systématique, voir _ensure_writable)
             try:
-                frame = frame.copy()  # Rendre la frame modifiable
                 h, w = frame.shape[:2]
             except Exception as e:
-                logger.error(f"❌ Erreur lors de la copie de frame pour caméra {cid}: {e}")
+                logger.error(f"❌ Erreur lors de la lecture de frame pour caméra {cid}: {e}")
                 time.sleep(0.1)
                 continue
-                
+
+            # 🚀 Copie paresseuse : la frame n'est dupliquée qu'à la première
+            # écriture réelle (ROI, overlay masque debug, zones, masques GUI,
+            # détections, point de mouvement). Sans aucune de ces écritures,
+            # aucune copie n'est faite — gain CPU/mémoire notable quand
+            # aucune zone/masque/détection n'est active.
+            frame_dirty = False
+
+            def _ensure_writable():
+                nonlocal frame, frame_dirty
+                if not frame_dirty:
+                    frame = frame.copy()
+                    frame_dirty = True
+
             with shared_detections_lock:
                 detections = shared_detections.get(cid, [])
             with shared_motion_roi_lock:
                 roi_info = shared_motion_roi.get(cid, None)
             # Afficher les ROI seulement si activé
             if roi_display_enabled.get(cid, False) and roi_info and roi_info.get("w_pad", 0) > 0 and roi_info.get("h_pad", 0) > 0:
+                _ensure_writable()
                 x_pad = roi_info["x_pad"]
                 y_pad = roi_info["y_pad"]
                 w_roi = roi_info["w_pad"]
@@ -900,6 +886,7 @@ def gen_frames(cid):
             if mask_overlay_enabled.get(cid, False) and cid in inference_threads:
                 detector = getattr(inference_threads[cid], 'motion_detector', None)
                 if detector is not None and detector._last_mask is not None:
+                    _ensure_writable()
                     dbg_mask = detector._last_mask
                     if dbg_mask.shape[:2] != (h, w):
                         dbg_mask = cv2.resize(dbg_mask, (w, h), interpolation=cv2.INTER_NEAREST)
@@ -909,16 +896,21 @@ def gen_frames(cid):
             # Superposer l'overlay des zones (créé une seule fois)
             zone_overlay = get_zone_overlay(frame.shape, cid)
             # Créer un masque pour ne dessiner que les pixels non-noirs de l'overlay
-            mask = np.any(zone_overlay > 0, axis=2)
-            frame[mask] = zone_overlay[mask]
+            zone_mask = np.any(zone_overlay > 0, axis=2)
+            if np.any(zone_mask):
+                _ensure_writable()
+                frame[zone_mask] = zone_overlay[zone_mask]
             # Appliquer les masques noirs sur la GUI (zones exclues de la détection)
             mask_bool = get_mask_overlay(frame.shape, cid)
-            frame[mask_bool] = 0
+            if np.any(mask_bool):
+                _ensure_writable()
+                frame[mask_bool] = 0
             # Récupérer l'état du mouvement depuis le thread d'inférence
             motion = False
             if cid in inference_threads:
                 motion = inference_threads[cid].motion
             for det in detections:
+                _ensure_writable()
                 # Maintenant det est un dictionnaire
                 zone_names = det.get("zones", [])  # Si les zones ont été ajoutées
                 x1 = max(0, min(w-1, int(det["x_min"])))
@@ -940,8 +932,6 @@ def gen_frames(cid):
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
                 class_id = det.get("class_id", -1)
-                # tracker_id = det.get("tracker_id", -1)
-                # label = det.get("label", "unknown")
                 label = f'{confidence:.2f} {label} '
                 cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
                 # Afficher la zone sur la détection
@@ -952,6 +942,7 @@ def gen_frames(cid):
                         cv2.putText(frame, zone_name, (x1, y2 + 20 + i * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
             # Ajout du point vert si mouvement détecté
             if motion:
+                _ensure_writable()
                 # En haut à droite
                 cv2.circle(frame, (w - 20, 20), 15, (0, 0, 255), -1)
             # Encodage JPEG optimisé pour réduire la latence
@@ -965,19 +956,15 @@ def gen_frames(cid):
                 frame_bytes = buffer.tobytes()
                 generation_time_ms = (time.time() - generation_start_time) * 1000
                 cache_performance_stats['total_generation_time'] += generation_time_ms
-                
+
                 # Mettre en cache la frame encodée
                 with frame_cache_lock:
                     frame_cache[cid] = frame_bytes
                     frame_cache_timestamp[cid] = current_time
                     cache_size = len(frame_cache)
-                
+
                 avg_generation_time = cache_performance_stats['total_generation_time'] / cache_performance_stats['misses']
                 hit_rate = cache_performance_stats['hits'] / (cache_performance_stats['hits'] + cache_performance_stats['misses']) * 100
-                # Log moins verbeux des générations
-                # if cache_performance_stats['misses'] % 10 == 0:  # Log tous les 10 misses
-                    # logger.debug(f"💾 Frame générée pour caméra {cid} en {generation_time_ms:.1f}ms (moy: {avg_generation_time:.1f}ms)")
-                    # logger.debug(f"   Cache: {len(frame_bytes)} bytes, {cache_size} entrées, taux HIT: {hit_rate:.1f}%")
 
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
@@ -1087,7 +1074,6 @@ def set_motion_param(cid):
 
         # Mise à jour via la méthode dédiée pour MOG2
         if param in ('varThreshold', 'history', 'detectShadows'):
-            # Ne pas faire le setattr ici, laisser update_fgbg_params gérer l'affectation et la comparaison
             kwargs = {
                 'varThreshold': value if param == 'varThreshold' else getattr(detector, 'varThreshold', None),
                 'history': value if param == 'history' else getattr(detector, 'history', None),
@@ -1095,7 +1081,7 @@ def set_motion_param(cid):
             }
             detector.update_fgbg_params(**kwargs)
             logger.debug(f"[ROUTE] Appel update_fgbg_params sur MotionDetector id={id(detector)} pour cid={cid} avec param={param}, value={value}")
-            
+
 
         return jsonify({'status': 'ok'})
 
@@ -1201,11 +1187,11 @@ def failsafe_status():
     """Endpoint pour vérifier l'état du système fail-safe."""
     with heartbeat_lock:
         time_since_heartbeat = time.time() - last_heartbeat
-        
+
     relay_states = {}
     for i in range(len(relays.relays)):
         relay_states[f"relay_{i}"] = relays.get_relay_state(i)
-    
+
     return jsonify({
         'application_healthy': application_healthy,
         'last_heartbeat_seconds_ago': round(time_since_heartbeat, 2),
@@ -1313,12 +1299,12 @@ def set_zones():
     data = request.get_json()
     zones = data.get('zones', [])
     alert_manager.set_zones(zones)
-    
+
     # Vider le cache des overlays car les zones ont changé
     with zone_overlay_lock:
         zone_overlay_cache.clear()
         logger.debug("🗑️ Cache des overlays de zones vidé suite à modification des zones")
-    
+
     return jsonify({'status': 'ok'})
 
 
@@ -1525,7 +1511,7 @@ def clear_frame_cache():
         frame_cache.clear()
         frame_cache_timestamp.clear()
         logger.debug(f"🗑️ Cache de frames vidé manuellement ({cache_size} entrées supprimées)")
-    
+
     return jsonify({'status': 'ok', 'cleared_entries': cache_size})
 
 
@@ -1536,7 +1522,7 @@ def clear_zone_cache():
         cache_size = len(zone_overlay_cache)
         zone_overlay_cache.clear()
         logger.debug(f"🗑️ Cache des overlays de zones vidé manuellement ({cache_size} entrées supprimées)")
-    
+
     return jsonify({'status': 'ok', 'cleared_entries': cache_size})
 
 
@@ -1553,17 +1539,17 @@ def cache_stats():
         cache_info = {}
         total_size = 0
         expired_count = 0
-        
+
         for cam_id, frame_data in frame_cache.items():
             timestamp = frame_cache_timestamp.get(cam_id, 0)
             age_ms = (current_time - timestamp) * 1000
             size_bytes = len(frame_data)
             total_size += size_bytes
             is_fresh = age_ms < FRAME_CACHE_DURATION * 1000
-            
+
             if not is_fresh:
                 expired_count += 1
-            
+
             cache_info[cam_id] = {
                 'age_ms': round(age_ms, 1),
                 'size_bytes': size_bytes,
@@ -1605,12 +1591,12 @@ def inference_stats():
             camera_stats['inference_mode'] = inference_thread.inference_mode
             camera_stats['url'] = inference_thread.url
             stats[f'camera_{cid}'] = camera_stats
-    
+
     # Calculer les totaux
     total_frames = sum(s.get('total_frames', 0) for s in stats.values())
     total_skipped = sum(s.get('skipped_frames', 0) for s in stats.values())
     total_time_saved = sum(s.get('time_saved_ms', 0) for s in stats.values())
-    
+
     summary = {
         'total_frames_processed': total_frames,
         'total_frames_skipped': total_skipped,
@@ -1619,7 +1605,7 @@ def inference_stats():
         'total_time_saved_seconds': round(total_time_saved / 1000, 1),
         'cameras': stats
     }
-    
+
     return jsonify(summary)
 
 
