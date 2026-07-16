@@ -21,8 +21,8 @@ security:sast:
     - pip install bandit pip-audit uv --quiet --no-cache-dir
   script:
     - echo "=== Analyse SAST avec Bandit ==="
-    - bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json 2>&1 || echo "Bandit completed with warnings"
-    - bandit -r src/ utils/ app.py -ll 2>&1 || echo "Bandit completed with warnings"
+    - bandit -r src/ utils/ run.py -ll -f json -o bandit-report.json 2>&1 || echo "Bandit completed with warnings"
+    - bandit -r src/ utils/ run.py -ll 2>&1 || echo "Bandit completed with warnings"
     - echo "=== Audit des dependances avec pip-audit ==="
     - >
       uv pip compile pyproject.toml

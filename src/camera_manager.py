@@ -59,7 +59,10 @@ class CameraManager:
         self.cams_status = {cid: 'unknown' for cid in filtered_cam_ids}  # online/offline/unknown
 
         # ── Initialisation GStreamer ───────────────────────────────────────────
-        Gst.init(None)
+        # Gst.init([]) et non Gst.init(None) : la typelib GStreamer >= 1.24
+        # (PyGObject 3.50, dev x86) n'accepte plus None pour argv ;
+        # la liste vide est acceptée par toutes les versions (Jetson 1.20 inclus).
+        Gst.init([])
         try:
             _warmup = Gst.parse_launch("fakesrc num-buffers=0 ! fakesink")
             _warmup.set_state(Gst.State.NULL)

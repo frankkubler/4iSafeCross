@@ -35,7 +35,7 @@ class AlerteManager:
         self.recording_executor = ThreadPoolExecutor(max_workers=4)
         self._pending_tasks = 0
         self._pending_tasks_lock = threading.Lock()
-        self.telegram_bot = telegram_bot  # Injecté depuis app.py
+        self.telegram_bot = telegram_bot  # Injecté depuis src/core/bootstrap.py
         self.last_telegram_sent = {}  # par caméra
         self.telegram_alert_enabled = telegram_alert_enabled
         # Construire le lookup plat zone_name -> zone_dict pour toutes les caméras

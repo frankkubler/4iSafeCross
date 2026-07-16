@@ -65,7 +65,6 @@ COPY static/ ./static/
 COPY db/ ./db/
 COPY src/ ./src/
 COPY utils/ ./utils/
-COPY app.py .
 COPY run.py .
 COPY setup_cython.py .
 
@@ -76,7 +75,6 @@ ENV TARGET_ARCH=amd64
 RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
-    rm -f app.py && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c
 
 
@@ -142,7 +140,6 @@ COPY static/ ./static/
 COPY db/ ./db/
 COPY src/ ./src/
 COPY utils/ ./utils/
-COPY app.py .
 COPY run.py .
 COPY setup_cython.py .
 
@@ -153,7 +150,6 @@ ENV TARGET_ARCH=arm64
 RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
-    rm -f app.py && \
     rm -rf build/ *.c src/**/*.c utils/**/*.
 
 
@@ -213,7 +209,6 @@ COPY --from=builder-amd64 /app/db/ ./db/
 COPY --from=builder-amd64 /app/src/ ./src/
 COPY --from=builder-amd64 /app/utils/ ./utils/
 COPY --from=builder-amd64 /app/run.py .
-COPY --from=builder-amd64 /app/*.so .
 
 
 RUN mkdir -p /app/logs /app/data
@@ -283,7 +278,6 @@ COPY --from=builder-arm64 /app/db/ ./db/
 COPY --from=builder-arm64 /app/src/ ./src/
 COPY --from=builder-arm64 /app/utils/ ./utils/
 COPY --from=builder-arm64 /app/run.py .
-COPY --from=builder-arm64 /app/*.so .
 
 
 RUN mkdir -p /app/logs /app/data

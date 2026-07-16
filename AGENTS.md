@@ -11,8 +11,10 @@ Application Flask de securite industrielle (vision + alertes) pour Jetson, avec:
 - interface web de supervision et d'edition de zones.
 
 Points d'entree principaux:
-- [app.py](app.py)
-- [run.py](run.py)
+- [run.py](run.py) (point d'entree unique)
+- [src/core/bootstrap.py](src/core/bootstrap.py) (sequence de boot, ordre critique fail-safe)
+- [src/web/app_factory.py](src/web/app_factory.py) (blueprints Flask, URLs sans prefixe)
+- [src/core/state.py](src/core/state.py) (etat partage singleton)
 - [src/inference.py](src/inference.py)
 - [src/alert_manager.py](src/alert_manager.py)
 - [src/relay_pilot.py](src/relay_pilot.py)
@@ -26,8 +28,7 @@ Points d'entree principaux:
 
 ## Commandes Essentielles
 
-- Run production Flask/Waitress: `python run.py`
-- Run dev Flask: `python app.py`
+- Run (production et dev) Flask/Waitress: `python run.py`
 - Tests rapides:
   - `python test_detections_format.py`
   - `python test_zone_editor.py`

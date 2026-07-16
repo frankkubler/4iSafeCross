@@ -21,7 +21,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 
 ```
 4iSafeCross/
-├── app.py                    # Application Flask principale (point d'entrée)
+├── run.py                    # Point d'entrée unique : bootstrap + serveur waitress
 ├── pyproject.toml            # Métadonnées et dépendances (uv)
 ├── uv.toml                   # Credentials index GitLab privé (non versionné — dev local uniquement)
 ├── requirements.txt          # Dépendances Python
@@ -40,6 +40,21 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 ├── dataset/                  # Images et labels collectés automatiquement
 ├── logs/                     # Logs applicatifs (rotation logrotate)
 ├── src/
+│   ├── core/                 # Cœur applicatif (extrait de l'ancien app.py)
+│   │   ├── bootstrap.py      # create_application() : séquence de boot complète
+│   │   ├── state.py          # AppState : conteneur d'état partagé (singleton)
+│   │   ├── geometry.py       # Fonctions pures : zones, overlays, IoU
+│   │   ├── caches.py         # Caches overlays zones/masques + frames JPEG
+│   │   ├── failsafe.py       # Heartbeat, watchdog, extinction post-démarrage
+│   │   ├── detection_pipeline.py  # Callback de détection (debounce, filtres)
+│   │   └── streaming.py      # Générateur MJPEG (gen_frames)
+│   ├── web/                  # Blueprints Flask (URLs inchangées, sans préfixe)
+│   │   ├── app_factory.py    # create_app() : Flask + enregistrement blueprints
+│   │   ├── routes_ui.py      # Pages HTML : / et /zone_editor
+│   │   ├── routes_stream.py  # /video_feed, /snapshot, /cam_status, résolution…
+│   │   ├── routes_detection.py    # Paramètres motion, toggles détection/alertes
+│   │   ├── routes_zones_api.py    # /api/zones, /api/masks, /api/relay_positions
+│   │   └── routes_system.py  # /failsafe_status, /debug_info, caches, galerie
 │   ├── alert_manager.py      # Gestion des alertes, relais, timers async
 │   ├── bot_aiogram.py        # Bot Telegram (aiogram 3.x)
 │   ├── camera_manager.py     # Capture RTSP via GStreamer (H.264, HW decoder)
@@ -201,7 +216,7 @@ Lorsque ce paramètre est `true`, les rejets sur `pose=[]` ou `kp < 4` sont igno
 
 #### 2. Debounce temporel (configurable par zone)
 
-Le debounce est configurable globalement (dans `app.py`) **et par zone** (dans `config/zones.ini`) :
+Le debounce est configurable globalement (dans `src/core/detection_pipeline.py`) **et par zone** (dans `config/zones.ini`) :
 
 | Paramètre | Valeur globale | Rôle |
 |---|---|---|
@@ -369,7 +384,7 @@ Cette approche évite tout secret dans un fichier commité, en local comme en CI
 
 #### Pour la CI GitLab de 4iSafeCross (build Docker)
 
-En **développement local**, `uv sync` et `uv run app.py` utilisent le fichier `uv.toml` local non versionné.
+En **développement local**, `uv sync` et `uv run run.py` utilisent le fichier `uv.toml` local non versionné.
 
 En **CI/CD Docker**, le token GitLab n'est pas écrit dans `uv.toml`. Il est injecté au build via un **secret BuildKit**, ce qui évite de stocker un secret dans une couche d'image Docker.
 
@@ -595,7 +610,7 @@ docker run -p 5000:5000 --env-file .env 4isafecross
 >   -t 4isafecross .
 > ```
 >
-> Le `uv.toml` local reste utilisé pour `uv sync` et `uv run app.py`, mais pas pour le build Docker CI/CD.
+> Le `uv.toml` local reste utilisé pour `uv sync` et `uv run run.py`, mais pas pour le build Docker CI/CD.
 
 ## Scripts et services systemd
 
@@ -870,10 +885,10 @@ uv run nuitka --standalone \
   --include-data-dir=logs=logs \
   --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so \
   --output-dir=dist \
-  app.py
+  run.py
 ```
 
-Le dossier `dist/app.dist/` contiendra l'exécutable et tous les fichiers nécessaires.
+Le dossier `dist/run.dist/` contiendra l'exécutable et tous les fichiers nécessaires.
 
 ### Compilation automatique avec GitLab CI/CD
 
@@ -978,7 +993,7 @@ dataset/
    yolo train data=dataset/dataset.yaml model=yolo11m.pt epochs=50 imgsz=640
    ```
 
-> ⚠️ **Important** : ne pas exécuter `DatasetCollector` (mode autonome) en même temps que `app.py`. Utilisez exclusivement `DatasetCollectionThread` (intégré dans `app.py`) pour éviter de dupliquer les pipelines GStreamer, les appels YOLO et les détecteurs MOG2.
+> ⚠️ **Important** : ne pas exécuter `DatasetCollector` (mode autonome) en même temps que l'application principale. Utilisez exclusivement `DatasetCollectionThread` (démarré par `src/core/bootstrap.py`) pour éviter de dupliquer les pipelines GStreamer, les appels YOLO et les détecteurs MOG2.
 
 ## Auteurs
 

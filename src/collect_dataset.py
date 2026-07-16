@@ -4,7 +4,7 @@ collect_dataset.py — Collecte automatique d'images pour constituer un dataset 
 Deux modes d'utilisation :
 
   MODE INTÉGRÉ (recommandé, zéro surcharge) :
-    Importer DatasetCollectionThread dans app.py.
+    Importer DatasetCollectionThread dans src/core/bootstrap.py.
     Le thread réutilise les frames et les détections déjà calculées par l'app principale :
       - aucun nouveau pipeline GStreamer / connexion RTSP
       - aucune requête supplémentaire vers le serveur IA (port 8004)
@@ -87,7 +87,7 @@ logger = logging.getLogger("collect_dataset")
 # ---------------------------------------------------------------------------
 class DatasetCollectionThread(threading.Thread):
     """
-    Thread de collecte dataset à intégrer directement dans app.py.
+    Thread de collecte dataset démarré par src/core/bootstrap.py.
 
     Réutilise les ressources de l'app principale :
       - get_frame_func  : même fonction que le thread d'inférence (frames déjà décodées)
@@ -467,7 +467,7 @@ class DatasetCollector:
     """
     Collecte autonome avec son propre CameraManager et son propre thread d'inférence.
 
-    ⚠️  NE PAS utiliser en parallèle de app.py : double les pipelines GStreamer,
+    ⚠️  NE PAS utiliser en parallèle de l'app principale : double les pipelines GStreamer,
     double les requêtes vers le serveur IA, double la charge CPU/réseau.
     Réservé aux sessions de collecte hors-production.
 
@@ -522,7 +522,7 @@ class DatasetCollector:
         logger.info(f"🗂  Dataset collector (standalone) → {self.output_dir.resolve()}")
         logger.warning(
             "⚠️  Mode standalone : crée ses propres pipelines GStreamer et appels IA. "
-            "NE PAS utiliser en parallèle de app.py. "
+            "NE PAS utiliser en parallèle de l'app principale. "
             "Préférez DATASET_COLLECTION = true dans config.ini pour le mode intégré."
         )
         logger.info(f"   Intervalle temporel    : toutes les {interval_minutes} min")

@@ -88,7 +88,7 @@ docker run --rm \
       --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so \
       --output-dir=dist \
       --output-filename=4isafecross \
-      app.py
+      run.py
     
     echo "✅ Compilation terminée avec succès !"
     
@@ -99,16 +99,16 @@ docker run --rm \
     if [ -f "dist/4isafecross" ]; then
         file dist/4isafecross
         echo "✅ Exécutable unique créé : dist/4isafecross"
-    elif [ -d "dist/app.dist" ]; then
-        file dist/app.dist/app
-        echo "✅ Dossier de distribution créé : dist/app.dist/"
+    elif [ -d "dist/run.dist" ]; then
+        file dist/run.dist/run
+        echo "✅ Dossier de distribution créé : dist/run.dist/"
     fi
     
     # Créer une archive
     echo "📦 Création de l'\''archive..."
     cd dist
-    if [ -d "app.dist" ]; then
-        tar -czf 4isafecross-arm64-jetson-local.tar.gz app.dist/
+    if [ -d "run.dist" ]; then
+        tar -czf 4isafecross-arm64-jetson-local.tar.gz run.dist/
         echo "✅ Archive créée : dist/4isafecross-arm64-jetson-local.tar.gz"
     elif [ -f "4isafecross" ]; then
         tar -czf 4isafecross-arm64-jetson-local.tar.gz 4isafecross

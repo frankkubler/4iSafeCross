@@ -833,7 +833,7 @@
     }
     </script>
                 <div class="cam-video-box" id="cam_box_{{ cam.idx }}">
-                    <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
+                    <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('stream.video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
                     <span id="placeholder_{{ cam.idx }}">Vidéo masquée</span>
                 </div>
                 {# Les contrôles luminosité/exposition sont masqués #}

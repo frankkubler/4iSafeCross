@@ -12,7 +12,8 @@ from pathlib import Path
 SOURCE_DIRS = ["src", "utils"]
 
 # Fichiers racine a compiler individuellement
-ROOT_FILES = ["app.py"]
+# (run.py reste en clair : simple lanceur waitress sans logique metier)
+ROOT_FILES = []
 
 EXCLUDE_FILES = ["constants.py"]
 
