@@ -71,31 +71,25 @@ def parse_tegrastats(line):
     return result
 
 
-# Colonnes de charge par moteur dans le CSV `intel_gpu_top -c` (noms variables
-# selon la génération/version de l'outil). On agrège par le max des moteurs.
-_INTEL_ENGINE_TOKENS = ('rcs', 'bcs', 'vcs', 'vecs', 'render', 'blitter', 'video')
+def extract_intel_busy(sample):
+    """Charge GPU (%) depuis un objet JSON ``intel_gpu_top -J`` : max des moteurs.
 
+    Le format ``-J`` expose ``{"engines": {"Render/3D/0": {"busy": 0.77,
+    "unit": "%"}, "Video/0": {"busy": 3.61, ...}, ...}}``. On itère sur les
+    valeurs (indépendant du nommage des moteurs) et retourne le max. Retourne
+    None si aucune donnée d'occupation (→ repli sur la note).
 
-def parse_intel_gpu_csv(header, row):
-    """Charge GPU depuis une paire (en-tête, ligne) du CSV ``intel_gpu_top -c``.
-
-    Best-effort : repère les colonnes de pourcentage d'occupation par moteur
-    (RCS/BCS/VCS/VECS…) et retourne le max. Retourne None si aucune colonne
-    reconnue (→ repli sur la note, jamais de chiffre inventé).
-
-    ⚠️  Non validé sur matériel Intel : format supposé d'après la doc.
+    Fonction pure (testable).
     """
-    cols = [c.strip() for c in header.split(',')]
-    vals = [v.strip() for v in row.split(',')]
-    if len(vals) < len(cols) or not cols:
+    engines = sample.get("engines")
+    if not isinstance(engines, dict):
         return None
     busy = []
-    for name, val in zip(cols, vals):
-        low = name.lower()
-        if '%' in name and any(tok in low for tok in _INTEL_ENGINE_TOKENS):
+    for eng in engines.values():
+        if isinstance(eng, dict) and "busy" in eng:
             try:
-                busy.append(float(val))
-            except ValueError:
+                busy.append(float(eng["busy"]))
+            except (TypeError, ValueError):
                 pass
     if not busy:
         return None
@@ -103,29 +97,43 @@ def parse_intel_gpu_csv(header, row):
 
 
 def _intel_gpu_reader():
-    """Thread daemon : lit intel_gpu_top -c en continu, met à jour la dernière valeur."""
+    """Thread daemon : lit intel_gpu_top -J en flux, met à jour la dernière valeur.
+
+    La sortie -J est un tableau JSON dont les objets arrivent au fil de l'eau
+    (``[`` puis objets séparés par ``,``). On les décode un par un avec
+    JSONDecoder.raw_decode dès qu'ils sont complets.
+    """
+    import json
     import subprocess
     try:
         proc = subprocess.Popen(
-            ["intel_gpu_top", "-c", "-s", "1000"],
+            ["intel_gpu_top", "-J", "-s", "1000"],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
         )
     except (OSError, ValueError) as e:
         logger.warning(f"intel_gpu_top indisponible : {e}")
         return
-    header = None
-    for line in proc.stdout:
-        line = line.strip()
-        if not line:
-            continue
-        # La première ligne non vide contenant des lettres est l'en-tête.
-        if header is None and any(c.isalpha() for c in line):
-            header = line
-            continue
-        parsed = parse_intel_gpu_csv(header, line)
-        if parsed:
-            with _lock:
-                _state["intel_value"] = parsed
+    dec = json.JSONDecoder()
+    buf = ""
+    for chunk in iter(lambda: proc.stdout.read(4096), ''):
+        buf += chunk
+        while True:
+            # Sauter le '[' initial et les séparateurs entre objets.
+            i = 0
+            while i < len(buf) and buf[i] in '[ ,\n\r\t':
+                i += 1
+            buf = buf[i:]
+            if not buf.startswith('{'):
+                break
+            try:
+                obj, end = dec.raw_decode(buf)
+            except ValueError:
+                break  # objet encore incomplet : attendre plus de données
+            buf = buf[end:]
+            parsed = extract_intel_busy(obj)
+            if parsed:
+                with _lock:
+                    _state["intel_value"] = parsed
 
 
 def _read_int(path):
