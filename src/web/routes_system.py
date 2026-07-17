@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, request, send_from_directory
 
 from src.core import caches, failsafe
 from src.core.state import state
+from src.core.system_metrics import get_resource_metrics
 from src.web.app_factory import PROJECT_ROOT
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
 
@@ -45,8 +46,8 @@ def failsafe_status():
 
 @system_bp.route('/debug_info')
 def debug_info():
-    mem = psutil.virtual_memory()
-    cpu = psutil.cpu_percent(interval=0.5)
+    # Métriques CPU/mémoire app + conteneur + hôte (non bloquant).
+    metrics = get_resource_metrics()
     disk = psutil.disk_usage('/')
     ip_str = ', '.join(get_non_local_ips()) or "N/A"
     docker_info = get_docker_info()
@@ -58,18 +59,23 @@ def debug_info():
         load15 = round(load15, 1)
     except Exception as e:
         load1 = load5 = load15 = f"Erreur: {e}"
-    return jsonify({
-        'ram_used': round(mem.used / 1024 / 1024, 1),
-        'ram_total': round(mem.total / 1024 / 1024, 1),
-        'cpu_percent': cpu,
+
+    payload = {
+        # Champs hôte historiques conservés (rétro-compat du contrat JSON).
+        'ram_used': metrics.get('host_ram_used_mb'),
+        'ram_total': metrics.get('host_ram_total_mb'),
+        'cpu_percent': metrics.get('host_cpu_percent'),
         'disk_used': round(disk.used / 1024 / 1024 / 1024, 2),
         'disk_total': round(disk.total / 1024 / 1024 / 1024, 2),
         'disk_percent': disk.percent,
         'ip': ip_str,
         'docker_info': docker_info,
         'service_status': service_status,
-        'load_avg': f"{load1} / {load5} / {load15}"
-    })
+        'load_avg': f"{load1} / {load5} / {load15}",
+    }
+    # Nouveaux champs : empreinte de l'application et du conteneur.
+    payload.update(metrics)
+    return jsonify(payload)
 
 
 @system_bp.route('/detections_thumbs')
