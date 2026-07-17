@@ -1,8 +1,13 @@
 from waitress import serve
+import faulthandler
 import logging
 
 
 if __name__ == '__main__':
+    # Dump de pile sur crash natif (SIGSEGV/SIGABRT — GStreamer, OpenCV…) :
+    # sans lui, un GPF tue le processus sans aucune trace exploitable.
+    faulthandler.enable()
+
     # waitress : serveur WSGI multi-thread sans fork.
     # Compatible GStreamer/GLib : pas de fork() après Gst.init(),
     # donc pas d'assertions GLib ni de GPF dans les threads daemon.
