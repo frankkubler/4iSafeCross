@@ -84,8 +84,12 @@ setup(
             'annotation_typing': False,
             'embedsignature': False,
             'always_allow_keywords': True,
-            'boundscheck': False,
-            'wraparound': False,
+            # boundscheck/wraparound restent a True (defaut) : ces directives
+            # n'accelerent que les tableaux types C (aucun dans ce code) et
+            # compilent tout index negatif (ex: liste[-1]) en acces memoire
+            # non verifie -> SIGSEGV avec Cython >= 3.2 (alert_manager:340,
+            # utils.py get_service_status). Diagnostic: segfault sur
+            # POST /api/zones en conteneur, pile native __Pyx_GetItemInt_Fast.
             'initializedcheck': False,
             'nonecheck': False,
             'cdivision': True,
