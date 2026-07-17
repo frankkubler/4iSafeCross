@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, request, send_from_directory
 
 from src.core import caches, failsafe
 from src.core.state import state
+from src.core.gpu_metrics import get_gpu_metrics
 from src.core.system_metrics import get_resource_metrics
 from src.web.app_factory import PROJECT_ROOT
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
@@ -75,6 +76,8 @@ def debug_info():
     }
     # Nouveaux champs : empreinte de l'application et du conteneur.
     payload.update(metrics)
+    # Charge GPU (Jetson/AMD/Intel), None si aucun GPU détecté.
+    payload['gpu'] = get_gpu_metrics()
     return jsonify(payload)
 
 

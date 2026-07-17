@@ -611,6 +611,20 @@
                         }
                     }
 
+                    // ── GPU (Jetson / AMD / Intel) — si détecté ──
+                    if (data.gpu) {
+                        const g = data.gpu;
+                        html += '<div class="metric-group-title">GPU (' + g.backend + ')</div>';
+                        if (g.gpu_percent != null) {
+                            let val = g.gpu_percent + ' %';
+                            if (g.gpu_temp_c != null) val += ' · ' + g.gpu_temp_c + ' °C';
+                            html += metricBar('Charge', val, g.gpu_percent);
+                        } else {
+                            html += '<div class="metric"><div class="metric-head"><span>Charge</span>'
+                                + '<span class="val">' + (g.note || 'non disponible') + '</span></div></div>';
+                        }
+                    }
+
                     // ── Hôte (contexte machine) ──
                     html += '<div class="metric-group-title">Hôte</div>';
                     html += metricBar('CPU', fmt(data.cpu_percent, ' %'), data.cpu_percent);
@@ -647,6 +661,7 @@
                 html += '<div class="stats-title">📊 CACHE DE FRAMES</div>';
                 html += `Durée cache: ${cacheData.cache_duration_ms}ms | Qualité: ${cacheData.frame_quality}%\n`;
                 html += `Entrées actives: ${cacheData.total_entries} | Taille totale: ${cacheData.total_size_kb} KB\n`;
+                html += `Encodage JPEG: ${cacheData.average_generation_time_ms}ms/frame | Hit rate: ${cacheData.hit_rate_percent}% (${cacheData.total_requests} req)\n`;
 
                 for (const [camId, camCache] of Object.entries(cacheData.cameras || {})) {
                     const status = camCache.is_fresh ? '✅' : '⏰';
