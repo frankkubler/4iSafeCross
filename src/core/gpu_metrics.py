@@ -1,23 +1,27 @@
 """Charge GPU — multi-plateforme, best-effort, jamais bloquant ni fatal.
 
+Toutes les sources sont des lectures sysfs (aucun outil, aucun sous-process,
+aucun accès PMU, aucun privilège requis) — hormis le repli tegrastats du Jetson.
+
 Cibles :
 - **Jetson** (Orin, cible principale) : charge GPU lue dans sysfs
-  (``/sys/devices/.../load``, valeur en pour-mille) sans sous-process ;
-  repli sur un lecteur ``tegrastats`` en arrière-plan si sysfs est absent.
+  (``/sys/devices/.../load``, valeur en pour-mille) ; repli sur un lecteur
+  ``tegrastats`` en arrière-plan si le chemin sysfs est absent.
 - **AMD** : ``gpu_busy_percent`` exposé directement dans sysfs.
-- **Intel iGPU** : aucune charge instantanée en sysfs ; ``intel_gpu_top`` est
-  requis (outil de streaming). Le backend est détecté mais ``gpu_percent`` reste
-  None avec une note — à câbler/valider sur la machine cible.
+- **Intel iGPU** : occupation calculée depuis la résidence RC6 (état
+  d'inactivité GPU) dans ``/sys/class/drm/card*/power/rc6_residency_ms`` —
+  ``busy% = 100 − ΔRC6/Δt``. Fichier world-readable ; ``intel_gpu_top`` n'est
+  pas utilisé (fragile en conteneur : bug get_num_gts sur Gen9, et besoin PMU).
 
 Le GPU Jetson/Intel partageant la RAM système, l'empreinte mémoire GPU est déjà
 couverte par les métriques process/cgroup (voir src/core/system_metrics.py).
 
-⚠️  Non validé sur GPU réel (développé hors Jetson/Intel) : le parseur
-tegrastats est testé sur des lignes d'exemple, mais les chemins sysfs et le
-lancement de tegrastats/intel_gpu_top doivent être confirmés sur la cible.
+⚠️  Chemins sysfs Jetson à confirmer sur la cible (varient selon JetPack/SoC).
+Le calcul RC6 Intel est validé ; le parseur tegrastats est testé sur exemples.
 """
 import glob
 import logging
+import os
 import re
 import shutil
 import threading
@@ -36,6 +40,8 @@ _JETSON_LOAD_GLOBS = [
 ]
 # AMD : busy % directement en sysfs.
 _AMD_BUSY_GLOB = "/sys/class/drm/card*/device/gpu_busy_percent"
+# Intel i915 : résidence RC6 (ms cumulées d'inactivité GPU).
+_INTEL_RC6_GLOB = "/sys/class/drm/card*/power/rc6_residency_ms"
 
 _TTL = 1.0  # cache des lectures pour ne pas marteler sysfs à chaque poll
 
@@ -49,9 +55,10 @@ _state = {
     # Valeur alimentée par le thread tegrastats (repli Jetson sans sysfs).
     "tegra_value": None,
     "tegra_started": False,
-    # Valeur alimentée par le thread intel_gpu_top.
-    "intel_value": None,
-    "intel_started": False,
+    # Intel : chemins sysfs + dernier échantillon RC6 pour le calcul du delta.
+    "intel_rc6_path": None,
+    "intel_card": None,
+    "intel_last": {"rc6": None, "ts": None},
 }
 
 
@@ -71,69 +78,20 @@ def parse_tegrastats(line):
     return result
 
 
-def extract_intel_busy(sample):
-    """Charge GPU (%) depuis un objet JSON ``intel_gpu_top -J`` : max des moteurs.
+def rc6_busy_percent(rc6_ms, ts, last_rc6_ms, last_ts):
+    """Occupation GPU (%) à partir de deux échantillons de résidence RC6.
 
-    Le format ``-J`` expose ``{"engines": {"Render/3D/0": {"busy": 0.77,
-    "unit": "%"}, "Video/0": {"busy": 3.61, ...}, ...}}``. On itère sur les
-    valeurs (indépendant du nommage des moteurs) et retourne le max. Retourne
-    None si aucune donnée d'occupation (→ repli sur la note).
+    RC6 = temps cumulé (ms) passé par le GPU en état d'inactivité.
+    ``busy% = 100 − (ΔRC6 / Δt_ms)``, borné [0, 100]. Retourne None si le
+    delta n'est pas calculable (premier échantillon, horloge non avancée).
 
     Fonction pure (testable).
     """
-    engines = sample.get("engines")
-    if not isinstance(engines, dict):
+    if (rc6_ms is None or last_rc6_ms is None or last_ts is None
+            or ts <= last_ts):
         return None
-    busy = []
-    for eng in engines.values():
-        if isinstance(eng, dict) and "busy" in eng:
-            try:
-                busy.append(float(eng["busy"]))
-            except (TypeError, ValueError):
-                pass
-    if not busy:
-        return None
-    return {"gpu_percent": round(max(busy), 1)}
-
-
-def _intel_gpu_reader():
-    """Thread daemon : lit intel_gpu_top -J en flux, met à jour la dernière valeur.
-
-    La sortie -J est un tableau JSON dont les objets arrivent au fil de l'eau
-    (``[`` puis objets séparés par ``,``). On les décode un par un avec
-    JSONDecoder.raw_decode dès qu'ils sont complets.
-    """
-    import json
-    import subprocess
-    try:
-        proc = subprocess.Popen(
-            ["intel_gpu_top", "-J", "-s", "1000"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-        )
-    except (OSError, ValueError) as e:
-        logger.warning(f"intel_gpu_top indisponible : {e}")
-        return
-    dec = json.JSONDecoder()
-    buf = ""
-    for chunk in iter(lambda: proc.stdout.read(4096), ''):
-        buf += chunk
-        while True:
-            # Sauter le '[' initial et les séparateurs entre objets.
-            i = 0
-            while i < len(buf) and buf[i] in '[ ,\n\r\t':
-                i += 1
-            buf = buf[i:]
-            if not buf.startswith('{'):
-                break
-            try:
-                obj, end = dec.raw_decode(buf)
-            except ValueError:
-                break  # objet encore incomplet : attendre plus de données
-            buf = buf[end:]
-            parsed = extract_intel_busy(obj)
-            if parsed:
-                with _lock:
-                    _state["intel_value"] = parsed
+    idle_frac = (rc6_ms - last_rc6_ms) / ((ts - last_ts) * 1000.0)
+    return round(max(0.0, min(100.0, 100.0 * (1.0 - idle_frac))), 1)
 
 
 def _read_int(path):
@@ -186,9 +144,14 @@ def _detect_backend():
         _state["backend"] = "amd"
         _state["load_path"] = amd_path
         return
-    if shutil.which("intel_gpu_top") is not None:
-        _state["backend"] = "intel"
-        return
+    # Intel i915 : résidence RC6 en sysfs (world-readable, ni outil ni PMU).
+    for rc6 in glob.glob(_INTEL_RC6_GLOB):
+        if _read_int(rc6) is not None:
+            _state["backend"] = "intel"
+            _state["intel_rc6_path"] = rc6
+            # .../drm/cardN/power/rc6_residency_ms → .../drm/cardN
+            _state["intel_card"] = os.path.dirname(os.path.dirname(rc6))
+            return
     _state["backend"] = None
 
 
@@ -236,15 +199,22 @@ def get_gpu_metrics():
             else:
                 result["note"] = "tegrastats : mesure en cours d'amorçage"
         elif backend == "intel":
-            # Lecteur intel_gpu_top en arrière-plan (best-effort, non validé matériel).
-            if not _state["intel_started"]:
-                threading.Thread(target=_intel_gpu_reader, daemon=True).start()
-                _state["intel_started"] = True
-            iv = _state["intel_value"]
-            if iv is not None:
-                result.update(iv)
+            # Occupation via delta de résidence RC6 (aucun outil, aucun PMU).
+            rc6 = _read_int(_state["intel_rc6_path"])
+            last = _state["intel_last"]
+            busy = rc6_busy_percent(rc6, now, last["rc6"], last["ts"])
+            _state["intel_last"] = {"rc6": rc6, "ts": now}
+            if busy is not None:
+                result["gpu_percent"] = busy
             else:
-                result["note"] = "intel_gpu_top : mesure en cours d'amorçage"
+                result["note"] = "charge GPU : amorçage de la mesure RC6"
+            # Fréquence GPU (contexte, best-effort).
+            act = _read_int(os.path.join(_state["intel_card"], "gt_act_freq_mhz"))
+            mx = _read_int(os.path.join(_state["intel_card"], "gt_max_freq_mhz"))
+            if act is not None:
+                result["freq_mhz"] = act
+            if mx is not None:
+                result["freq_max_mhz"] = mx
 
         _state["cached"] = result
         _state["cached_ts"] = now

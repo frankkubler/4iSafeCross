@@ -618,6 +618,8 @@
                         if (g.gpu_percent != null) {
                             let val = g.gpu_percent + ' %';
                             if (g.gpu_temp_c != null) val += ' · ' + g.gpu_temp_c + ' °C';
+                            if (g.freq_mhz != null) val += ' · ' + g.freq_mhz
+                                + (g.freq_max_mhz != null ? '/' + g.freq_max_mhz : '') + ' MHz';
                             html += metricBar('Charge', val, g.gpu_percent);
                         } else {
                             html += '<div class="metric"><div class="metric-head"><span>Charge</span>'

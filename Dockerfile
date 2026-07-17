@@ -195,7 +195,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     intel-media-va-driver-non-free \
     i965-va-driver \
     vainfo \
-    intel-gpu-tools \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
