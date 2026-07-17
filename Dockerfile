@@ -56,7 +56,7 @@ RUN --mount=type=secret,id=uv_index_token \
     TOKEN="$(cat /run/secrets/uv_index_token)" && \
     printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
     uv sync --frozen --no-dev --python 3.12 && \
-    uv pip install --python /app/.venv/bin/python cython setuptools wheel && \
+    uv pip install --python /app/.venv/bin/python "cython==3.2.8" setuptools wheel && \
     rm -f uv.toml
 
 COPY config/ ./config/
@@ -131,7 +131,7 @@ RUN --mount=type=secret,id=uv_index_token \
     TOKEN="$(cat /run/secrets/uv_index_token)" && \
     printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
     uv sync --frozen --no-dev --python 3.10 && \
-    uv pip install --python /app/.venv/bin/python cython setuptools wheel && \
+    uv pip install --python /app/.venv/bin/python "cython==3.2.8" setuptools wheel && \
     rm -f uv.toml
 
 COPY config/ ./config/
