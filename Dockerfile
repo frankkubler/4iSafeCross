@@ -151,7 +151,24 @@ COPY setup_cython.py .
 ENV TARGET_ARCH=arm64
 
 
-RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
+# Le build ARM64 tourne sous QEMU (binfmt) en CI : gcc et son linker y
+# segfaultent aleatoirement, sur un module au hasard et sans rapport avec le
+# code compile ("command '/usr/bin/aarch64-linux-gnu-gcc' failed with exit
+# code -11"). build_ext saute les extensions dont le .so est deja a jour :
+# relancer l'etape reprend donc la ou elle s'est arretee, au lieu de perdre
+# les ~20 min de compilation deja faites. Avant chaque reprise, les .so ecrits
+# au moment du crash sont supprimes : tronques, ils paraitraient a jour.
+RUN attempt=1; max=5; \
+    until /app/.venv/bin/python setup_cython.py build_ext --inplace; do \
+        attempt=$((attempt + 1)); \
+        if [ "$attempt" -gt "$max" ]; then \
+            echo ">>> Compilation Cython en echec apres $max tentatives" >&2; \
+            exit 1; \
+        fi; \
+        find src/ utils/ -name "*.so" -newermt '-120 seconds' -delete; \
+        echo ">>> Crash gcc sous QEMU - reprise, tentative $attempt/$max"; \
+        sleep 5; \
+    done && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
     rm -rf build/ *.c src/**/*.c utils/**/*.c

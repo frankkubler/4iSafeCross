@@ -41,10 +41,17 @@ def create_extensions():
 
     TARGET_ARCH = os.environ.get("TARGET_ARCH", "amd64")
 
+    # ARM64 : le build CI tourne sous QEMU (binfmt), ou gcc et son linker
+    # segfaultent aleatoirement (setup.py -> "failed with exit code -11") sur
+    # les gros fichiers C generes par Cython. -O2 au lieu de -O3 et -g0 (pas
+    # d'infos de debug) reduisent nettement le travail et l'empreinte memoire
+    # du compilateur, donc la probabilite de crash. Le gain de -O3 est de
+    # toute facon negligeable ici : le code genere est presque uniquement des
+    # appels a l'API CPython.
     if TARGET_ARCH == "arm64":
-        ARCH_FLAGS = ["-march=armv8-a"]
+        ARCH_FLAGS = ["-march=armv8-a", "-O2", "-g0"]
     else:
-        ARCH_FLAGS = ["-march=x86-64-v2"]
+        ARCH_FLAGS = ["-march=x86-64-v2", "-O3", "-g0"]
 
     for filepath in python_files:
         # Convertir le chemin en nom de module
@@ -55,7 +62,7 @@ def create_extensions():
             Extension(
                 module_name,
                 [filepath],
-                extra_compile_args=['-O3'] + ARCH_FLAGS,
+                extra_compile_args=ARCH_FLAGS,
                 language='c'
             )
         )
