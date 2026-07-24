@@ -20,7 +20,7 @@ Ce document décrit le pipeline `.gitlab-ci.yml` utilisé pour compiler et publi
 
 ### Stage 2 : build:docker:arm64
 
-- Émulation ARM64 via QEMU (`multiarch/qemu-user-static`)
+- Émulation ARM64 via QEMU (`tonistiigi/binfmt`, l'installeur binfmt officiel de buildx)
 - Build multi-stage : `nvcr.io/nvidia/cuda:13.2.1-devel-ubuntu24.04` (builder) → `nvcr.io/nvidia/cuda:13.2.1-runtime-ubuntu24.04` (image finale) — JetPack 7.2 / L4T r39.2.0 (plus d'image `l4t-jetpack` pour JetPack 7)
 - Plugins GStreamer NVIDIA (`nvv4l2decoder`, `nvvidconv`) installés via `nvidia-l4t-gstreamer` depuis le dépôt apt Jetson r39.2 (`common` + `som`)
 - Compilation Cython avec `-OO` → tous les `.py` deviennent des `.so`

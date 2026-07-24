@@ -53,7 +53,9 @@ build:docker:arm64:
     - docker system prune -af --volumes || true
     - df -h
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+    # binfmt officiel buildx (QEMU 9, image statique) — multiarch/qemu-user-static
+    # est abandonné (QEMU 7) et son layer usr-merge plante l'extraction containerd
+    - docker run --rm --privileged tonistiigi/binfmt --install arm64
   script:
     - echo "Construction de l'image Docker ARM64..."
     - docker buildx create --use --name multiarch || docker buildx use multiarch
@@ -70,7 +72,6 @@ build:docker:arm64:
       docker buildx build \
         --platform linux/arm64 \
         --target final-arm64 \
-        --build-arg PYTHON_VERSION=3.10 \
         --build-arg UV_INDEX_USERNAME=${GITLAB_DEPLOY_USERNAME_38} \
         --secret id=uv_index_token,env=GITLAB_DEPLOY_TOKEN_38 \
         --tag ${IMAGE_NAME}:${IMAGE_TAG}-arm64 \
@@ -115,7 +116,6 @@ build:docker:amd64:
       docker buildx build \
         --platform linux/amd64 \
         --target final-amd64 \
-        --build-arg PYTHON_VERSION=3.10 \
         --build-arg UV_INDEX_USERNAME=${GITLAB_DEPLOY_USERNAME_38} \
         --secret id=uv_index_token,env=GITLAB_DEPLOY_TOKEN_38 \
         --tag ${IMAGE_NAME}:${IMAGE_TAG}-amd64 \
