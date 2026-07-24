@@ -123,12 +123,27 @@ Le build Docker ARM64 avec QEMU prend ~15–25 min.
 
 ### Espace disque insuffisant
 
+Le pipeline nettoie automatiquement en `after_script` : `docker buildx prune --keep-storage 10GB` (cache de build borné) et `docker image prune -f` (images sans tag).
+
+Si cela ne suffit pas, sur le serveur Runner :
+
 ```bash
-# Sur le serveur Runner
-docker system prune -af --volumes
+docker buildx prune -af          # tout le cache de build (builds suivants plus lents)
+docker image prune -a --filter "until=168h"
 ```
 
-Le pipeline nettoie automatiquement via `docker system prune -f` en `after_script`.
+> ⚠️ **Ne jamais lancer `docker system prune -af --volumes` pendant qu'un pipeline tourne.**
+> Le Runner utilise le daemon Docker de l'hôte (socket monté), partagé par tous les jobs :
+> la garbage collection de containerd supprime les blobs en cours de téléchargement des
+> autres jobs, qui échouent alors sur `failed to Lchown ... no such file or directory` ou
+> `failed commit on ref ... no such file or directory`. `--volumes` supprime en plus les
+> volumes des autres services de l'hôte.
+
+### Jobs de build sérialisés
+
+`build:docker:arm64` et `build:docker:amd64` partagent le `resource_group: docker-host` :
+ils ne tournent jamais en parallèle, pour la même raison (daemon Docker unique et partagé).
+Le pipeline complet dure donc la somme des deux builds.
 
 ### Logs du pipeline
 
