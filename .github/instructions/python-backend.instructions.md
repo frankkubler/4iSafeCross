@@ -1,5 +1,5 @@
 ---
-applyTo: "{app.py,run.py,src/**/*.py,utils/**/*.py,test_*.py}"
+applyTo: "{run.py,src/**/*.py,utils/**/*.py,test_*.py}"
 description: "Use when editing Python backend code in 4iSafeCross: Flask routes, inference pipeline, alert/failsafe logic, relay control, and detection data contracts."
 ---
 # Python Backend Instructions — 4iSafeCross

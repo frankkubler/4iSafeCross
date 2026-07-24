@@ -1,6 +1,6 @@
 # Rapport d'audit de maturité cybersécurité — 4iSafeCross
 
-**Date d'audit** : 26 mai 2026 — **Révision 2** : 27 mai 2026 (air-gap + accès physique direct uniquement + dépôt privé)  
+**Date d'audit** : 26 mai 2026 — **Révision 2** : 27 mai 2026 (air-gap + accès physique direct uniquement + dépôt privé) — **Révision 3** : 24 juillet 2026 (migration base image JetPack 7.2 / CUDA 13.2, voir Q3)  
 **Dépôt** : `frankkubler/4iSafeCross` — branche `main`  
 **Méthode** : Analyse statique du dépôt GitHub (code source, configuration, CI/CD, documentation)  
 **Référentiel** : ANSSI, OWASP ML Security Top 10, AI Act UE 2024/1689, NIST AI RMF  
@@ -113,7 +113,9 @@ Le système relève **probablement de la catégorie Haut Risque** (AI Act Art. 6
 - `uv.lock` : verrouillage de toutes les dépendances transitives avec hachages SHA256 — traçabilité partielle ✅
 - `pyproject.toml` : 9 dépendances directes déclarées (aiogram, flask, waitress, opencv-python, psutil, requests, yoctopuce, nuitka, gunicorn).
 - `Dockerfile` L.1 : `FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0` — image de base épinglée à un tag précis ✅
+  *Révision 3 (24 juil. 2026)* : bases migrées vers `nvcr.io/nvidia/cuda:13.2.1-devel-ubuntu24.04` (builder) et `:13.2.1-runtime-ubuntu24.04` (finale) — JetPack 7.2 / L4T r39.2.0, toujours épinglées à un tag précis ✅. Ajout du dépôt apt `repo.download.nvidia.com/jetson` (r39.2, clé GPG NVIDIA) pour `nvidia-l4t-gstreamer`.
 - `Dockerfile` L.33 : `curl -LsSf https://astral.sh/uv/install.sh | sh` — téléchargement **sans vérification de hash** ⚠️
+  *Révision 3 (24 juil. 2026)* : résolu — `uv` est copié depuis l'image épinglée `ghcr.io/astral-sh/uv:0.11.16` (`COPY --from`), plus de `curl | sh` dans le `Dockerfile`.
 
 **Lacunes :**
 - ❌ `.gitlab-ci.yml` : pipeline uniquement `build` + `release` — aucun job Trivy, pip-audit, Safety, Dependabot.
@@ -123,7 +125,7 @@ Le système relève **probablement de la catégorie Haut Risque** (AI Act Art. 6
 
 **Recommandation (Moyenne urgence)** :
 1. Ajouter dans `.gitlab-ci.yml` un job `security:scan` avec `trivy image` + `pip-audit`.
-2. Remplacer `curl | sh` par un téléchargement avec vérification de hash dans le `Dockerfile`.
+2. ~~Remplacer `curl | sh` par un téléchargement avec vérification de hash dans le `Dockerfile`.~~ ✅ Résolu (Révision 3) : `COPY --from` d'une image `uv` épinglée.
 
 ---
 

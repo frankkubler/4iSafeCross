@@ -15,7 +15,7 @@ Validate core API availability, failsafe route health, and upstream inference in
 
 ## When to Use
 
-- After modifying [app.py](app.py), [src/inference.py](src/inference.py), [src/alert_manager.py](src/alert_manager.py)
+- After modifying [src/web/](src/web/) routes, [src/core/](src/core/) modules, [src/inference.py](src/inference.py), [src/alert_manager.py](src/alert_manager.py)
 - Before opening a PR
 - After config/runtime changes affecting API behavior
 

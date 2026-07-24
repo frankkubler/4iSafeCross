@@ -24,8 +24,8 @@ jobs:
 
       - name: Run Bandit SAST
         run: |
-          bandit -r src/ utils/ app.py -ll -f json -o bandit-report.json || true
-          bandit -r src/ utils/ app.py -ll
+          bandit -r src/ utils/ run.py -ll -f json -o bandit-report.json || true
+          bandit -r src/ utils/ run.py -ll
 
       - name: Run pip-audit
         run: |
@@ -125,16 +125,16 @@ jobs:
               --include-data-file=.venv/lib/python3.10/site-packages/yoctopuce/cdll/libyapi-aarch64.so=yoctopuce/cdll/libyapi-aarch64.so \
               --output-dir=dist \
               --output-filename=4isafecross \
-              app.py
-            
+              run.py
+
             # Vérification de l'exécutable
             ls -lh dist/
-            file dist/4isafecross || file dist/app.dist/app || true
-            
+            file dist/4isafecross || file dist/run.dist/run || true
+
             # Créer une archive pour faciliter le déploiement
             cd dist
-            if [ -d "app.dist" ]; then
-              tar -czf 4isafecross-arm64-jetson.tar.gz app.dist/
+            if [ -d "run.dist" ]; then
+              tar -czf 4isafecross-arm64-jetson.tar.gz run.dist/
             else
               tar -czf 4isafecross-arm64-jetson.tar.gz 4isafecross
             fi

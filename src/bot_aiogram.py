@@ -10,16 +10,18 @@ import time
 import io
 import psutil
 import platform
-import sys
 from utils.utils import get_non_local_ips, get_docker_info, get_service_status
 
 
 class BotThread():
 
-    def __init__(self, overwrite_file):
+    def __init__(self, overwrite_file, state=None):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.overwrite_file = overwrite_file
+        # AppState injecté par le bootstrap ; manager/cam_ids sont remplis
+        # plus tard dans la séquence de boot, lecture paresseuse dans /take.
+        self._state = state
         self.message_save = None  # Initialiser à None
         self.last_detection_sent = 0  # timestamp de la dernière détection envoyée
         self.bot = Bot(token=TOKEN)  # Initialisation unique ici
@@ -152,15 +154,11 @@ class BotThread():
 
         @self.dp.message(Command("take"))
         async def handle_take_command(message: types.Message):
-            # Import dynamique pour éviter les cycles
+            # Lecture paresseuse du state : manager/cam_ids ne sont remplis
+            # qu'après la phase caméras du boot (src/core/bootstrap.py)
             try:
-                if 'app' in sys.modules:
-                    app_module = sys.modules['app']
-                else:
-                    import app as app_module
-                manager = app_module.manager
-                # ...existing code...
-                CAM_IDS = app_module.CAM_IDS
+                manager = self._state.manager
+                CAM_IDS = self._state.cam_ids
                 for cid in range(len(CAM_IDS)):
                     frame = manager.get_frame_array(CAM_IDS[cid])
                     if frame is not None:

@@ -21,7 +21,8 @@ Ce document décrit le pipeline `.gitlab-ci.yml` utilisé pour compiler et publi
 ### Stage 2 : build:docker:arm64
 
 - Émulation ARM64 via QEMU (`multiarch/qemu-user-static`)
-- Build multi-stage : `nvcr.io/nvidia/l4t-jetpack:r36.4.0`
+- Build multi-stage : `nvcr.io/nvidia/cuda:13.2.1-devel-ubuntu24.04` (builder) → `nvcr.io/nvidia/cuda:13.2.1-runtime-ubuntu24.04` (image finale) — JetPack 7.2 / L4T r39.2.0 (plus d'image `l4t-jetpack` pour JetPack 7)
+- Plugins GStreamer NVIDIA (`nvv4l2decoder`, `nvvidconv`) installés via `nvidia-l4t-gstreamer` depuis le dépôt apt Jetson r39.2 (`common` + `som`)
 - Compilation Cython avec `-OO` → tous les `.py` deviennent des `.so`
 - Push des tags `:<sha>` et `:latest` dans le registry GitLab
 
@@ -74,7 +75,7 @@ registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest
 
 L'image contient :
 - Les binaires Cython `.so` (code source supprimé)
-- Le runtime Python 3.10 + dépendances GStreamer/NVIDIA
+- Le runtime Python 3.12 (Ubuntu 24.04) + dépendances GStreamer/NVIDIA
 - `run.py` comme point d'entrée (non compilé, importe `app` depuis le `.so`)
 
 ## Déploiement sur le Jetson

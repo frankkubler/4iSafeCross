@@ -98,6 +98,45 @@
             margin-bottom: 6px;
         }
 
+        /* ── Barres de métriques (panneau debug) ── */
+        .metric-group-title {
+            font-weight: 700;
+            font-size: 0.70rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--accent);
+            margin: 12px 0 6px;
+        }
+        .metric-group-title:first-child { margin-top: 0; }
+        .metric { margin-bottom: 8px; }
+        .metric-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.78rem;
+            margin-bottom: 3px;
+        }
+        .metric-head .val { color: var(--text-secondary); white-space: nowrap; }
+        .metric-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: var(--bg-elevated);
+            overflow: hidden;
+        }
+        .metric-bar > span {
+            display: block;
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        #debug-raw {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.76rem;
+        }
+
         /* ── Légende postures (horizontale, sous le header) ── */
         .legend-bar {
             display: flex;
@@ -521,22 +560,92 @@
                 statsInterval = null;
             }
         }
+        // Barre de métrique : label + valeur formatée + barre colorée par seuil.
+        // N'insère que des nombres/chaînes contrôlées → innerHTML sûr.
+        function metricBar(label, valueText, pct) {
+            const p = Math.max(0, Math.min(100, Number(pct) || 0));
+            let color = 'var(--status-ok)';
+            if (p >= 85) color = 'var(--status-ko)';
+            else if (p >= 60) color = '#f59e0b';
+            return '<div class="metric">'
+                + '<div class="metric-head"><span>' + label + '</span>'
+                + '<span class="val">' + valueText + '</span></div>'
+                + '<div class="metric-bar"><span style="width:' + p + '%;background:' + color + '"></span></div>'
+                + '</div>';
+        }
+        const fmt = (v, unit) => (v == null ? '?' : v + (unit || ''));
+
         function updateDebugPanel() {
             fetch('/debug_info')
                 .then(r => r.json())
                 .then(data => {
                     let html = '';
-                    html += 'RAM utilisée : ' + data.ram_used + ' / ' + data.ram_total + ' MB\n';
-                    html += 'CPU utilisé : ' + data.cpu_percent + ' %\n';
-                    html += 'Disque utilisé : ' + data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_percent + ' %)\n';
-                    html += 'Adresse(s) IP : ' + data.ip + '\n';
-                    html += 'Load average : ' + data.load_avg + '\n';
-                    html += 'Docker : ' + data.docker_info + '\n';
-                    html += 'Service 4isafecross :\n' + data.service_status;
-                    document.getElementById('debug-panel-content').textContent = html;
+
+                    // ── Application (empreinte réelle du process) ──
+                    html += '<div class="metric-group-title">Application</div>';
+                    html += metricBar('CPU',
+                        fmt(data.app_cpu_percent_norm, ' %') + ' · ' + fmt(data.app_cpu_percent, ' % cumulé'),
+                        data.app_cpu_percent_norm);
+                    const hostTotal = data.host_ram_total_mb || data.ram_total || 1;
+                    html += metricBar('Mémoire (RSS)',
+                        fmt(data.app_ram_mb, ' MB') + ' · pic ' + fmt(data.app_ram_peak_mb, ' MB'),
+                        (data.app_ram_mb || 0) / hostTotal * 100);
+                    html += '<div class="metric"><div class="metric-head"><span>Threads</span>'
+                        + '<span class="val">' + fmt(data.app_threads) + '</span></div></div>';
+
+                    // ── Conteneur (cgroup) — seulement si conteneurisé ──
+                    if (data.container) {
+                        const c = data.container;
+                        html += '<div class="metric-group-title">Conteneur</div>';
+                        if (c.cpu_percent != null) {
+                            html += metricBar('CPU',
+                                fmt(c.cpu_percent_norm, ' %') + ' · ' + fmt(c.cpu_percent, ' % cumulé'),
+                                c.cpu_percent_norm);
+                        }
+                        if (c.mem_used_mb != null) {
+                            const memText = c.mem_limit_mb != null
+                                ? c.mem_used_mb + ' / ' + c.mem_limit_mb + ' MB'
+                                : c.mem_used_mb + ' MB (sans limite)';
+                            const memPct = c.mem_percent != null ? c.mem_percent : c.mem_used_mb / hostTotal * 100;
+                            html += metricBar('Mémoire', memText, memPct);
+                        }
+                    }
+
+                    // ── GPU (Jetson / AMD / Intel) — si détecté ──
+                    if (data.gpu) {
+                        const g = data.gpu;
+                        html += '<div class="metric-group-title">GPU (' + g.backend + ')</div>';
+                        if (g.gpu_percent != null) {
+                            let val = g.gpu_percent + ' %';
+                            if (g.gpu_temp_c != null) val += ' · ' + g.gpu_temp_c + ' °C';
+                            if (g.freq_mhz != null) val += ' · ' + g.freq_mhz
+                                + (g.freq_max_mhz != null ? '/' + g.freq_max_mhz : '') + ' MHz';
+                            html += metricBar('Charge', val, g.gpu_percent);
+                        } else {
+                            html += '<div class="metric"><div class="metric-head"><span>Charge</span>'
+                                + '<span class="val">' + (g.note || 'non disponible') + '</span></div></div>';
+                        }
+                    }
+
+                    // ── Hôte (contexte machine) ──
+                    html += '<div class="metric-group-title">Hôte</div>';
+                    html += metricBar('CPU', fmt(data.cpu_percent, ' %'), data.cpu_percent);
+                    html += metricBar('Mémoire', fmt(data.ram_used) + ' / ' + fmt(data.ram_total, ' MB'), data.host_ram_percent);
+                    html += metricBar('Disque', fmt(data.disk_used) + ' / ' + fmt(data.disk_total, ' GB'), data.disk_percent);
+
+                    document.getElementById('debug-metrics').innerHTML = html;
+
+                    // Chaînes externes (systemctl/docker/IP) → textContent, jamais innerHTML.
+                    let raw = '';
+                    raw += 'Load average : ' + data.load_avg + '\n';
+                    raw += 'Adresse(s) IP : ' + data.ip + '\n';
+                    raw += 'Docker : ' + data.docker_info + '\n';
+                    raw += 'Service 4isafecross :\n' + data.service_status;
+                    document.getElementById('debug-raw').textContent = raw;
                 })
                 .catch(() => {
-                    document.getElementById('debug-panel-content').textContent = 'Erreur lors de la récupération des infos debug.';
+                    document.getElementById('debug-metrics').textContent = 'Erreur lors de la récupération des infos debug.';
+                    document.getElementById('debug-raw').textContent = '';
                 });
         }
 
@@ -554,6 +663,7 @@
                 html += '<div class="stats-title">📊 CACHE DE FRAMES</div>';
                 html += `Durée cache: ${cacheData.cache_duration_ms}ms | Qualité: ${cacheData.frame_quality}%\n`;
                 html += `Entrées actives: ${cacheData.total_entries} | Taille totale: ${cacheData.total_size_kb} KB\n`;
+                html += `Encodage JPEG: ${cacheData.average_generation_time_ms}ms/frame | Hit rate: ${cacheData.hit_rate_percent}% (${cacheData.total_requests} req)\n`;
 
                 for (const [camId, camCache] of Object.entries(cacheData.cameras || {})) {
                     const status = camCache.is_fresh ? '✅' : '⏰';
@@ -686,7 +796,10 @@
     <!-- ── Panels Debug et Stats (flottants, cachés par défaut) ── -->
     <div id="debug-panel">
         <button class="close-btn" onclick="hideDebugPanel()">×</button>
-        <div id="debug-panel-content">Chargement...</div>
+        <div id="debug-panel-content">
+            <div id="debug-metrics">Chargement...</div>
+            <div id="debug-raw"></div>
+        </div>
     </div>
     <div id="stats-panel">
         <button class="close-btn" onclick="hideStatsPanel()">×</button>
@@ -833,7 +946,7 @@
     }
     </script>
                 <div class="cam-video-box" id="cam_box_{{ cam.idx }}">
-                    <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
+                    <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('stream.video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
                     <span id="placeholder_{{ cam.idx }}">Vidéo masquée</span>
                 </div>
                 {# Les contrôles luminosité/exposition sont masqués #}

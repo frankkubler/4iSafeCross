@@ -10,7 +10,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # Importer les fonctions à tester
-from app import get_zone_for_detection
+from src.core.geometry import get_zone_for_detection
 
 
 def test_get_zone_for_detection():
