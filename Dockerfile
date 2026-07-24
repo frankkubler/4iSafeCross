@@ -79,20 +79,25 @@ RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
 
 
 # ═══════════════════════════════════════════════════════════════════
-# BUILDER ARM64 (Jetson Orin NX)
+# BUILDER ARM64 (Jetson Orin NX - JetPack 7.2 / L4T r39.2.0)
+# Pas d'image l4t-jetpack pour JetPack 7 : NVIDIA unifie sur les
+# images CUDA SBSA multi-arch (Ubuntu 24.04, CUDA 13.2)
 # ═══════════════════════════════════════════════════════════════════
 FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:0.11.16 AS uv-binary-arm64
 
 
-FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS builder-arm64
+FROM --platform=linux/arm64 nvcr.io/nvidia/cuda:13.2.1-devel-ubuntu24.04 AS builder-arm64
 
 
 WORKDIR /app
 
 
+ENV DEBIAN_FRONTEND=noninteractive
+
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-dev \
+    python3.12 \
+    python3.12-dev \
     python3-pip \
     build-essential \
     gcc \
@@ -102,7 +107,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libglib2.0-0 \
     libglib2.0-dev \
-    libgirepository1.0-dev \
+    libgirepository-1.0-dev \
     gobject-introspection \
     gir1.2-gstreamer-1.0 \
     gstreamer1.0-tools \
@@ -112,7 +117,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libcairo2-dev \
-    python3-dev \
     libsm6 \
     libxrender1 \
     libxext6 \
@@ -130,7 +134,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=secret,id=uv_index_token \
     TOKEN="$(cat /run/secrets/uv_index_token)" && \
     printf '[[index]]\nname = "gitlab-license-validator"\nurl = "https://%s:%s@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"\nexplicit = true\n' "${UV_INDEX_USERNAME}" "$TOKEN" > uv.toml && \
-    uv sync --frozen --no-dev --python 3.10 && \
+    uv sync --frozen --no-dev --python 3.12 && \
     uv pip install --python /app/.venv/bin/python "cython==3.2.8" setuptools wheel && \
     rm -f uv.toml
 
@@ -150,7 +154,7 @@ ENV TARGET_ARCH=arm64
 RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
-    rm -rf build/ *.c src/**/*.c utils/**/*.
+    rm -rf build/ *.c src/**/*.c utils/**/*.c
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -230,12 +234,17 @@ CMD ["/app/.venv/bin/python", "run.py"]
 
 
 # ═══════════════════════════════════════════════════════════════════
-# STAGE FINAL ARM64 (Jetson Orin NX - NVIDIA JetPack)
+# STAGE FINAL ARM64 (Jetson Orin NX - JetPack 7.2 / L4T r39.2.0)
+# Base CUDA 13.2 Ubuntu 24.04 ; les plugins GStreamer NVIDIA
+# (nvv4l2decoder, nvvidconv) viennent du dépôt apt Jetson r39.2
 # ═══════════════════════════════════════════════════════════════════
-FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS final-arm64
+FROM nvcr.io/nvidia/cuda:13.2.1-runtime-ubuntu24.04 AS final-arm64
 
 
 WORKDIR /app
+
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 
 COPY --from=builder-arm64 /root/.local /root/.local
@@ -243,8 +252,8 @@ COPY --from=builder-arm64 /app/.venv /app/.venv
 
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    libglib2.0-0 \
+    python3.12 \
+    libglib2.0-0t64 \
     libgirepository-1.0-1 \
     libcairo2 \
     libcairo-gobject2 \
@@ -259,7 +268,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libgl1 \
     libgomp1 \
-    libgtk-3-0 \
+    libgtk-3-0t64 \
     libavcodec-dev \
     libavformat-dev \
     libswscale-dev \
@@ -267,6 +276,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatlas-base-dev \
     libhdf5-dev \
     iputils-ping \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+
+# Plugins GStreamer NVIDIA (nvv4l2decoder, nvvidconv) depuis le dépôt L4T r39.2
+# (common + som). Le fichier .nv-l4t-disable-boot-fw-update-in-preinstall permet
+# d'installer les paquets BSP hors du Jetson (le preinst saute la détection de
+# plateforme et la vérification rootfs A/B).
+RUN curl -fsSL https://repo.download.nvidia.com/jetson/jetson-ota-public.asc \
+    -o /etc/apt/trusted.gpg.d/jetson-ota-public.asc \
+    && printf 'deb https://repo.download.nvidia.com/jetson/common r39.2 main\ndeb https://repo.download.nvidia.com/jetson/som r39.2 main\n' \
+    > /etc/apt/sources.list.d/nvidia-l4t.list \
+    && mkdir -p /opt/nvidia/l4t-packages \
+    && touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    nvidia-l4t-gstreamer \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -287,6 +314,8 @@ ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
+# Nécessaire pour que le runtime nvidia monte les libs vidéo (nvv4l2, NVENC/NVDEC)
+ENV NVIDIA_DRIVER_CAPABILITIES=all
 
 
 EXPOSE 5050
