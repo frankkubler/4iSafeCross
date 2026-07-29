@@ -80,13 +80,15 @@ RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
 
 # ═══════════════════════════════════════════════════════════════════
 # BUILDER ARM64 (Jetson Orin NX - JetPack 7.2 / L4T r39.2.0)
-# Pas d'image l4t-jetpack pour JetPack 7 : NVIDIA unifie sur les
-# images CUDA SBSA multi-arch (Ubuntu 24.04, CUDA 13.2)
+# Ubuntu 24.04 nu et non l'image CUDA : la compilation Cython n'appelle
+# que gcc et aucune dependance du projet ne se lie a CUDA. Cela evite de
+# tirer les ~5 Go de l'image devel sous QEMU en CI. C'est le stage final
+# qui a besoin de CUDA au runtime, pas celui-ci.
 # ═══════════════════════════════════════════════════════════════════
 FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:0.11.16 AS uv-binary-arm64
 
 
-FROM --platform=linux/arm64 nvcr.io/nvidia/cuda:13.2.1-devel-ubuntu24.04 AS builder-arm64
+FROM --platform=linux/arm64 ubuntu:24.04 AS builder-arm64
 
 
 WORKDIR /app
@@ -204,12 +206,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libgomp1 \
     libgtk-3-0t64 \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libtbb-dev \
-    libatlas-base-dev \
-    libhdf5-dev \
     libva2 \
     libva-drm2 \
     libva-x11-2 \
@@ -221,7 +217,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 
-COPY --from=builder-amd64 /root/.local /root/.local
 COPY --from=builder-amd64 /app/.venv /app/.venv
 COPY --from=builder-amd64 /app/config/ ./config/
 COPY --from=builder-amd64 /app/templates/ ./templates/
@@ -235,7 +230,7 @@ COPY --from=builder-amd64 /app/run.py .
 RUN mkdir -p /app/logs /app/data
 
 
-ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
@@ -264,10 +259,9 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 
 
-COPY --from=builder-arm64 /root/.local /root/.local
-COPY --from=builder-arm64 /app/.venv /app/.venv
-
-
+# Les couches apt (dont le pull BSP de ~130 Mo) viennent avant la copie du venv :
+# dans l'ordre inverse, la moindre modification de dependance Python les
+# invalidait toutes et relancait l'installation complete sous QEMU.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     libglib2.0-0t64 \
@@ -286,12 +280,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libgomp1 \
     libgtk-3-0t64 \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libtbb-dev \
-    libatlas-base-dev \
-    libhdf5-dev \
     iputils-ping \
     ca-certificates \
     curl \
@@ -315,6 +303,7 @@ RUN curl -fsSL https://repo.download.nvidia.com/jetson/jetson-ota-public.asc \
     && apt-get clean
 
 
+COPY --from=builder-arm64 /app/.venv /app/.venv
 COPY --from=builder-arm64 /app/config/ ./config/
 COPY --from=builder-arm64 /app/templates/ ./templates/
 COPY --from=builder-arm64 /app/static/ ./static/
@@ -327,7 +316,7 @@ COPY --from=builder-arm64 /app/run.py .
 RUN mkdir -p /app/logs /app/data
 
 
-ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
