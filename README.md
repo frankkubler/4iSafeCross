@@ -175,6 +175,43 @@ CameraManager  ──── frame brute (1080p)
      └── gen_frames()            # Flux MJPEG vers interface web
 ```
 
+### Mesure des latences du pipeline
+
+Chaque `InferenceServerThread` chronomètre la décomposition d'un aller-retour
+d'inférence et l'expose sous la clé `latency` de `GET /api/inference/stats`,
+par caméra :
+
+| phase | mesure | côté |
+|---|---|---|
+| `serialize` | `np.save()` de la frame | client |
+| `uplink` | émission → arrivée serveur (transport montant + attente de file) | — |
+| `parse` | décodage multipart par FastAPI | serveur |
+| `deserialize` | `np.load()` de la frame | serveur |
+| `detect` | inférence TensorRT de détection | serveur |
+| `pose` | inférence TensorRT des keypoints | serveur |
+| `downlink` | réponse serveur → réception | — |
+| `roundtrip` | total mesuré par `requests.post()` | client |
+
+Les phases internes se somment exactement au `roundtrip` : aucun temps n'échappe
+à la découpe. `transport_overhead_p50_ms` agrège tout ce qui n'est pas de
+l'inférence, c'est-à-dire le budget qu'un transport IPC (ZeroMQ) supprimerait ;
+`inference_p50_ms` est incompressible à modèle égal.
+
+Les phases serveur proviennent du champ `timings` renvoyé par
+`inf_jetson_yolo`. Si ce serveur est dans une version antérieure qui ne l'expose
+pas, seules `serialize` et `roundtrip` sont renseignées — sans erreur.
+
+Pour lire les deux extrémités d'un coup :
+
+```sh
+python3 scripts/latency_report.py             # rapport complet
+python3 scripts/latency_report.py --reset     # vide la fenêtre serveur
+```
+
+Protocole pour mesurer la contention entre caméras : relever une première fois
+avec une seule caméra en détection, puis `--reset` et relever avec les deux.
+L'écart sur `uplink` isole le temps d'attente de file, distinct du transport.
+
 ### Modes de détection (`DETECTION` dans config.ini)
 
 | Mode | Classes surveillées | Usage |

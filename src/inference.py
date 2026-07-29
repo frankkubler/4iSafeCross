@@ -5,6 +5,7 @@ import logging
 import requests
 import io
 import cv2
+from collections import deque
 from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
                              DETECTION, POSE_ENABLED,
@@ -22,9 +23,11 @@ from src.pose_analyser import PoseAnalyzer
 class InferenceServerThread(threading.Thread):
     def __init__(self, home_dir, get_frame_func,
                  white_pixels_threshold=MOTIONTHRESHOLD,
-                 detection_callback=None, stop_event=None, masks=None):
+                 detection_callback=None, stop_event=None, masks=None,
+                 cam_id=None):
         super().__init__()
         self.home_dir = home_dir
+        self.cam_id = cam_id  # Index caméra, pour attribuer les mesures de latence
         self.get_frame_func = get_frame_func  # Fonction pour obtenir la frame courante
         self.detection_callback = detection_callback  # Callback pour envoyer les résultats
         self.stop_event = stop_event or threading.Event()
@@ -83,6 +86,30 @@ class InferenceServerThread(threading.Thread):
         # 🚀 Optimisation sleep adaptatif
         self.consecutive_skips = 0
         self.last_motion_time = 0
+
+        # ── Instrumentation des latences (mesure avant décision ZeroMQ) ──────
+        # Découpe le coût d'un aller-retour d'inférence pour distinguer ce qui
+        # relève du transport HTTP (supprimable par un passage à ZeroMQ) de ce
+        # qui relève de l'inférence TensorRT (incompressible à modèle égal).
+        #
+        # Client et serveur tournent sur la même Jetson (network_mode: host),
+        # donc les horloges sont communes et les timestamps comparables :
+        #
+        #   serialize  np.save() de la frame            — côté client
+        #   uplink     émission → arrivée serveur       — transport montant
+        #   parse      décodage multipart FastAPI       — côté serveur
+        #   deserial.  np.load() de la frame            — côté serveur
+        #   detect     inférence TensorRT détection     — côté serveur
+        #   pose       inférence TensorRT keypoints     — côté serveur
+        #   downlink   réponse serveur → réception      — transport descendant
+        #   roundtrip  total mesuré par requests.post()
+        self.timing_window = 200
+        self.timings = {
+            phase: deque(maxlen=self.timing_window)
+            for phase in ("serialize", "uplink", "parse", "deserialize",
+                          "detect", "pose", "downlink", "roundtrip")
+        }
+        self.timings_lock = threading.Lock()
 
     @property
     def motion(self):
@@ -160,6 +187,91 @@ class InferenceServerThread(threading.Thread):
         return hash(small.tobytes())
 
 
+    def _record_timings(self, server_timings, serialize_ms, t_send, t_received):
+        """Enregistre la décomposition de latence d'un aller-retour d'inférence.
+
+        Args:
+            server_timings: Dict `timings` renvoyé par le serveur d'inférence,
+                ou None si le serveur ne l'expose pas (ancienne version).
+            serialize_ms: Durée du np.save() côté client, en ms.
+            t_send: Timestamp d'émission de la requête.
+            t_received: Timestamp de réception de la réponse.
+        """
+        sample = {
+            "serialize": serialize_ms,
+            "roundtrip": (t_received - t_send) * 1000,
+        }
+
+        if isinstance(server_timings, dict):
+            # Un cache hit serveur ne reflète pas le coût d'inférence réel :
+            # on garde le transport, on écarte detect/pose.
+            cache_hit = server_timings.get("cache_hit", False)
+            sample["uplink"] = server_timings.get("wait")
+            sample["parse"] = server_timings.get("parse")
+            sample["deserialize"] = server_timings.get("deserialize")
+            if not cache_hit:
+                sample["detect"] = server_timings.get("detect")
+                sample["pose"] = server_timings.get("pose")
+            t_reply = server_timings.get("t_reply")
+            if t_reply:
+                sample["downlink"] = (t_received - t_reply) * 1000
+
+        with self.timings_lock:
+            for phase, value in sample.items():
+                if value is not None and phase in self.timings:
+                    self.timings[phase].append(value)
+
+    def get_timing_stats(self):
+        """Agrège les latences par phase en p50/p95 (ms) sur la fenêtre courante."""
+        with self.timings_lock:
+            snapshot = {phase: sorted(values) for phase, values in self.timings.items()}
+
+        def percentile(values, fraction):
+            if not values:
+                return None
+            index = min(int(fraction * len(values)), len(values) - 1)
+            return round(values[index], 2)
+
+        stats = {}
+        for phase, values in snapshot.items():
+            if not values:
+                stats[phase] = {"count": 0}
+                continue
+            stats[phase] = {
+                "count": len(values),
+                "p50": percentile(values, 0.50),
+                "p95": percentile(values, 0.95),
+                "mean": round(sum(values) / len(values), 2),
+            }
+
+        # Budget transport : ce qu'un passage à ZeroMQ pourrait supprimer.
+        transport_p50 = sum(
+            stats[phase].get("p50") or 0
+            for phase in ("serialize", "uplink", "parse", "deserialize", "downlink")
+        )
+        inference_p50 = sum(
+            stats[phase].get("p50") or 0
+            for phase in ("detect", "pose")
+        )
+        # Le cycle complet = sérialisation (avant émission) + aller-retour.
+        # `roundtrip` seul exclut le np.save(), qui fait pourtant partie du
+        # coût que ZeroMQ supprimerait : c'est donc le mauvais dénominateur.
+        roundtrip_p50 = stats["roundtrip"].get("p50") or 0
+        serialize_p50 = stats["serialize"].get("p50") or 0
+        cycle_p50 = serialize_p50 + roundtrip_p50
+
+        return {
+            "phases": stats,
+            "transport_overhead_p50_ms": round(transport_p50, 2),
+            "inference_p50_ms": round(inference_p50, 2),
+            "roundtrip_p50_ms": roundtrip_p50,
+            "cycle_p50_ms": round(cycle_p50, 2),
+            "transport_share_pct": (
+                round(transport_p50 / cycle_p50 * 100, 1)
+                if cycle_p50 else None
+            ),
+        }
+
     def _call_detection_callback(self, result):
         """Appelle le callback de détection s'il est défini."""
         if self.detection_callback:
@@ -226,17 +338,25 @@ class InferenceServerThread(threading.Thread):
                 with io.BytesIO() as buffer:
                     np.save(buffer, frame, allow_pickle=True)
                     buffer.seek(0)
+                    payload = buffer.getvalue()
+                    serialize_ms = (time.time() - inference_start_time) * 1000
+                    t_send = time.time()
                     response = requests.post(
                         self.url,
-                        files={"frame": buffer.getvalue()},
+                        files={"frame": payload},
                         params={
                             "confidence": self.confidence_threshold,
                             "skip_pose": not self.pose_enabled,
+                            "t_send": t_send,
                         },
                         timeout=30,
                     )
+                t_received = time.time()
                 if response.status_code == 200:
-                    detections = response.json().get("detections", [])
+                    response_payload = response.json()
+                    detections = response_payload.get("detections", [])
+                    self._record_timings(response_payload.get("timings"),
+                                         serialize_ms, t_send, t_received)
                     inference_time = (time.time() - inference_start_time) * 1000  # en ms
                     self.logger.debug(f"⚡ Inférence IA: {inference_time:.1f}ms")
 
@@ -369,5 +489,6 @@ class InferenceServerThread(threading.Thread):
             "inference_fps": round(1.0 / self.min_inference_interval, 1),
             "time_saved_ms": self.inference_skip_count * 100,  # 100ms économisées par frame sautée
             "consecutive_skips": getattr(self, 'consecutive_skips', 0),
-            "avg_sleep_ms": round(avg_sleep * 1000, 1)
+            "avg_sleep_ms": round(avg_sleep * 1000, 1),
+            "latency": self.get_timing_stats(),
         }

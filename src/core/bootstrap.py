@@ -252,7 +252,8 @@ def create_application():
             get_frame_func=get_frame_func_factory(i),
             detection_callback=detection_callback_factory(i, state.main_loop),
             stop_event=stop_event,
-            masks=state.masks_by_camera.get(i, [])
+            masks=state.masks_by_camera.get(i, []),
+            cam_id=i,
         )
         thread.start()
         state.inference_threads[i] = thread
