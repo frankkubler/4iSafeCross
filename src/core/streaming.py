@@ -160,7 +160,7 @@ def gen_frames(cid):
                 if zone_names:
                     for i, zone_name in enumerate(zone_names):
                         # Utiliser le cache pour la couleur de la zone
-                        color = caches.zone_color_cache[cid].get(zone_name, (255, 0, 0))
+                        color = caches.get_zone_color(cid, zone_name)
                         cv2.putText(frame, zone_name, (x1, y2 + 20 + i * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
             # Ajout du point vert si mouvement détecté
             if motion:

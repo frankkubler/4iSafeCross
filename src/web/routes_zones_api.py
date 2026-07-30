@@ -42,10 +42,9 @@ def set_zones():
     zones = data.get('zones', [])
     state.alert_manager.set_zones(zones)
 
-    # Vider le cache des overlays car les zones ont changé
-    with caches.zone_overlay_lock:
-        caches.zone_overlay_cache.clear()
-        logger.debug("🗑️ Cache des overlays de zones vidé suite à modification des zones")
+    # Vider les caches de zones car la géométrie a changé
+    caches.invalidate_zones()
+    logger.debug("🗑️ Caches de zones vidés suite à modification des zones")
 
     return jsonify({'status': 'ok'})
 
@@ -92,12 +91,10 @@ def save_zones(cid):
         state.zones_by_camera = load_zones_by_camera_from_ini(ZONES_INI_PATH)
 
         # Vider tous les caches
-        with caches.zone_overlay_lock:
-            caches.zone_overlay_cache.clear()
+        caches.invalidate_zones()
         with caches.frame_cache_lock:
             caches.frame_cache.clear()
             caches.frame_cache_timestamp.clear()
-        caches.zone_color_cache.clear()
 
         # Mettre à jour l'alert manager avec toutes les zones (toutes caméras)
         state.alert_manager.set_zones(state.zones_by_camera)

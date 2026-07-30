@@ -46,6 +46,8 @@ class AppState:
         self.roi_display_enabled = {}
         self.mask_overlay_enabled = {}
         self.stream_display_width = {}
+        # Réinitialisé depuis TELEGRAM_ENABLED par bootstrap.create_application() :
+        # ce défaut ne vaut que pour la fenêtre avant boot.
         self.telegram_alert_enabled = False
 
         # Heartbeat fail-safe (voir src/core/failsafe.py)

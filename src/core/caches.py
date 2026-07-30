@@ -70,6 +70,36 @@ def get_zone_overlay(frame_shape, cid):
         return zone_overlay_cache[cache_key]
 
 
+DEFAULT_ZONE_COLOR = (255, 0, 0)  # BGR
+
+
+def get_zone_color(cid, zone_name):
+    """Couleur BGR d'une zone, avec repli sur DEFAULT_ZONE_COLOR.
+
+    Lecture défensive et sous verrou : zone_color_cache n'est peuplé que lors
+    d'un défaut de cache d'overlay, alors que invalidate_zones() le vide en
+    entier. Un accès direct par index depuis le générateur MJPEG lèverait donc
+    KeyError si une sauvegarde de zones s'intercale — ce qui tuait le générateur
+    et laissait le flux de la caméra figé jusqu'à reconnexion du navigateur.
+    """
+    with zone_overlay_lock:
+        return zone_color_cache.get(cid, {}).get(zone_name, DEFAULT_ZONE_COLOR)
+
+
+def invalidate_zones():
+    """Invalide les deux caches dérivés de la géométrie des zones.
+
+    Overlays et couleurs sont construits ensemble par get_zone_overlay() ; les
+    vider séparément laisse l'un des deux périmé. Renvoie le nombre d'overlays
+    supprimés (pour le retour des routes d'invalidation).
+    """
+    with zone_overlay_lock:
+        cleared = len(zone_overlay_cache)
+        zone_overlay_cache.clear()
+        zone_color_cache.clear()
+    return cleared
+
+
 def get_mask_overlay(frame_shape, cid):
     """Récupère le masque booléen depuis le cache ou le crée si nécessaire."""
     with mask_overlay_lock:

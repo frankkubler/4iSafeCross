@@ -202,11 +202,9 @@ def clear_frame_cache():
 
 @system_bp.route('/clear_zone_cache', methods=['POST'])
 def clear_zone_cache():
-    """Vide le cache des overlays de zones"""
-    with caches.zone_overlay_lock:
-        cache_size = len(caches.zone_overlay_cache)
-        caches.zone_overlay_cache.clear()
-        logger.debug(f"🗑️ Cache des overlays de zones vidé manuellement ({cache_size} entrées supprimées)")
+    """Vide les caches de zones (overlays et couleurs)"""
+    cache_size = caches.invalidate_zones()
+    logger.debug(f"🗑️ Caches de zones vidés manuellement ({cache_size} overlays supprimés)")
 
     return jsonify({'status': 'ok', 'cleared_entries': cache_size})
 

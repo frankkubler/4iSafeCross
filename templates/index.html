@@ -506,17 +506,18 @@
         });
         function setWhitePixelsThreshold(idx) {
             const val = document.getElementById('threshold-' + idx).value;
-            fetch('/set_white_pixels_threshold/' + idx, {
+            fetch('/set_motion_param/' + idx, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({threshold: val})
+                body: JSON.stringify({param: 'white_pixels_threshold', value: val})
             })
             .then(r => r.json())
             .then(data => {
                 alert(data.status === 'ok' ? 'Seuil mis à jour !' : 'Erreur : ' + data.message);
                 const input = document.getElementById('threshold-' + idx);
                 adjustThresholdWidth(input);
-            });
+            })
+            .catch(err => alert('Erreur : ' + err.message));
         }
         let debugInterval = null;
         let statsInterval = null;

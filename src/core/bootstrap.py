@@ -245,10 +245,15 @@ def create_application():
     state.relay_positions_by_camera = RELAY_POSITIONS_BY_CAMERA
     _log_zone_inventory()
 
+    # Source unique de vérité pour l'état des alertes Telegram : le state, dont
+    # le tableau de bord dérive le libellé du bouton. AlerteManager en reçoit une
+    # copie ici, et /toggle_telegram_alert réaligne les deux à chaque bascule.
+    state.telegram_alert_enabled = TELEGRAM_ENABLED
+
     # Passer toutes les zones (toutes caméras) à l'alert_manager
     state.alert_manager = AlerteManager(state.relays, telegram_bot=state.telegram_bot,
                                         zones_by_camera=state.zones_by_camera,
-                                        telegram_alert_enabled=TELEGRAM_ENABLED)
+                                        telegram_alert_enabled=state.telegram_alert_enabled)
 
     # ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
     failsafe.start_failsafe_watchdog()
