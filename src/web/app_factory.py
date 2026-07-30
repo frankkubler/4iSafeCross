@@ -53,7 +53,9 @@ def _register_auth(app):
         # Les ressources statiques (CSS/JS/images) ne portent aucune donnée
         # d'exploitation et sont servies sans défi, pour éviter des invites
         # d'authentification répétées dans le navigateur.
-        if request.endpoint == 'static':
+        # /health est exempté : le HEALTHCHECK Docker interroge la sonde sans
+        # identifiants, et son corps ne divulgue aucune donnée d'exploitation.
+        if request.endpoint in ('static', 'system.health'):
             return None
         if _credentials_valid(request.authorization):
             return None

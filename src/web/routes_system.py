@@ -24,6 +24,52 @@ system_bp = Blueprint('system', __name__)
 DETECTIONS_DIR = str(PROJECT_ROOT / 'detections')
 
 
+@system_bp.route('/health')
+def health():
+    """Sonde de vivacité du conteneur (HEALTHCHECK Docker et compose).
+
+    Renvoie 503 quand la supervision ne peut structurellement pas fonctionner :
+    boot inachevé, module relais absent, ou plus aucune caméra en ligne. Dans ces
+    trois cas le produit est aveugle ou muet et une intervention est nécessaire.
+
+    Le mode fail-safe (`application_healthy = False`) ne renvoie **pas** 503 :
+    les relais sont alors verrouillés en position d'alerte, c'est-à-dire que le
+    système remplit sa fonction de sécurité. Le signaler comme « unhealthy »
+    apprendrait à l'exploitant à ignorer la sonde au pire moment. L'état est
+    reporté dans le corps de la réponse, et /failsafe_status le détaille.
+    """
+    cameras_total = len(state.cam_ids)
+    cameras_online = 0
+    if state.manager is not None:
+        cameras_online = sum(
+            1 for cid in state.cam_ids if state.manager.get_status(cid) == 'online'
+        )
+
+    relays_ready = state.relays is not None and state.relays.is_initialized
+    booted = state.manager is not None and bool(state.cam_ids)
+
+    reasons = []
+    if not booted:
+        reasons.append('démarrage inachevé : aucune caméra initialisée')
+    if not relays_ready:
+        reasons.append('module relais non initialisé : aucune alerte ne peut être émise')
+    if booted and cameras_online == 0:
+        reasons.append('aucune caméra en ligne : plus aucune détection possible')
+
+    payload = {
+        'ok': not reasons,
+        'failsafe_active': not state.application_healthy,
+        'cameras_online': cameras_online,
+        'cameras_total': cameras_total,
+        'relays_initialized': relays_ready,
+    }
+    if reasons:
+        payload['reasons'] = reasons
+        logger.warning("Sonde /health en échec : %s", ' ; '.join(reasons))
+        return jsonify(payload), 503
+    return jsonify(payload)
+
+
 @system_bp.route('/failsafe_status')
 def failsafe_status():
     """Endpoint pour vérifier l'état du système fail-safe."""
