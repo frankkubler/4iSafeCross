@@ -18,19 +18,28 @@ security:sast:
   image: python:3.10-bookworm
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends build-essential libglib2.0-dev libgirepository1.0-dev pkg-config libffi-dev libcairo2-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
-    - pip install bandit pip-audit uv --quiet --no-cache-dir
+    - pip install uv --quiet --no-cache-dir
+    # Outillage epingle par [dependency-groups] dev de pyproject.toml + uv.lock :
+    # la version de bandit/pip-audit qui tourne ici est celle du lock, pas la
+    # derniere publiee. --only-group evite d'installer opencv/pygobject, inutiles
+    # pour l'analyse statique.
+    - uv sync --frozen --only-group dev
   script:
     - echo "=== Analyse SAST avec Bandit ==="
-    - bandit -r src/ utils/ run.py -ll -f json -o bandit-report.json 2>&1 || echo "Bandit completed with warnings"
-    - bandit -r src/ utils/ run.py -ll 2>&1 || echo "Bandit completed with warnings"
+    # Le passage JSON tolere l'echec pour que l'artefact existe toujours ; le
+    # passage lisible ne le tolere pas, sinon le job ne peut jamais signaler
+    # quoi que ce soit. allow_failure garde le pipeline vert le temps d'une
+    # release, puis doit passer a false (voir TECH_DEBT_AUDIT.md, F043).
+    - .venv/bin/bandit -r src/ utils/ run.py -ll -f json -o bandit-report.json || true
+    - .venv/bin/bandit -r src/ utils/ run.py -ll
     - echo "=== Audit des dependances avec pip-audit ==="
     - >
       uv pip compile pyproject.toml
       --extra-index-url "https://${GITLAB_DEPLOY_USERNAME_38}:${GITLAB_DEPLOY_TOKEN_38}@gitlab.4itec.ddns.net/api/v4/projects/38/packages/pypi/simple"
       --output-file /tmp/audit-requirements.txt
-    - test -f /tmp/audit-requirements.txt && wc -l /tmp/audit-requirements.txt || echo "Failed to compile requirements"
-    - pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json 2>&1 || echo "Pip-audit found issues (see below)"
-    - pip-audit -r /tmp/audit-requirements.txt 2>&1 || echo "Audit complete"
+    - wc -l /tmp/audit-requirements.txt
+    - .venv/bin/pip-audit -r /tmp/audit-requirements.txt -f json -o pip-audit-report.json || true
+    - .venv/bin/pip-audit -r /tmp/audit-requirements.txt
   artifacts:
     when: always
     paths:
