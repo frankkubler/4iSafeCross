@@ -3,57 +3,6 @@ from yoctopuce.yocto_relay import YRelay
 import logging
 
 
-class YoctoRelay:
-    def __init__(self):
-        self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
-        self.initialized = False
-        self.relay = None
-        self.last_state = None
-        errmsg = YRefParam()
-        if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-            self.logger.error(f"Erreur d'initialisation du hub Yoctopuce : {errmsg.value}")
-            return
-        self.relay = YRelay.FirstRelay()
-        if self.relay is None:
-            self.logger.error("Aucun relais trouvé.")
-        else:
-            self.logger.info(f"Relais trouvé : {self.relay.get_hardwareId()} - État actuel : {self.relay.get_state()}")
-            self.initialized = True
-
-    @property
-    def state(self):
-        if self.initialized and self.relay:
-            return self.last_state
-
-    @property
-    def is_initialized(self):
-        return self.initialized
-
-    def action_on(self):
-        if self.initialized and self.relay:
-            self.relay.set_state(YRelay.STATE_A)
-            self.last_state = self.relay.get_state()
-            self.logger.info(f"Relais STATE A : {self.last_state}")
-        else:
-            self.logger.error("Relais non initialisé ou non trouvé.")
-
-    def action_off(self):
-        if self.initialized and self.relay:
-            self.relay.set_state(YRelay.STATE_B)
-            self.last_state = self.relay.get_state()
-            self.logger.info(f"Relais STATE B : {self.last_state}")
-        else:
-            self.logger.error("Relais non initialisé ou non trouvé.")
-
-    def relay_state(self):
-        if self.initialized and self.relay:
-            self.last_state = self.relay.get_state()
-            return self.last_state
-        else:
-            self.logger.error("Relais non initialisé ou non trouvé.")
-            return None
-
-
 class YoctoMultiRelay:
     def __init__(self):
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)

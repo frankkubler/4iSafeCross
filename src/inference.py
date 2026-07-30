@@ -6,7 +6,6 @@ import requests
 import io
 import cv2
 from collections import deque
-from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
                              DETECTION, POSE_ENABLED,
                              URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,

@@ -14,7 +14,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 - **Pilotage de relais Yoctopuce** multi-canaux (avertisseurs lumineux/sonores) mappés par zone
 - **Interface web Flask** : flux vidéo en direct, éditeur de zones/masques graphique, galerie des détections, statistiques système
 - **Collecte automatique de dataset** intégrée (4 stratégies : temporel, événement, fond, hard-negatives)
-- **Base de données SQLite** des événements (détections + activations relais)
+- **Base de données SQLite** des activations relais (traçabilité des alertes, purge RGPD automatique)
 - **LicenceCheck** : vérification RSA + protection anti-retour d'horloge (JSON + `last_seen_time` + HMAC)
 
 ## Structure du projet
@@ -35,7 +35,7 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   ├── license_state.json    # State local de licence (timestamp, last_seen_time, hmac)
 │   └── license_state.key     # Clé locale HMAC du state licence
 ├── db/
-│   └── detections.db         # Base SQLite (détections + événements relais)
+│   └── detections.db         # Base SQLite (événements relais)
 ├── detections/               # Captures annotées lors des alertes
 ├── dataset/                  # Images et labels collectés automatiquement
 ├── logs/                     # Logs applicatifs (rotation logrotate)
@@ -59,7 +59,6 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   ├── bot_aiogram.py        # Bot Telegram (aiogram 3.x)
 │   ├── camera_manager.py     # Capture RTSP via GStreamer (H.264, HW decoder)
 │   ├── collect_dataset.py    # Thread de collecte automatique de dataset
-│   ├── context_vehicle.py    # Analyse IoU personne/véhicule (contexte conducteur)
 │   ├── detection_db.py       # Schéma et insertions SQLite
 │   ├── inference.py          # Thread d'inférence IA (YOLO + pose)
 │   ├── motion.py             # Détection de mouvement MOG2
@@ -69,10 +68,9 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 │   ├── constants.py          # Chargement de config.ini → constantes Python
 │   ├── utils.py              # Fonctions génériques (IP, Docker, logs, sauvegarde frame)
 │   ├── zone_writer.py        # Sérialisation zones/masques vers INI
-│   ├── coco_classes.py       # Correspondance ID → nom de classe COCO
 │   └── license_validator.py  # Vérification cryptographique des licences LicenceCheck
 ├── static/                   # Ressources web (CSS, JS, Fabric.js, icônes)
-├── templates/                # Templates Jinja2 Flask (index, zone_editor, preview…)
+├── templates/                # Templates Jinja2 Flask (index, zone_editor)
 ├── scripts/                  # Scripts systemd, déploiement Jetson, logrotate
 └── docs/
     ├── build/                # CI/CD, compilation Cython, GitHub Actions / GitLab CI
