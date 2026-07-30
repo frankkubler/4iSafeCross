@@ -3,6 +3,12 @@ __pycache__
 !logs/
 # Fichiers de configuration contenant des credentials sensibles
 .env
+# Artefacts de licence : jamais versionnes (cf. README, section Licence).
+# Les chemins config/* sont conserves pour les deploiements anterieurs au
+# deplacement vers licenses/ ; public_key.pem reste suivi (cle publique).
+licenses/*.lic
+licenses/license_state.json
+licenses/license_state.key
 config/4isafecross.lic
 config/license_state.json
 config/license_state.key
@@ -15,6 +21,9 @@ static/ffmpeg/bin/ffprobe.exe
 __pycache__/app.cpython-312.pyc
 .python-version
 .venv/
+
+# Bac à sable de l'éditeur de zones (tools/zone_editor_sandbox.py)
+tools/sandbox/
 
 # Nuitka build artifacts
 dist/

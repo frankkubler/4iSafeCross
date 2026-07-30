@@ -1,9 +1,8 @@
 # constants.py
 # Fichier pour stocker les constantes globales de l'application
-
-
-#TOKEN = "***REMOVED-TELEGRAM-TOKEN***"  # dev bot
-#CHAT_ID = "-4161590134"  # dev_4itec_supervision
+#
+# Aucun credential en dur dans ce fichier : les secrets (Telegram, RTSP) sont
+# lus depuis l'environnement plus bas, avec config.ini en dernier recours.
 import configparser
 import ast
 import os

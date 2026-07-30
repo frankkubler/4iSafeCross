@@ -216,14 +216,28 @@ class AlerteManager:
                         else:
                             self.logger.warning(f"Queue d'enregistrement pleine ({MAX_RECORDING_QUEUE_SIZE}), frame ignorée pour caméra {cid}")
                 # Envoi Telegram
-                if self.telegram_alert_enabled:
+                if self.telegram_alert_enabled and self.telegram_bot is not None:
                     last_telegram = self.last_telegram_sent.get(cid)
                     if last_telegram is None or (now - last_telegram).total_seconds() >= 120:
                         caption = f"Détection caméra {cid} le {now.strftime('%Y-%m-%d %H:%M:%S')}"
-                        await self.telegram_bot.send_detection_frame(current_frame, caption)
+                        # send_detection_frame est synchrone et fait un POST HTTP
+                        # bloquant (timeout 30 s). L'exécuter dans un executor :
+                        # cette boucle asyncio porte aussi les timers d'extinction
+                        # des relais, qu'un appel Telegram lent bloquerait.
+                        await asyncio.get_running_loop().run_in_executor(
+                            None,
+                            self.telegram_bot.send_detection_frame,
+                            current_frame,
+                            caption,
+                        )
                         self.last_telegram_sent[cid] = now
-            except Exception as e:
-                self.logger.error(f"Erreur lors de l'enregistrement ou l'envoi Telegram : {e}")
+            except Exception:
+                self.logger.error(
+                    "Échec du traitement de l'alerte pour la caméra %s "
+                    "(annotation, enregistrement ou envoi Telegram)",
+                    cid,
+                    exc_info=True,
+                )
 
     async def on_no_more_detection(self, timestamp: float, zone_names=None):
         """

@@ -272,6 +272,53 @@ class InferenceServerThread(threading.Thread):
             ),
         }
 
+    def _parse_detection(self, d):
+        """Valide et normalise une détection reçue du serveur d'inférence.
+
+        Frontière de confiance : le serveur d'inférence est un service externe
+        (voir AGENTS.md, « Couplage Inter-Projets »). Un changement de contrat
+        côté serveur ne doit pas tuer le thread — une détection malformée est
+        journalisée et ignorée, les autres continuent d'être traitées.
+
+        Args:
+            d: Dict brut issu du JSON du serveur.
+
+        Returns:
+            Dict de détection normalisé, ou None si l'entrée est inexploitable
+            ou filtrée (classe non surveillée, confiance sous le seuil).
+        """
+        try:
+            if d["class_id"] not in self.class_id:
+                return None
+            confidence = float(d["confidence"])
+            if confidence < self.confidence_threshold:
+                return None
+            label = d.get("label", "")
+            personne_type = d.get("personne_type")
+            if personne_type not in ("sitting_in_vehicle", "pieton"):
+                personne_type = "pieton" if label == "person" else ""
+            return {
+                "x_min": float(d["x_min"]),
+                "y_min": float(d["y_min"]),
+                "x_max": float(d["x_max"]),
+                "y_max": float(d["y_max"]),
+                "confidence": confidence,
+                "class_id": int(d["class_id"]),
+                "label": label,
+                "tracker_id": int(d.get("tracker_id") or -1),
+                # pose=None → pose désactivée (POSE_ENABLED=False, skip_pose=True)
+                # pose=[]   → pose activée, modèle a tourné, aucun corps trouvé
+                # pose=[..] → keypoints disponibles
+                "pose": None if not self.pose_enabled else d.get("pose", []),
+                "personne_type": personne_type,
+            }
+        except (KeyError, TypeError, ValueError) as exc:
+            self.logger.error(
+                "Détection malformée ignorée (%s: %s) — payload=%r",
+                type(exc).__name__, exc, d
+            )
+            return None
+
     def _call_detection_callback(self, result):
         """Appelle le callback de détection s'il est défini."""
         if self.detection_callback:
@@ -361,26 +408,12 @@ class InferenceServerThread(threading.Thread):
                     self.logger.debug(f"⚡ Inférence IA: {inference_time:.1f}ms")
 
                     if detections:
-                        # Remettre les coordonnées dans le repère image d'origine
+                        # Validation à la frontière : voir _parse_detection().
                         current_detections = [
-                            {
-                                "x_min": float(d["x_min"]),
-                                "y_min": float(d["y_min"]),
-                                "x_max": float(d["x_max"]),
-                                "y_max": float(d["y_max"]),
-                                "confidence": float(d["confidence"]),
-                                "class_id": int(d["class_id"]),
-                                "label": d.get("label", ""),
-                                "tracker_id": int(d.get("tracker_id") or -1),  # Utilise 'or -1' au lieu de la valeur par défaut
-                                # pose=None → pose désactivée (POSE_ENABLED=False, skip_pose=True)
-                                # pose=[]   → pose activée, modèle a tourné, aucun corps trouvé
-                                # pose=[..] → keypoints disponibles
-                                "pose": None if not self.pose_enabled else d.get("pose", []),
-                                "personne_type": (d.get("personne_type") if (d.get("personne_type") in ("sitting_in_vehicle", "pieton")) else ("pieton" if d["label"] == "person" else ""))
-                            }
-                            for d in detections
-                            if d["class_id"] in self.class_id
-                            and float(d["confidence"]) >= self.confidence_threshold
+                            parsed for parsed in (
+                                self._parse_detection(d) for d in detections
+                            )
+                            if parsed is not None
                         ]
                         # Fallback de sécurité: si une personne a encore un label vide/inconnu, mettre 'pieton'
                         for detection in current_detections:
@@ -400,10 +433,29 @@ class InferenceServerThread(threading.Thread):
                         self.is_detection = False
                         current_detections = []
                 else:
-                    self.logger.error("La réponse du serveur est invalide ou absente.")
+                    self.logger.error(
+                        "Réponse serveur invalide : HTTP %s", response.status_code
+                    )
             except requests.ConnectionError:
                 self.logger.error("Impossible de se connecter au serveur.")
                 # Mettre quand même à jour le ROI pour l'affichage vidéo
+                self._call_detection_callback({
+                    "detections": [],
+                    "roi": roi,
+                    "x_pad": (x_pad, y_pad, w_pad, h_pad, x, y, w, h),
+                    "y_pad": None
+                })
+                time.sleep(1)
+                continue
+            except Exception:
+                # Filet de sécurité : ce thread ne doit JAMAIS mourir sur une
+                # réponse inattendue (timeout, JSON invalide, contrat modifié).
+                # S'il meurt, le heartbeat s'arrête, le watchdog verrouille les
+                # relais en ON et la détection ne repart plus sans redémarrage.
+                self.logger.error(
+                    "Erreur inattendue pendant le cycle d'inférence — cycle ignoré",
+                    exc_info=True,
+                )
                 self._call_detection_callback({
                     "detections": [],
                     "roi": roi,

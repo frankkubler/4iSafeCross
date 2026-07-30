@@ -483,13 +483,6 @@
             panel.style.display = isOpen ? 'none' : 'block';
             btn.classList.toggle('active', !isOpen);
         }
-        function quitServer() {
-            if(confirm('Voulez-vous vraiment quitter et arrêter le serveur ?')) {
-                fetch('/quit', {method: 'POST'})
-                    .then(() => { window.close(); })
-                    .catch(() => { alert('Le serveur a été arrêté.'); });
-            }
-        }
         function adjustThresholdWidth(input) {
             let span = document.getElementById('width-measure-span');
             if (!span) {
@@ -823,7 +816,6 @@
                 style="{{ 'background:#d97706;' if telegram_alert_enabled else 'background:#475569;' }}">
                 {{ '🔔 Désactiver Telegram' if telegram_alert_enabled else '🔕 Activer Telegram' }}
             </button>
-            <button class="btn btn-red" onclick="quitServer()">⏻ Quitter</button>
         </div>
     </header>
     <script>

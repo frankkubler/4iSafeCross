@@ -6,7 +6,7 @@ import re
 import time
 
 import psutil
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, jsonify, send_from_directory
 
 from src.core import caches, failsafe
 from src.core.state import state
@@ -211,18 +211,10 @@ def clear_zone_cache():
     return jsonify({'status': 'ok', 'cleared_entries': cache_size})
 
 
-@system_bp.route('/shutdown')
-def shutdown():
-    state.manager.release()
-    return "Cameras released"
-
-
-@system_bp.route('/quit', methods=['POST'])
-def quit_server():
-    state.manager.release()
-    func = request.environ.get('werkzeug.server.shutdown')
-    if func is not None:
-        func()
-    else:
-        os._exit(0)
-    return 'Serveur arrêté.'
+# Les routes /shutdown et /quit ont été supprimées : non authentifiées, elles
+# permettaient à n'importe quel hôte du réseau d'arrêter la supervision de
+# sécurité (/quit atteignait os._exit(0) sous waitress, et /shutdown en GET
+# était déclenchable par un simple préchargement de lien).
+# L'arrêt du service passe désormais par l'orchestrateur :
+#   docker compose stop        (restart: unless-stopped est déjà configuré)
+#   systemctl stop 4isafecross.service

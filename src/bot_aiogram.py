@@ -63,10 +63,8 @@ class BotThread():
             self.logger.error(f"Error stopping bot : {e}")
 
     def send_message_to_bot(self, message):
-
-        # TOKEN = ("***REMOVED-TELEGRAM-TOKEN***")
-        # chat_id= "-4046288817"
-        # message = "hello from your telegram bot"
+        # TOKEN / CHAT_ID viennent de l'environnement (voir utils/constants.py
+        # et .env.example) — ne jamais les inscrire en dur ici.
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
         self.logger.debug(requests.get(url, timeout=10).json())  # this sends the message
 

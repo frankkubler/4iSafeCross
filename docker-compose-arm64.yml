@@ -37,7 +37,21 @@ services:
       - /dev/video1
     
     volumes:
-      - /data/4isafecross:/app/data
+      # État mutable au runtime — doit survivre à une mise à jour d'image.
+      # config/ est réécrit par l'éditeur de zones, db/ porte l'historique des
+      # relais. Sans ces montages, un `docker compose pull && up` efface la
+      # géométrie des zones du site et la traçabilité des alertes.
+      #
+      # ⚠️  PREMIER DÉPLOIEMENT : amorcer /data/4isafecross depuis l'image,
+      # sinon config/ est vide et l'application ne démarre pas :
+      #   sudo mkdir -p /data/4isafecross/{config,db,detections,dataset}
+      #   docker run --rm --entrypoint tar <image> -C /app -c config db \
+      #     | sudo tar -C /data/4isafecross -x
+      # (scripts/deploy-jetson.sh effectue cet amorçage automatiquement.)
+      - /data/4isafecross/config:/app/config
+      - /data/4isafecross/db:/app/db
+      - /data/4isafecross/detections:/app/detections
+      - /data/4isafecross/dataset:/app/dataset
       - ./licenses:/app/licenses
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro

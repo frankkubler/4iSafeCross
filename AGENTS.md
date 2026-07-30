@@ -31,7 +31,9 @@ Points d'entree principaux:
 - Run (production et dev) Flask/Waitress: `python run.py`
 - Tests rapides:
   - `python test_detections_format.py`
-  - `python test_zone_editor.py`
+- Outils de developpement (NE PAS lancer dans une checklist automatisee) :
+  - `python tools/zone_editor_sandbox.py` — serveur interactif sur 127.0.0.1:5051,
+    travaille sur une copie jetable des zones (`tools/sandbox/zones.ini`).
 
 ## Endpoints Critiques
 
@@ -68,7 +70,7 @@ Points d'entree principaux:
 
 - L'application demarre sans erreur sur la cible nominale.
 - Les routes modifiees repondent sans erreur 500 sur cas nominal.
-- Les tests de base passent (`test_detections_format.py`, `test_zone_editor.py` selon impact).
+- Les tests de base passent (`test_detections_format.py`).
 - Aucun changement accidentel dans `config/`, `db/`, `dataset/`, `scripts/`.
 - Le couplage API vers les serveurs d'inference est verifie (URLs/fonctions valides et contrat de payload compatible).
 

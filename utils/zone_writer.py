@@ -228,18 +228,37 @@ def _parse_ini_sections(ini_path):
 
 
 def _write_ini_sections(ini_path, sections):
-    """Écrit les sections dans un fichier INI.
+    """Écrit les sections dans un fichier INI, de manière atomique.
+
+    Écriture dans un fichier temporaire du même répertoire, fsync, puis
+    os.replace() : le remplacement est atomique sur le même système de fichiers.
+    Une coupure d'alimentation ou un crash en cours d'écriture laisse donc
+    l'ancien fichier intact plutôt qu'un zones.ini tronqué — ce qui ferait
+    disparaître silencieusement des zones de sécurité au redémarrage suivant.
 
     Args:
         ini_path: Chemin du fichier INI.
         sections: Liste de {"header": str, "entries": [(key, value), ...]}.
     """
-    os.makedirs(os.path.dirname(ini_path) or ".", exist_ok=True)
+    target_dir = os.path.dirname(ini_path) or "."
+    os.makedirs(target_dir, exist_ok=True)
 
-    with open(ini_path, "w", encoding="utf-8") as f:
-        for i, section in enumerate(sections):
-            if i > 0:
-                f.write("\n")
-            f.write(f"[{section['header']}]\n")
-            for key, value in section["entries"]:
-                f.write(f"{key} = {value}\n")
+    tmp_path = f"{ini_path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            for i, section in enumerate(sections):
+                if i > 0:
+                    f.write("\n")
+                f.write(f"[{section['header']}]\n")
+                for key, value in section["entries"]:
+                    f.write(f"{key} = {value}\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, ini_path)
+    except BaseException:
+        # Ne jamais laisser un .tmp orphelin derrière soi.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise

@@ -1,17 +1,32 @@
 """
-Script standalone pour tester l'éditeur de zones avec une image statique.
+Bac à sable de l'éditeur de zones — outil de développement, PAS un test.
 
 Lance un mini-serveur Flask sur le port 5051 qui simule l'interface
 4iSafeCross avec une image fixe au lieu d'un flux caméra RTSP.
 
+⚠️  Ce script N'EST PAS un test automatisé et ne doit pas être lancé dans le
+cadre d'une checklist de PR. Il démarre un serveur qui attend une interaction
+humaine dans un navigateur.
+
+Les zones réelles de config/zones.ini sont COPIÉES au démarrage vers
+tools/sandbox/zones.ini ; toutes les écritures de l'éditeur vont dans cette
+copie. La configuration de production n'est jamais modifiée. Pour reporter le
+résultat d'une session :
+
+    diff config/zones.ini tools/sandbox/zones.ini
+    cp tools/sandbox/zones.ini config/zones.ini   # après relecture
+
 Usage :
-    python test_zone_editor.py
+    python tools/zone_editor_sandbox.py
 
 Puis ouvrir http://localhost:5051 dans un navigateur.
 """
 
 import os
+import shutil
 import logging
+from pathlib import Path
+
 import cv2
 import numpy as np
 from flask import Flask, render_template, Response, request, jsonify
@@ -20,8 +35,15 @@ from utils.constants import load_zones_by_camera_from_ini
 from utils.zone_writer import save_zones_to_ini
 
 # --- Configuration ---
-ZONES_INI_PATH = "config/zones.ini"
-STATIC_IMAGE_PATH = "static/res/test_snapshot.jpg"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+# Source en lecture seule : la config réelle, jamais écrite par ce script.
+SOURCE_ZONES_INI = str(PROJECT_ROOT / "config" / "zones.ini")
+# Cible en écriture : copie jetable, ignorée par git.
+SANDBOX_DIR = PROJECT_ROOT / "tools" / "sandbox"
+ZONES_INI_PATH = str(SANDBOX_DIR / "zones.ini")
+
+STATIC_IMAGE_PATH = str(PROJECT_ROOT / "static" / "res" / "test_snapshot.jpg")
 CAM_ID = 0  # Caméra simulée
 
 # Palette de couleurs automatiques
@@ -40,9 +62,32 @@ ZONE_COLORS_PALETTE = [
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Le script vit dans tools/ : templates/ et static/ sont à la racine du projet
+# et doivent être désignés explicitement (cf. src/web/app_factory.py).
+app = Flask(
+    __name__,
+    template_folder=str(PROJECT_ROOT / "templates"),
+    static_folder=str(PROJECT_ROOT / "static"),
+)
 
-# Charger les zones au démarrage
+
+def _seed_sandbox_zones():
+    """Copie la config réelle vers le bac à sable, sans jamais l'écraser."""
+    SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+    if os.path.exists(SOURCE_ZONES_INI):
+        shutil.copyfile(SOURCE_ZONES_INI, ZONES_INI_PATH)
+        logger.info("Zones copiées depuis %s vers %s", SOURCE_ZONES_INI, ZONES_INI_PATH)
+    else:
+        logger.warning("%s introuvable — bac à sable démarré vide", SOURCE_ZONES_INI)
+    logger.warning(
+        "Bac à sable : les sauvegardes vont dans %s, PAS dans config/zones.ini",
+        ZONES_INI_PATH,
+    )
+
+
+_seed_sandbox_zones()
+
+# Charger les zones au démarrage (depuis la copie)
 zones_by_camera = load_zones_by_camera_from_ini(ZONES_INI_PATH)
 
 
@@ -193,11 +238,15 @@ if __name__ == "__main__":
     else:
         print(f"✅ Image statique : {STATIC_IMAGE_PATH}")
 
-    print(f"✅ Zones INI : {os.path.abspath(ZONES_INI_PATH)}")
+    print(f"✅ Zones INI (bac à sable) : {os.path.abspath(ZONES_INI_PATH)}")
+    print(f"   Source copiée          : {SOURCE_ZONES_INI} (jamais écrite)")
     print(f"   Zones cam{CAM_ID} : {len(zones_by_camera.get(CAM_ID, []))} zone(s)")
     print()
     print(f"🌐 Serveur démarré sur http://localhost:5051")
     print(f"   Éditeur direct : http://localhost:5051/zone_editor/{CAM_ID}")
     print()
 
-    app.run(host="0.0.0.0", port=5051, debug=True)
+    # 127.0.0.1 et non 0.0.0.0 : debug=True expose la console Werkzeug
+    # (exécution de code arbitraire) — elle ne doit jamais être joignable
+    # depuis le réseau.
+    app.run(host="127.0.0.1", port=5051, debug=True)

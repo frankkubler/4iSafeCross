@@ -55,6 +55,25 @@ else
 fi
 docker pull ${FULL_IMAGE}
 
+# Amorcage de l'etat persistant (premier deploiement uniquement).
+# config/ et db/ sont montes depuis l'hote pour survivre aux mises a jour
+# d'image. Un bind mount sur un repertoire hote vide masquerait le contenu de
+# l'image : on copie donc la config par defaut avant le premier demarrage.
+DATA_DIR="/data/4isafecross"
+echo "📂 Verification de l'etat persistant dans ${DATA_DIR}..."
+sudo mkdir -p "${DATA_DIR}/config" "${DATA_DIR}/db" \
+              "${DATA_DIR}/detections" "${DATA_DIR}/dataset"
+
+if [ -z "$(ls -A "${DATA_DIR}/config" 2>/dev/null)" ]; then
+    echo "   Premier deploiement : copie de la configuration par defaut..."
+    docker run --rm --entrypoint tar "${FULL_IMAGE}" -C /app -c config db \
+        | sudo tar -C "${DATA_DIR}" -x
+    echo "   ✅ Config amorcee dans ${DATA_DIR}/config"
+    echo "   ⚠️  Renseigner ${DATA_DIR}/config/config.ini (adresses RTSP) avant exploitation"
+else
+    echo "   ✅ Configuration existante conservee (non ecrasee)"
+fi
+
 # Lancer le nouveau conteneur
 echo "🚀 Lancement du conteneur..."
 docker run -d \
@@ -62,8 +81,12 @@ docker run -d \
   --runtime nvidia \
   --restart unless-stopped \
   --privileged \
-  -p 5000:5000 \
-  -v /data/4isafecross:/app/data \
+  -v "${DATA_DIR}/config":/app/config \
+  -v "${DATA_DIR}/db":/app/db \
+  -v "${DATA_DIR}/detections":/app/detections \
+  -v "${DATA_DIR}/dataset":/app/dataset \
+  -v "$(pwd)/licenses":/app/licenses \
+  -v /etc/machine-id:/etc/machine-id:ro \
   -v /dev:/dev \
   --network host \
   -e TZ=Europe/Paris \
@@ -84,7 +107,7 @@ if docker ps | grep -q ${CONTAINER_NAME}; then
     echo "   docker logs -f ${CONTAINER_NAME}"
     echo ""
     echo "🔍 Tester l'API:"
-    echo "   curl http://localhost:5000/health"
+    echo "   curl http://localhost:5050/failsafe_status"
 else
     echo "❌ Erreur: Le conteneur n'a pas demarre"
     echo "Logs:"
