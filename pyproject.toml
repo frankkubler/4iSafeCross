@@ -11,7 +11,7 @@ dependencies = [
     "flask>=3.1.1",
     "gunicorn>=23.0.0",
     "license-validator==0.2.2",
-    "nuitka>=2.7.12",
+    # "nuitka>=2.7.12",
     "opencv-python>=4.11.0.86",
     "psutil>=7.0.0",
     # pygobject nécessite libgirepository1.0-dev (apt) pour la compilation
