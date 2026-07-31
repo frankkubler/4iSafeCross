@@ -60,6 +60,68 @@ Détails notables :
 
 Les autres findings du tableau ci-dessous sont inchangés.
 
+## Couplage avec inf_jetson_yolo (2026-07-31)
+
+Le serveur d'inférence consommé par `src/inference.py` a été audité séparément :
+`/mnt/storage/GitLab/inf_jetson_yolo/TECH_DEBT_AUDIT.md` (61 findings, en français).
+Ses identifiants `F0xx` sont numérotés indépendamment de ceux d'ici — les références
+ci-dessous précisent toujours de quel côté elles parlent.
+
+**Un point appelle une action côté serveur avant toute réactivation de la pose ici.**
+`src/inference.py:311` traduit une clé `pose` absente en `[]` dès que `POSE_ENABLED` est
+vrai, et `src/alert_manager.py:124-131` rejette `[]` sans recours (faux positif chariot).
+Or le serveur omet cette clé quand le recadrage d'une personne fait moins de 1000 px²
+— cas qui ne survient qu'en bord de cadre, où le rognage réduit le recadrage, donc
+précisément quand quelqu'un entre dans le champ. La personne serait alors écartée.
+Suivi en **F061 côté serveur** (correctif d'une ligne). Sans effet tant que
+`config/config.ini:76` reste à `POSE_ENABLED = false` : le client envoie alors
+`skip_pose=True` et tout retombe sur `None`, donc fail-safe.
+
+Autres correspondances, vérifiées contre le code courant des deux dépôts :
+
+- **F009 (ici, `RESOLVED`)** ↔ **F032 (serveur)**. La frontière est désormais durcie de
+  ce côté (`_parse_detection` + `except (KeyError, TypeError, ValueError)`), mais le
+  serveur ne publie toujours aucun `response_model` : le schéma de détection n'est
+  vérifiable nulle part. C'est maintenant le maillon faible du couplage.
+- **Contrat `pose` tri-état** (`None` / `[]` / rempli). Documenté par des commentaires
+  dans les deux dépôts, fixé par aucun test ni d'un côté ni de l'autre. C'est la seule
+  sémantique de sécurité partagée. Suivi en F033 côté serveur.
+- **Question ouverte n°5 (mapping des class-ID) — RÉPONDUE, et le résultat est un bug.**
+  Les métadonnées du moteur déployé (`models/4isafecross-5th.engine`, exporté le
+  2026-03-26) déclarent **trois** classes : `{0: Forklift, 1: Driver, 2: Person}`.
+  `src/collect_dataset.py:58-59` en documente six en dur (0 Bus, 1 Driver, 2 Forklift,
+  3 Person, 4 Truck, 5 Car), et `TRANSFERT_TO_DATASET` (`:61-66`) remappe sur cette base.
+  Conséquences directes :
+  - `class_id 2` → étiqueté `forklift` dans le dataset, alors que le modèle émet **Person** ;
+  - `class_id 3` → jamais émis, donc **aucune personne n'est jamais collectée** ;
+  - `class_id 0` → ignoré comme « Bus », alors que le modèle émet **Forklift**.
+
+  Le dataset collecté était donc systématiquement mal étiqueté, ce qui aurait empoisonné
+  un réentraînement. Le filtrage `TRANSFERT_CLASSES = [0..5]` (`config.ini:81`), lui, ne
+  perdait rien : c'est un sur-ensemble de `{0,1,2}`. Et l'alerte piéton n'était pas
+  affectée, car `personne_type` s'appuie sur `d["label"] == "person"` et non sur
+  l'identifiant.
+
+  **Corrigé le 2026-07-31** : `TRANSFERT_TO_DATASET` (`src/collect_dataset.py:62-71`)
+  remappé sur les trois classes réelles — la correspondance est aujourd'hui l'identité,
+  gardée explicite parce qu'elle redeviendra non triviale au prochain changement de
+  modèle. `person_class_ids` (`:331`) en dérive et se corrige seul (`{3}` → `{2}`).
+  Commentaire de `config/config.ini:79-82` mis à jour. Suivi en **F062 côté serveur**,
+  où le correctif de fond — exposer `model.names` via une route plutôt que de laisser
+  trois écrits diverger — reste ouvert.
+
+  ⚠️ **Les datasets déjà collectés avec l'ancien mapping sont mal étiquetés** : toute
+  personne y figure comme « forklift », et aucune image n'y porte la classe « person ».
+  À trier ou à jeter avant réentraînement.
+- **Question ouverte n°8 (version JetPack)**. Même incohérence des deux côtés, à
+  trancher une fois pour les deux dépôts.
+- **Deux décisions prises côté serveur le 2026-07-31**, à connaître ici : le cache de
+  détections a été désactivé (il pouvait renvoyer les détections d'une autre image, et
+  la déduplication de `_should_run_inference` le rendait de toute façon inopérant), et
+  le tracking reste inactif — `tracker_id` vaut donc toujours `null`.
+  `src/inference.py:307` le normalise en `-1` et aucune structure n'est indexée dessus :
+  rien à changer ici.
+
 ---
 
 ## Executive summary

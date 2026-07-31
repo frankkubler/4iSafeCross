@@ -56,14 +56,25 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # ---------------------------------------------------------------------------
 # Configuration des classes cibles (remapping depuis le modèle courant)
 # ---------------------------------------------------------------------------
-# Le modèle en mode "transfert" renvoie des class_id 0–5 correspondant à :
-#   0=Bus, 1=Driver, 2=Forklift, 3=Person, 4=Truck, 5=Car
-# Remapping vers notre dataset custom avec 3 classes :
+# Le modèle de détection déployé (models/4isafecross-5th.engine côté
+# inf_jetson_yolo) déclare TROIS classes dans ses métadonnées :
+#   0=Forklift, 1=Driver, 2=Person
+#
+# Le mapping ci-dessous valait pour un modèle antérieur à six classes
+# (0=Bus, 1=Driver, 2=Forklift, 3=Person, 4=Truck, 5=Car). Avec le modèle
+# courant, il étiquetait les personnes en « forklift » (class_id 2), ne
+# collectait jamais de personne (class_id 3 jamais émis) et jetait les
+# chariots (class_id 0 traité comme un bus).
+#
+# La correspondance est aujourd'hui l'identité. On la garde explicite plutôt
+# que de la supprimer : c'est ce dict qui documente le lien entre les IDs du
+# modèle et ceux du dataset, et il redeviendra non trivial au prochain
+# changement de modèle. Source de vérité : `model.names` côté serveur
+# d'inférence — à revérifier après toute réexportation du moteur.
 TRANSFERT_TO_DATASET = {
+    0: 0,   # Forklift → classe 0 "forklift"
     1: 1,   # Driver   → classe 1 "driver"
-    2: 0,   # Forklift → classe 0 "forklift"
-    3: 2,   # Person   → classe 2 "person"
-    # 0=Bus, 4=Truck, 5=Car ignorés (non pertinents pour ce dataset)
+    2: 2,   # Person   → classe 2 "person"
 }
 DATASET_CLASSES = {
     0: "forklift",
