@@ -18,7 +18,7 @@ from pathlib import Path
 
 from src.alert_manager import AlerteManager
 from src.bot_aiogram import BotThread
-from src.camera_manager import CameraManager
+from src.camera_manager import CameraManager, redact_rtsp_url
 from src.collect_dataset import DatasetCollectionThread
 from src.core import caches, failsafe
 from src.core.detection_pipeline import detection_callback_factory, get_frame_func_factory
@@ -133,6 +133,29 @@ def _start_main_loop():
     return loop
 
 
+def _log_zone_inventory():
+    """Journalise ce qui a réellement été chargé depuis config/*.ini.
+
+    Les chargeurs de utils.constants tournent à l'import, avant logs_settings() :
+    ce récapitulatif est le premier endroit où l'exploitant peut constater qu'une
+    caméra se retrouve sans zone de surveillance (section mal nommée, fichier
+    tronqué). Une caméra sans zone ne déclenche aucune alerte.
+    """
+    if not ZONES_BY_CAMERA:
+        logger.error(
+            "Aucune zone de surveillance chargée depuis config/zones.ini — "
+            "aucune détection ne déclenchera d'alerte."
+        )
+    for cam_id in sorted(ZONES_BY_CAMERA):
+        zone_names = [z['name'] for z in ZONES_BY_CAMERA[cam_id]]
+        logger.info(
+            "Caméra %d : %d zone(s) chargée(s) — %s",
+            cam_id, len(zone_names), ', '.join(zone_names)
+        )
+    for cam_id in sorted(MASKS_BY_CAMERA):
+        logger.info("Caméra %d : %d masque(s) chargé(s)", cam_id, len(MASKS_BY_CAMERA[cam_id]))
+
+
 def _wait_for_rtsp_streams():
     """Attente active jusqu'à ce qu'au moins une caméra réponde au ping RTSP."""
     cam_ids = []
@@ -154,14 +177,14 @@ def _wait_for_rtsp_streams():
         # Logger l'état de chaque caméra pour cette tentative
         for cid in cam_ids:
             if results.get(cid, False):
-                logger.info(f"Ping RTSP OK pour {cid} (tentative {attempt})")
+                logger.info(f"Ping RTSP OK pour {redact_rtsp_url(cid)} (tentative {attempt})")
             else:
-                logger.warning(f"Ping RTSP échoué pour {cid} (tentative {attempt})")
+                logger.warning(f"Ping RTSP échoué pour {redact_rtsp_url(cid)} (tentative {attempt})")
 
         if available_cam_ids:
             if WAIT_BEFORE_TEST_RTSP > 0:
                 logger.info(
-                    f"Au moins une caméra répond au ping RTSP ({available_cam_ids[0]}). Attente de {WAIT_BEFORE_TEST_RTSP}s avant démarrage des flux RTSP..."
+                    f"Au moins une caméra répond au ping RTSP ({redact_rtsp_url(available_cam_ids[0])}). Attente de {WAIT_BEFORE_TEST_RTSP}s avant démarrage des flux RTSP..."
                 )
                 time.sleep(WAIT_BEFORE_TEST_RTSP)
             break
@@ -220,11 +243,17 @@ def create_application():
     state.zones_by_camera = ZONES_BY_CAMERA
     state.masks_by_camera = MASKS_BY_CAMERA
     state.relay_positions_by_camera = RELAY_POSITIONS_BY_CAMERA
+    _log_zone_inventory()
+
+    # Source unique de vérité pour l'état des alertes Telegram : le state, dont
+    # le tableau de bord dérive le libellé du bouton. AlerteManager en reçoit une
+    # copie ici, et /toggle_telegram_alert réaligne les deux à chaque bascule.
+    state.telegram_alert_enabled = TELEGRAM_ENABLED
 
     # Passer toutes les zones (toutes caméras) à l'alert_manager
     state.alert_manager = AlerteManager(state.relays, telegram_bot=state.telegram_bot,
                                         zones_by_camera=state.zones_by_camera,
-                                        telegram_alert_enabled=TELEGRAM_ENABLED)
+                                        telegram_alert_enabled=state.telegram_alert_enabled)
 
     # ===== SYSTÈME DE HEARTBEAT FAIL-SAFE =====
     failsafe.start_failsafe_watchdog()
@@ -234,7 +263,7 @@ def create_application():
 
     # Vérification des flux RTSP avant d'instancier CameraManager
     state.cam_ids = _wait_for_rtsp_streams()
-    logger.info(f"Caméras RTSP disponibles : {state.cam_ids}")
+    logger.info(f"Caméras RTSP disponibles : {[redact_rtsp_url(c) for c in state.cam_ids]}")
     state.manager = CameraManager(state.cam_ids, frame_width=1920, frame_height=1080)
 
     for i in range(len(state.cam_ids)):

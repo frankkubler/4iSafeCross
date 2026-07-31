@@ -5,14 +5,46 @@
 # lus depuis l'environnement plus bas, avec config.ini en dernier recours.
 import configparser
 import ast
+import logging
 import os
 import re
+
+# Ce module fait ses chargements à l'import, donc avant logs_settings() : les
+# messages ci-dessous passent par le handler de dernier recours de logging
+# (WARNING+ sur stderr). C'est volontaire — une section de zone mal nommée doit
+# être visible même si elle survient avant la configuration du logging.
+logger = logging.getLogger(__name__)
+
+
+def _parse_cam_id(section):
+    """Extrait l'index caméra d'un nom de section ``<prefixe><n>_cam<j>``.
+
+    Renvoie ``None`` (avec un WARNING) si la section ne suit pas la convention :
+    une zone dont le suffixe est mal orthographié disparaîtrait sinon en silence,
+    sans aucune trace, et la surveillance correspondante serait inactive.
+    """
+    if "_cam" not in section:
+        logger.warning(
+            "Section INI '%s' ignorée : suffixe '_cam<n>' absent "
+            "(convention attendue : 'zone1_cam0').", section
+        )
+        return None
+    suffix = section.split("_cam")[-1]
+    try:
+        return int(suffix)
+    except ValueError:
+        logger.warning(
+            "Section INI '%s' ignorée : '%s' n'est pas un index caméra valide "
+            "(convention attendue : 'zone1_cam0').", section, suffix
+        )
+        return None
+
 
 def load_zones_by_camera_from_ini(ini_path):
     config = configparser.ConfigParser()
     config.read(ini_path, encoding='utf-8')
-    print("Zones config file loaded:", os.path.abspath(ini_path))
-    print("Sections trouvées dans zones.ini:", config.sections())
+    logger.debug("Zones config file loaded: %s", os.path.abspath(ini_path))
+    logger.debug("Sections trouvées dans zones.ini: %s", config.sections())
     zones_by_camera = {}
     for section in config.sections():
         zone = {"name": section}
@@ -35,12 +67,9 @@ def load_zones_by_camera_from_ini(ini_path):
             zone["debounce_reset_seconds"] = float(debounce_reset_str) if debounce_reset_str else None
         except ValueError:
             zone["debounce_reset_seconds"] = None
-        if "_cam" in section:
-            try:
-                cam_id = int(section.split("_cam")[-1])
-                zones_by_camera.setdefault(cam_id, []).append(zone)
-            except Exception:
-                pass
+        cam_id = _parse_cam_id(section)
+        if cam_id is not None:
+            zones_by_camera.setdefault(cam_id, []).append(zone)
     return zones_by_camera
 
 
@@ -85,14 +114,15 @@ def load_masks_by_camera_from_ini(ini_path):
         pts = re.findall(r'\((\d+),(\d+)\)', poly_str)
         polygon = [(int(x), int(y)) for x, y in pts]
         if len(polygon) < 3:
+            logger.warning(
+                "Masque '%s' ignoré : polygone à %d point(s), 3 minimum requis.",
+                section, len(polygon)
+            )
             continue
         mask = {'name': section, 'polygon': polygon}
-        if '_cam' in section:
-            try:
-                cam_id = int(section.split('_cam')[-1])
-                masks_by_camera.setdefault(cam_id, []).append(mask)
-            except Exception:
-                pass
+        cam_id = _parse_cam_id(section)
+        if cam_id is not None:
+            masks_by_camera.setdefault(cam_id, []).append(mask)
     return masks_by_camera
 
 
@@ -116,17 +146,20 @@ def load_relay_positions_from_ini(ini_path):
     for section in config_parser.sections():
         if 'x' not in config_parser[section] or 'y' not in config_parser[section]:
             continue
-        if '_cam' not in section:
+        cam_id = _parse_cam_id(section)
+        if cam_id is None:
             continue
         try:
-            cam_id = int(section.split('_cam')[-1])
             relay_part = section.split('_cam')[0]
             relay_id = int(relay_part.replace('relay', ''))
             x = int(config_parser[section]['x'])
             y = int(config_parser[section]['y'])
             positions.setdefault(cam_id, {})[relay_id] = (x, y)
-        except (ValueError, AttributeError):
-            pass
+        except (ValueError, AttributeError) as exc:
+            logger.warning(
+                "Position de relais '%s' ignorée : %s "
+                "(convention attendue : 'relay0_cam0' avec x/y entiers).", section, exc
+            )
     return positions
 
 
@@ -136,8 +169,8 @@ RELAY_POSITIONS_BY_CAMERA = load_relay_positions_from_ini('config/relay_position
 # Chargement classique de config.ini (chemin relatif)
 config = configparser.ConfigParser()
 config.read('config/config.ini', encoding='utf-8')
-print("Config file loaded:", os.path.abspath('config/config.ini'))
-print("Sections trouvées:", config.sections())
+logger.debug("Config file loaded: %s", os.path.abspath('config/config.ini'))
+logger.debug("Sections trouvées: %s", config.sections())
 
 LOG_LEVEL = config.get('logging', 'level', fallback='INFO')
 

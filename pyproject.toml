@@ -9,9 +9,7 @@ dependencies = [
     "aiohttp>=3.14.1",
     "cryptography>=48.0.0",
     "flask>=3.1.1",
-    "gunicorn>=23.0.0",
     "license-validator==0.2.2",
-    "nuitka>=2.7.12",
     "opencv-python>=4.11.0.86",
     "psutil>=7.0.0",
     # pygobject nécessite libgirepository1.0-dev (apt) pour la compilation
@@ -21,6 +19,25 @@ dependencies = [
     "setuptools>=80.8.0",
     "waitress>=3.0.2",
     "yoctopuce>=2.1.6320",
+]
+
+[dependency-groups]
+# Outillage de développement et de CI. Exclu des images par le
+# `uv sync --frozen --no-dev` du Dockerfile : ces paquets n'ont rien à faire
+# dans le venv de production.
+#
+# gunicorn a été retiré des dépendances d'exécution : run.py sert avec waitress,
+# et gunicorn avait été explicitement abandonné (commit 6409dea) parce que le
+# fork casse GStreamer. Il n'était plus référencé que dans une ligne commentée.
+#
+# nuitka est ici et non en dépendance d'exécution : le build image utilise
+# Cython (setup_cython.py), Nuitka ne sert plus qu'à scripts/test-build-local.sh.
+dev = [
+    "bandit>=1.8.0",
+    "nuitka>=2.7.12",
+    "pip-audit>=2.9.0",
+    "pytest>=8.3.0",
+    "ruff>=0.9.0",
 ]
 
 [tool.uv.sources]

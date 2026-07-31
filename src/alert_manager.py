@@ -7,9 +7,8 @@ from datetime import datetime
 import logging
 import cv2
 import asyncio
-from src.detection_db import init_db, insert_relay_event, purge_old_relay_events  # , insert_detection
+from src.detection_db import init_db, insert_relay_event, purge_old_relay_events
 from utils.constants import RELAY_EVENTS_KEEP_DAYS
-from utils.coco_classes import COCO_CLASSES
 
 # Queue avec limite pour éviter l'accumulation de tâches en mémoire
 MAX_RECORDING_QUEUE_SIZE = 20
@@ -389,10 +388,8 @@ class AlerteManager:
             y2 = max(0, min(h-1, int(det["y_max"])))
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             confidence = det.get("confidence", 0)
-            class_id = det.get("class_id", -1)
             label = det.get("label", "unknown")
             text = f"{label} {confidence:.2f}"
-            # label = f"{confidence:.2f} {COCO_CLASSES.get(class_id, 'unknown')}"
             cv2.putText(frame, text, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             zone_names = det.get("zones", [])
             if zone_names:

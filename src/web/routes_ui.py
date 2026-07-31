@@ -1,6 +1,7 @@
 """Pages HTML : tableau de bord et éditeur de zones."""
 from flask import Blueprint, render_template
 
+from src.camera_manager import redact_rtsp_url
 from src.core.state import state
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, OBJECT_COLORS,
                              NUM_RELAYS,
@@ -43,7 +44,9 @@ def index():
                 aspect_filter = getattr(detector, 'use_aspect_filter', MOTION_ASPECT_FILTER)
                 min_single_contour = getattr(detector, 'min_single_contour', MOTION_MIN_SINGLE_CONTOUR)
         cam_infos.append({
-            'id': cam_id,
+            # URL rédigée : le template n'utilise que 'idx', et cette page est
+            # servie sans authentification tant que SAFECROSS_AUTH_* n'est pas défini.
+            'id': redact_rtsp_url(cam_id),
             'idx': idx,
             'white_pixels_threshold': threshold,
             'varThreshold': var_threshold,

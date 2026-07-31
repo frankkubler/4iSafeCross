@@ -4,21 +4,13 @@ from utils.constants import DB_PATH, RELAY_EVENTS_KEEP_DAYS
 
 
 def init_db():
+    # Seule relay_events est créée : la table `detections` d'origine n'a jamais
+    # reçu d'écriture (insert_detection n'était appelée nulle part). Les bases
+    # existantes la conservent, vide, sans effet. Rétablir les deux — table et
+    # insertion — si la traçabilité des détections devient un besoin, en tenant
+    # compte de la rétention RGPD (voir purge_old_relay_events).
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS detections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            camera_id TEXT NOT NULL,
-            zone TEXT NOT NULL,
-            center_x REAL NOT NULL,
-            center_y REAL NOT NULL,
-            width REAL NOT NULL,
-            height REAL NOT NULL
-        )
-    ''')
-    # Ajout d'une table pour les événements relais
     c.execute('''
         CREATE TABLE IF NOT EXISTS relay_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,17 +20,6 @@ def init_db():
             time_off TEXT NOT NULL
         )
     ''')
-    conn.commit()
-    conn.close()
-
-
-def insert_detection(timestamp: datetime, camera_id: str, zone: str, center_x: float, center_y: float, width: float, height: float):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO detections (timestamp, camera_id, zone, center_x, center_y, width, height)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp.isoformat(), camera_id, zone, center_x, center_y, width, height))
     conn.commit()
     conn.close()
 

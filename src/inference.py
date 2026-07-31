@@ -6,7 +6,6 @@ import requests
 import io
 import cv2
 from collections import deque
-from src.context_vehicle import infer_in_vehicle_context
 from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
                              DETECTION, POSE_ENABLED,
                              URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
@@ -424,7 +423,19 @@ class InferenceServerThread(threading.Thread):
                                 detection["stature"] = "inconnu"
                         if len(current_detections) > 0:
                             self.is_detection = True
-                            self.logger.info(f"Détections actuelles : {current_detections}")
+                            # Résumé en INFO, dictionnaires complets en DEBUG : avec
+                            # POSE_ENABLED chaque détection porte 17 keypoints, et à
+                            # 5 FPS × N caméras le dump saturait les 10 Mo × 5 du
+                            # driver json-file, évinçant les lignes de diagnostic.
+                            self.logger.info(
+                                "%d détection(s) : %s",
+                                len(current_detections),
+                                ', '.join(
+                                    f"{d['label'] or '?'}({d['confidence']:.2f})"
+                                    for d in current_detections
+                                ),
+                            )
+                            self.logger.debug(f"Détections actuelles : {current_detections}")
                         else:
                             self.is_detection = False
                             self.logger.debug("Aucune détection de classe 0 trouvée.")

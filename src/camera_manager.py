@@ -1,4 +1,5 @@
 import cv2
+import re
 import threading
 import logging
 import platform
@@ -8,6 +9,22 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 import os
 import numpy as np
+
+# Un identifiant de caméra RTSP est une URL complète, credentials inclus
+# (rtsp://login:password@host:554/stream1). Elle est interpolée dans de nombreux
+# messages de log — d'où ce filtre, à appliquer systématiquement avant journalisation.
+_USERINFO_RE = re.compile(r'(?<=://)[^/@]+@')
+
+
+def redact_rtsp_url(value):
+    """Masque le segment userinfo d'une URL RTSP avant journalisation.
+
+    ``rtsp://login:password@host:554/s1`` → ``rtsp://***@host:554/s1``.
+    Les identifiants non-URL (index V4L2 entier, ``None``) sont renvoyés tels quels.
+    """
+    if not isinstance(value, str):
+        return value
+    return _USERINFO_RE.sub('***@', value)
 
 # ---------------------------------------------------------------------------
 # Backends GStreamer H.264 supportés :
@@ -177,17 +194,18 @@ class CameraManager:
                 err, debug = message.parse_warning()
                 self.logger.warning(f"GStreamer WARNING: {err}, debug: {debug}")
             elif message_type == Gst.MessageType.EOS:
-                self.logger.warning(f"GStreamer EOS (fin de flux) pour {cid}")
+                self.logger.warning(f"GStreamer EOS (fin de flux) pour {redact_rtsp_url(cid)}")
                 eos_or_error.set()
 
     def update(self, cid):
         reconnect_delay = 3
+        safe_cid = redact_rtsp_url(cid)
         while self.running:
             pipeline = None
             bus = None
             while self.running:
                 pipeline_str = self._build_pipeline_str(cid)
-                self.logger.info(f"Pipeline GStreamer [{self.backend}]: {pipeline_str}")
+                self.logger.info(f"Pipeline GStreamer [{self.backend}]: {redact_rtsp_url(pipeline_str)}")
                 try:
                     pipeline = Gst.parse_launch(pipeline_str)
                     appsink = pipeline.get_by_name('sink')
@@ -199,11 +217,11 @@ class CameraManager:
                     if ret != Gst.StateChangeReturn.FAILURE:
                         break
                     else:
-                        self.logger.error(f"Échec de mise en PLAYING pour {cid}, nouvelle tentative dans {reconnect_delay}s...")
+                        self.logger.error(f"Échec de mise en PLAYING pour {safe_cid}, nouvelle tentative dans {reconnect_delay}s...")
                         pipeline.set_state(Gst.State.NULL)
                         time.sleep(reconnect_delay)
                 except Exception as e:
-                    self.logger.error(f"Exception lors de l'init du pipeline GStreamer pour {cid}: {e}")
+                    self.logger.error(f"Exception lors de l'init du pipeline GStreamer pour {safe_cid}: {e}")
                     if pipeline:
                         pipeline.set_state(Gst.State.NULL)
                     self.cams_status[cid] = 'offline'
@@ -239,19 +257,19 @@ class CameraManager:
                         with self.locks[cid]:
                             self.frames[cid] = frame
                     else:
-                        self.logger.warning(f"Impossible de mapper le buffer GStreamer pour {cid}")
+                        self.logger.warning(f"Impossible de mapper le buffer GStreamer pour {safe_cid}")
                 else:
                     self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
                     if eos_or_error.is_set():
                         break
 
                     fail_count += 1
-                    self.logger.warning(f"Aucune frame reçue via GStreamer pour {cid} (compteur: {fail_count})")
+                    self.logger.warning(f"Aucune frame reçue via GStreamer pour {safe_cid} (compteur: {fail_count})")
                     self.cams_status[cid] = 'offline'
                     while self.running:
-                        self.logger.info(f"Attente de reconnexion au flux RTSP {cid}...")
+                        self.logger.info(f"Attente de reconnexion au flux RTSP {safe_cid}...")
                         if self.test_rtsp_stream(cid):
-                            self.logger.info(f"Reconnexion détectée pour {cid}, relance du pipeline.")
+                            self.logger.info(f"Reconnexion détectée pour {safe_cid}, relance du pipeline.")
                             time.sleep(20)
                             break
                         time.sleep(2)
@@ -267,14 +285,14 @@ class CameraManager:
                 self.cams_status[cid] = 'offline'
                 auth_reconnect_delay = 15
                 self.logger.error(
-                    f"Échec d'authentification RTSP (401) pour {cid}. "
+                    f"Échec d'authentification RTSP (401) pour {safe_cid}. "
                     f"Vérifiez login/mot de passe. Nouvelle tentative dans {auth_reconnect_delay}s..."
                 )
                 time.sleep(auth_reconnect_delay)
             else:
-                self.logger.warning(f"Redémarrage du pipeline pour {cid} dans {reconnect_delay}s...")
+                self.logger.warning(f"Redémarrage du pipeline pour {safe_cid} dans {reconnect_delay}s...")
                 time.sleep(reconnect_delay)
-        self.logger.info(f"Thread update caméra {cid} terminé.")
+        self.logger.info(f"Thread update caméra {safe_cid} terminé.")
         self.cams_status[cid] = 'offline'
 
     def get_status(self, cid):
@@ -304,23 +322,23 @@ class CameraManager:
         Retourne True si la connexion TCP aboutit, False sinon.
         """
         import socket
-        import re
         import logging
         logger = logging.getLogger(__name__).getChild('test_rtsp_stream')
-        logger.info(f"Test du flux RTSP {cid} avec connexion TCP...")
+        safe_cid = redact_rtsp_url(cid)
+        logger.info(f"Test du flux RTSP {safe_cid} avec connexion TCP...")
         match = re.match(r"rtsp://(?:[^@]+@)?([^/:]+)(?::(\d+))?", cid)
         if not match:
-            logger.warning(f"Impossible d'extraire le host du flux RTSP : {cid}")
+            logger.warning(f"Impossible d'extraire le host du flux RTSP : {safe_cid}")
             return False
         host = match.group(1)
         port = int(match.group(2)) if match.group(2) else 554
         try:
             with socket.create_connection((host, port), timeout=timeout):
                 pass
-            logger.info(f"TCP OK pour {host}:{port} (flux {cid})")
+            logger.info(f"TCP OK pour {host}:{port} (flux {safe_cid})")
             return True
         except Exception as e:
-            logger.warning(f"TCP échoué pour {host}:{port} (flux {cid}) : {e}")
+            logger.warning(f"TCP échoué pour {host}:{port} (flux {safe_cid}) : {e}")
             return False
 
     @staticmethod

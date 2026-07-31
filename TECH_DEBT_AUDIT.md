@@ -7,12 +7,41 @@ Scope: full repository (~12 200 LOC Python/JS/HTML/CSS, 118 tracked files, 554 c
 
 ## Statut d'application (2026-07-30)
 
-Le « Top 5 » a été appliqué. Findings **RESOLVED** : F001, F002 (code), F003,
-F006, F007, F008, F009, F010, F011, F015.
-Findings **PARTIEL** : F004 — le mécanisme d'authentification existe
-(HTTP Basic, `src/web/app_factory.py`) mais reste inactif tant que
-`SAFECROSS_AUTH_USER` / `SAFECROSS_AUTH_PASSWORD` ne sont pas définis sur la
-cible ; un avertissement est journalisé au démarrage.
+Le « Top 5 » puis la liste **Quick wins** ont été appliqués.
+
+Findings **RESOLVED** : F001, F002 (code), F003, F005, F006, F007, F008, F009,
+F010, F011, F015, F016, F020, F021, F022, F023, F024, F026, F028, F029, F033,
+F034, F040, F041, F043, F044, F045, F056.
+
+Findings **PARTIEL** :
+
+- **F004** — le mécanisme d'authentification existe (HTTP Basic,
+  `src/web/app_factory.py`) mais reste inactif tant que `SAFECROSS_AUTH_USER` /
+  `SAFECROSS_AUTH_PASSWORD` ne sont pas définis sur la cible ; un avertissement
+  est journalisé au démarrage. `/health` est explicitement exempté du défi
+  d'authentification (le HEALTHCHECK Docker interroge sans identifiants).
+- **F042** — le groupe `[dependency-groups] dev` existe et épingle
+  `bandit`/`pip-audit`/`pytest`/`ruff`/`nuitka` via `uv.lock` ; la CI l'installe
+  avec `uv sync --frozen --only-group dev`. Le pin `cython==3.2.8` reste dans le
+  `Dockerfile` : il est déjà explicite, et déplacer la chaîne de build Cython
+  vers un groupe `build` n'a pas été jugé justifié face au risque de casser le
+  build multi-arch.
+- **F049** — les quatre `print()` de `utils/constants.py` sont convertis en
+  `logging.debug` (partie triviale). Le `load_config()` appelé depuis
+  `bootstrap` reste à faire.
+
+Détails notables :
+
+- **F023** — la table `detections` n'est plus créée et `insert_detection` est
+  supprimée (aucune écriture n'a jamais eu lieu). Les bases existantes
+  conservent la table, vide et sans effet. README corrigé en conséquence.
+- **F028** — `/health` renvoie 503 uniquement sur boot inachevé, module relais
+  absent, ou zéro caméra en ligne. Le **mode fail-safe ne renvoie pas 503** :
+  les relais y sont verrouillés en alerte, donc le système remplit sa fonction ;
+  le signaler « unhealthy » entraînerait à ignorer la sonde au pire moment.
+- **F033 / F034** — remplacés par deux helpers dans `src/core/caches.py` :
+  `get_zone_color()` (lecture défensive sous verrou) et `invalidate_zones()`
+  (vide overlays **et** couleurs), utilisés par les trois sites d'invalidation.
 
 **Actions restant à la charge de l'exploitant** (non automatisables ici) :
 
@@ -288,24 +317,24 @@ And for F011 — rename `test_zone_editor.py` to `tools/zone_editor_sandbox.py`,
 
 Low effort, Medium severity or above. Roughly ordered by value per minute.
 
-- [ ] **F001** — `git rm --cached` the two licence artefacts, fix `.gitignore`, rotate the HMAC key.
-- [ ] **F002** — Revoke both Telegram tokens; delete the comments at `bot_aiogram.py:67` and `constants.py:5-6`.
-- [ ] **F003** — Delete `/shutdown` and `/quit` and the dashboard button that calls them.
-- [ ] **F005** — Redact the RTSP userinfo before logging (`camera_manager.py:191`, `bootstrap.py:157,159`).
-- [ ] **F007** — Remove the bad `await` at `alert_manager.py:223`; Telegram alerts start working.
-- [ ] **F010** — Atomic write in `zone_writer._write_ini_sections`.
-- [ ] **F011** — Rename `test_zone_editor.py` and repoint its `ZONES_INI_PATH`.
-- [ ] **F015** — Add `exc_info=True` to the alert-path handler at `alert_manager.py:225`.
-- [ ] **F016** — Replace `except Exception: pass` with a WARNING at `constants.py:43,95`; log zone counts at boot.
-- [ ] **F026** — Point the threshold slider at `/set_motion_param/` (`index.html:516`).
-- [ ] **F028** — Add a real `/health` route and `raise_for_status()` in both healthchecks.
-- [ ] **F029** — Initialise `state.telegram_alert_enabled` from `TELEGRAM_ENABLED` in `bootstrap.py`.
-- [ ] **F033** — `caches.zone_color_cache.get(cid, {})` at `streaming.py:163`.
-- [ ] **F040 / F041** — Drop `nuitka` and `gunicorn` from `[project.dependencies]`.
-- [ ] **F043** — Remove the `|| echo` suffixes from the human-readable bandit/pip-audit runs.
-- [ ] **F044 / F045** — Delete the stale Nuitka workflow and the two dead CI files.
-- [ ] **F020 / F021 / F022 / F023 / F024** — Delete ~1 900 lines of dead code in one commit.
-- [ ] **F056** — Demote the per-detection dict dump to DEBUG (`inference.py:395`).
+- [x] **F001** — `git rm --cached` the two licence artefacts, fix `.gitignore`, rotate the HMAC key.
+- [x] **F002** — Revoke both Telegram tokens; delete the comments at `bot_aiogram.py:67` and `constants.py:5-6`.
+- [x] **F003** — Delete `/shutdown` and `/quit` and the dashboard button that calls them.
+- [x] **F005** — Redact the RTSP userinfo before logging (`camera_manager.py:191`, `bootstrap.py:157,159`).
+- [x] **F007** — Remove the bad `await` at `alert_manager.py:223`; Telegram alerts start working.
+- [x] **F010** — Atomic write in `zone_writer._write_ini_sections`.
+- [x] **F011** — Rename `test_zone_editor.py` and repoint its `ZONES_INI_PATH`.
+- [x] **F015** — Add `exc_info=True` to the alert-path handler at `alert_manager.py:225`.
+- [x] **F016** — Replace `except Exception: pass` with a WARNING at `constants.py:43,95`; log zone counts at boot.
+- [x] **F026** — Point the threshold slider at `/set_motion_param/` (`index.html:516`).
+- [x] **F028** — Add a real `/health` route and `raise_for_status()` in both healthchecks.
+- [x] **F029** — Initialise `state.telegram_alert_enabled` from `TELEGRAM_ENABLED` in `bootstrap.py`.
+- [x] **F033** — `caches.zone_color_cache.get(cid, {})` at `streaming.py:163`.
+- [x] **F040 / F041** — Drop `nuitka` and `gunicorn` from `[project.dependencies]`.
+- [x] **F043** — Remove the `|| echo` suffixes from the human-readable bandit/pip-audit runs.
+- [x] **F044 / F045** — Delete the stale Nuitka workflow and the two dead CI files.
+- [x] **F020 / F021 / F022 / F023 / F024** — Delete ~1 900 lines of dead code in one commit.
+- [x] **F056** — Demote the per-detection dict dump to DEBUG (`inference.py:395`).
 
 ---
 

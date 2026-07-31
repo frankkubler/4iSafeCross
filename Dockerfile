@@ -240,7 +240,7 @@ EXPOSE 5050
 
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /app/.venv/bin/python -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
+    CMD /app/.venv/bin/python -c "import requests; requests.get('http://localhost:5050/health', timeout=5).raise_for_status()" || exit 1
 
 CMD ["/app/.venv/bin/python", "run.py"]
 
@@ -328,6 +328,6 @@ EXPOSE 5050
 
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /app/.venv/bin/python -c "import requests; requests.get('http://localhost:5050/health')" || exit 1
+    CMD /app/.venv/bin/python -c "import requests; requests.get('http://localhost:5050/health', timeout=5).raise_for_status()" || exit 1
 
 CMD ["/app/.venv/bin/python", "run.py"]
