@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Hook pre-commit : refuse tout commit introduisant un secret (gitleaks).
+#
+# Activation, une fois par clone :
+#     git config core.hooksPath .githooks
+#
+# Nécessite gitleaks dans le PATH — https://github.com/gitleaks/gitleaks#installing
+#     brew install gitleaks
+#     go install github.com/gitleaks/gitleaks/v8@latest
+#     ou un binaire depuis les releases GitHub
+#
+# Contourner ponctuellement (à éviter) :  git commit --no-verify
+
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    printf '\033[33m[pre-commit] gitleaks absent — scan de secrets ignoré.\033[0m\n' >&2
+    printf '            Installer : https://github.com/gitleaks/gitleaks#installing\n' >&2
+    printf '            Le job CI security:gitleaks reste le garde-fou bloquant.\n' >&2
+    exit 0
+fi
+
+# Scanne uniquement l'index (modifications indexées), pas tout l'historique.
+# `gitleaks git --staged` remplace l'ancien `gitleaks protect --staged`.
+if ! gitleaks git --staged --redact --no-banner --verbose; then
+    printf '\033[31m[pre-commit] Secret détecté dans les modifications indexées — commit refusé.\033[0m\n' >&2
+    printf '            Retirer le secret des fichiers indexés avant de recommiter.\n' >&2
+    exit 1
+fi

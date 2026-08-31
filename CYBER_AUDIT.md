@@ -209,7 +209,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 ## Constats hors référentiel
 
-- **CI — analyses de sécurité non bloquantes** : `.gitlab-ci.yml` — le job `security:sast` porte `allow_failure: true` et le passage JSON de `bandit`/`pip-audit` est suffixé `|| true`. Les vulnérabilités sont visibles mais ne cassent jamais le pipeline (cohérent avec `TECH_DEBT_AUDIT.md` F043).
+- **CI — analyses de sécurité non bloquantes** : `.gitlab-ci.yml` — le job `security:sast` porte `allow_failure: true` et le passage JSON de `bandit`/`pip-audit` est suffixé `|| true`. Les vulnérabilités sont visibles mais ne cassent jamais le pipeline (cohérent avec `TECH_DEBT_AUDIT.md` F043). *(2026-08-31 : ajout d'un job `security:gitleaks` bloquant — détection de secrets sur tout l'historique — et d'un hook `.githooks/pre-commit` ; ce job échoue tant que l'historique CS-113-04 n'est pas purgé.)*
 - **CI — runner privilégié** : `.gitlab-ci.yml:77` `docker run --rm --privileged tonistiigi/binfmt:...` ; le runner partage le daemon Docker de l'hôte (`resource_group: docker-host`).
 - **CI — token dans une ligne de commande** : `uv pip compile --extra-index-url "https://${GITLAB_DEPLOY_USERNAME_38}:${GITLAB_DEPLOY_TOKEN_38}@..."` expose le token dans l'`argv` du process. Préférer `UV_INDEX_..._PASSWORD` en variable d'environnement.
 - **Conteneur root + privilèges maximaux** : aucun `USER` dans le `Dockerfile` ; `privileged: true`, `network_mode: host`, `ipc: host`, `-v /dev:/dev`. Un exploit applicatif s'exécute avec les droits root sur l'hôte Jetson. Ajouter `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `read_only: true` + `tmpfs`, et un utilisateur dédié.
@@ -310,6 +310,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 ### Phase RUN (non-conformités mineures et volet contractuel)
 
+- [x] Détection de secrets : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml` *(fait 2026-08-31 ; retirer l'allowlist `replacements.txt` de `.gitleaks.toml` après la purge de l'historique)* — `CS-113-04`
 - [ ] Ajouter `SECURITY.md` + canal de signalement de vulnérabilité *(coût : faible)* — `CS-1141-03`
 - [ ] Documenter la procédure d'effacement sécurisé des supports en fin de vie / retour SAV *(coût : faible)* — `CS-R1-03`
 - [ ] Mettre en place un export des logs (support amovible ou syslog lors des interventions) *(coût : moyen)* — `CS-R2-04`

@@ -1,0 +1,12 @@
+# Framework pre-commit (https://pre-commit.com) — optionnel.
+# Alternative au hook versionné .githooks/pre-commit.
+#
+#   uv tool install pre-commit
+#   pre-commit install
+#
+# gitleaks : refuse tout commit introduisant un secret (scan des fichiers indexés).
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks

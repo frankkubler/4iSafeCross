@@ -1,0 +1,23 @@
+# Configuration gitleaks — 4iSafeCross
+# Détection de secrets (tokens, clés, mots de passe) dans le code et l'historique.
+# Utilisée par le job CI `security:gitleaks` (.gitlab-ci.yml) et le hook
+# .githooks/pre-commit.
+
+title = "4iSafeCross gitleaks config"
+
+# Repartir des règles par défaut de gitleaks (Telegram bot token, clés privées,
+# AWS, mots de passe génériques, URI avec identifiants, etc.).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Faux positifs connus, propres à ce dépôt."
+paths = [
+  # Le fichier de lock ne contient que des hachages sha256 de paquets.
+  '''uv\.lock''',
+  # Modèle de configuration : uniquement des valeurs-gabarits <...>.
+  '''\.env\.example''',
+  # Fichier de règles de purge : contient volontairement les motifs des
+  # secrets historiques (à supprimer après réécriture de l'historique).
+  '''replacements\.txt''',
+]
