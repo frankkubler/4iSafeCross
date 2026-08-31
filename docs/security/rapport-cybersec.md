@@ -134,7 +134,7 @@ Le système relève **probablement de la catégorie Haut Risque** (AI Act Art. 6
 **Observable dans le dépôt (positif) :**
 - `.env.example` : template avec instructions `chmod 600` — secrets externalisés ✅
 - `.gitignore` : `.env` et `.env.*` explicitement exclus ✅
-- `scripts/install_xrdp_jetson.sh` : `apt install -y ... ufw fail2ban` — UFW et Fail2ban installés et configurés ✅
+- `scripts/install_vnc_jetson.sh` : `apt install -y ... ufw fail2ban` — UFW et Fail2ban installés et configurés ✅
 - `README.md §VNC` : restriction du port 5999 au sous-réseau `192.168.3.0/24` ✅
 
 **⚠️ Observable dans le dépôt — risque résiduel :**

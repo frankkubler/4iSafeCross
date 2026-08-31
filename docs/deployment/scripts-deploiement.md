@@ -18,7 +18,7 @@ configuration matérielle et la maintenance du boîtier Jetson.
 | [`disable-autosuspend.sh`](../../scripts/disable-autosuspend.sh) | Bash | Désactive l'USB autosuspend (Yoctopuce) |
 | [`set_poe_gpio.sh`](../../scripts/set_poe_gpio.sh) | Bash | Positionne le GPIO PoE (utilisé par le service) |
 | [`switch-display.sh`](../../scripts/switch-display.sh) | Bash | Logique de détection HDMI / activation dummy Xorg |
-| [`install_xrdp_jetson.sh`](../../scripts/install_xrdp_jetson.sh) | Bash | TigerVNC + XFCE + UFW + Fail2ban sur Jetson |
+| [`install_vnc_jetson.sh`](../../scripts/install_vnc_jetson.sh) | Bash | TigerVNC + XFCE + UFW + Fail2ban sur Jetson |
 | [`4isafecross.logrotate`](../../scripts/4isafecross.logrotate) | logrotate | Rotation des logs applicatifs (10 Mo × 5) |
 
 ---
@@ -215,7 +215,7 @@ Géré automatiquement au boot via `check-dummy-display.service`.
 
 ---
 
-### `install_xrdp_jetson.sh`
+### `install_vnc_jetson.sh`
 
 Installe et configure **TigerVNC + XFCE** sur Jetson Orin NX pour l'accès
 graphique distant (VNC sur port `5999`, display `:99`).
@@ -244,10 +244,10 @@ graphique distant (VNC sur port `5999`, display `:99`).
 
 ```sh
 # Accès local RJ45 uniquement
-sudo bash scripts/install_xrdp_jetson.sh --subnet 192.168.3.0/24
+sudo bash scripts/install_vnc_jetson.sh --subnet 192.168.3.0/24
 
 # Recommandé : XFCE + VNC + accès Tailscale distant
-sudo bash scripts/install_xrdp_jetson.sh --tailscale
+sudo bash scripts/install_vnc_jetson.sh --tailscale
 ```
 
 **Configuration réseau maintenance recommandée (NetworkManager) :**
@@ -290,7 +290,7 @@ tailscale status
 tailscale ip -4
 
 # 4. Lancer le script avec l'option Tailscale
-sudo bash scripts/install_xrdp_jetson.sh --tailscale
+sudo bash scripts/install_vnc_jetson.sh --tailscale
 
 # 5. Définir le mot de passe VNC et démarrer
 vncpasswd
@@ -340,7 +340,7 @@ Après le flash JetPack (voir
 1. disable-autosuspend.sh   → désactiver USB autosuspend + reboot
 2. set_poe_gpio.sh          → installer set-poe-gpio.service
 3. switch-display.sh        → installer check-dummy-display.service
-4. install_xrdp_jetson.sh   → VNC + UFW + Fail2ban
+4. install_vnc_jetson.sh   → VNC + UFW + Fail2ban
 5. .env                     → créer et remplir depuis .env.example
 6. 4isafecross.service      → installer et activer
 7. 4isafecross.logrotate    → installer dans /etc/logrotate.d/

@@ -662,7 +662,7 @@ le démarrage, la configuration matérielle et la maintenance du boîtier Jetson
 | [`disable-autosuspend.sh`](scripts/disable-autosuspend.sh) | Désactive USB autosuspend (Yoctopuce) — 1 fois post-flash |
 | [`set_poe_gpio.sh`](scripts/set_poe_gpio.sh) | GPIO PoE sur gpiochip2/ligne 15 |
 | [`switch-display.sh`](scripts/switch-display.sh) | Détection HDMI + activation dummy Xorg |
-| [`install_xrdp_jetson.sh`](scripts/install_xrdp_jetson.sh) | TigerVNC + XFCE + UFW + Fail2ban |
+| [`install_vnc_jetson.sh`](scripts/install_vnc_jetson.sh) | TigerVNC + XFCE + UFW + Fail2ban |
 | [`4isafecross.logrotate`](scripts/4isafecross.logrotate) | Rotation des logs (10 Mo × 5) |
 
 📌 **Documentation complète** (procédures d'installation, options, ordre déploiement) :

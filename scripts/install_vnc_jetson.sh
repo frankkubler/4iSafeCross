@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================
-# install_xrdp_jetson.sh
+# install_vnc_jetson.sh
 # Installation VNC sur Jetson Orin NX (JetPack / Ubuntu)
-# Configuration unique : XFCE + TigerVNC
-# Usage : sudo bash install_xrdp_jetson.sh [--subnet 192.168.3.0/24] [--tailscale]
+# Configuration unique : XFCE + TigerVNC, session chiffrée (X509Vnc / RA2ne)
+# Usage : sudo bash install_vnc_jetson.sh [--subnet 192.168.3.0/24] [--tailscale]
 # ============================================================
 
 set -euo pipefail
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Argument inconnu : $1"
-            echo "Usage : sudo bash install_xrdp_jetson.sh [--subnet 192.168.3.0/24] [--tailscale]"
+            echo "Usage : sudo bash install_vnc_jetson.sh [--subnet 192.168.3.0/24] [--tailscale]"
             exit 1
             ;;
     esac
@@ -96,6 +96,15 @@ fi
 echo "    OK"
 
 echo "[3/5] Création du service systemd TigerVNC..."
+# -SecurityTypes X509Vnc,RA2ne : la session est CHIFFRÉE (TLS/AES). VncAuth
+#   (challenge DES, écran + clavier en clair) et None sont refusés.
+#   X509Vnc : certificat auto-généré dans ~/.vnc/x509_{cert,key}.pem au 1er
+#             démarrage — empreinte à vérifier côté client au premier accès.
+#             Pour un certificat provisionné : ajouter
+#             -X509Cert /chemin/cert.pem -X509Key /chemin/key.pem
+#   RA2ne  : repli RSA-AES (empreinte serveur en TOFU) pour les clients sans X509.
+# -localhost no : Xvnc écoute sur toutes les interfaces ; l'accès reste borné au
+#   sous-réseau maintenance par UFW (étape suivante) + fail2ban.
 cat > /etc/systemd/system/vncserver@.service << VNCSVC
 [Unit]
 Description=TigerVNC server display :%i
@@ -108,7 +117,7 @@ WorkingDirectory=$USER_HOME
 KillMode=mixed
 TimeoutStopSec=10
 ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
-ExecStart=/usr/bin/vncserver -fg :%i -geometry 1920x1080 -depth 24 -localhost no -xstartup $USER_HOME/.vnc/xstartup
+ExecStart=/usr/bin/vncserver -fg :%i -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes X509Vnc,RA2ne -xstartup $USER_HOME/.vnc/xstartup
 ExecStop=-/usr/bin/timeout 8 /usr/bin/vncserver -kill :%i
 ExecStopPost=-/usr/bin/pkill -KILL -f "Xtigervnc.*:%i|Xvnc.*:%i|vncserver.*:%i"
 ExecStopPost=-/usr/bin/rm -f /tmp/.X%i-lock /tmp/.X11-unix/X%i
@@ -214,16 +223,20 @@ echo "============================================"
 echo " Installation terminée !"
 echo "============================================"
 echo "   Session     : XFCE"
-echo "   Protocole   : VNC"
+echo "   Protocole   : VNC chiffré (SecurityTypes X509Vnc,RA2ne)"
 echo "   Port        : ${VNC_PORT}"
 echo "   Display     : :${VNC_DISPLAY}"
 echo "   Utilisateur : $CURRENT_USER"
 echo ""
 echo " Étapes suivantes :"
 echo "   1. Définir le mot de passe  : sudo -u $CURRENT_USER vncpasswd"
+echo "      (mot de passe unique par boîtier, à stocker dans le coffre-fort 4itec)"
 echo "   2. Démarrer le service      : sudo systemctl start vncserver@${VNC_DISPLAY}.service"
 echo "   3. Vérifier le statut       : sudo systemctl status vncserver@${VNC_DISPLAY}.service"
-echo "   4. Connexion Remmina        : VNC | hôte:${VNC_PORT}"
+echo "   4. Connexion Remmina/vncviewer : activer le chiffrement côté client"
+echo "      (TLS/X509 ou RSA-AES) ; une connexion 'VNC' non chiffrée doit être REFUSÉE."
+echo "   5. Contrôle : sudo -u $CURRENT_USER vncviewer -SecurityTypes VncAuth 127.0.0.1:${VNC_PORT}"
+echo "      → doit échouer ('No matching security types')."
 echo ""
 echo " Workflow port maintenance :"
 echo "   1. Brancher le câble RJ45"
