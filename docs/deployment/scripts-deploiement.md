@@ -4,9 +4,10 @@ Ce document décrit l'ensemble des scripts Bash et fichiers systemd fournis dans
 dossier [`scripts/`](../../scripts/) pour automatiser le déploiement, la
 configuration matérielle et la maintenance du boîtier Jetson.
 
-> Ce document remplace l'ancien `script-deploiement.md` (accès distant RustDesk /
-> xrdp), supprimé : **RustDesk et xrdp/RDP ne sont plus utilisés**. Le contenu
-> encore pertinent (affichage headless, GDM3) a été repris ci-dessous.
+> Ce document fusionne l'ancien `script-deploiement.md` (supprimé). **xrdp/RDP
+> est abandonné** ; **RustDesk est conservé comme accès distant provisoire de
+> mise au point** (voir la section dédiée). L'affichage headless et GDM3 sont
+> repris ci-dessous.
 
 ---
 
@@ -17,13 +18,14 @@ Le boîtier fonctionne **autonome, sans connexion Internet** en exploitation.
 | Élément | En mise au point (sur site) | En exploitation (RUN) |
 |---|---|---|
 | Connectivité | Clé **4G** provisoire (téléchargement d'image, réglages) — retirée à la livraison | Aucune |
-| Accès distant | SSH + VNC local ; option Tailscale possible | **VNC local uniquement** (câble RJ45 point-à-point sur `eth2`) |
+| Accès distant | SSH + VNC local ; **RustDesk** et/ou **Tailscale** provisoires | **VNC local uniquement** (câble RJ45 point-à-point sur `eth2`) |
 | Caméras | `eth1`, sous-réseau dédié `192.168.2.x` (PoE) | Idem |
 
-**Accès de maintenance : TigerVNC chiffré** (port `5999`, `SecurityTypes X509Vnc,RA2ne`).
+**Accès de maintenance en RUN : TigerVNC chiffré** (port `5999`, `SecurityTypes X509Vnc,RA2ne`).
 RDP/xrdp est proscrit (§1.1.4.3 du référentiel Stellantis STLA-CS_STD_004) et
-n'est **pas** installé. Le bot Telegram et l'option Tailscale sont des commodités
-de mise au point à désactiver/retirer pour l'état RUN — voir `CYBER_AUDIT.md`.
+n'est **pas** installé. **Clé 4G, RustDesk, Tailscale et bot Telegram sont des
+commodités de mise au point** : connectivité à déclarer au Plant IT Leader, et à
+désinstaller/retirer + attester à la recette (voir `CYBER_AUDIT.md`).
 
 ---
 
@@ -362,6 +364,60 @@ sudo bash scripts/install_vnc_jetson.sh --tailscale
 
 À la livraison : `sudo tailscale down && sudo apt purge tailscale`, puis
 re-lancer le script sans `--tailscale` pour rétablir le blocage UFW de `tailscale0`.
+
+---
+
+## Accès distant provisoire de mise au point — RustDesk
+
+> **Provisoire, comme la clé 4G et Tailscale.** RustDesk (self-hosted) sert
+> uniquement au réglage à distance pendant la mise au point sur site. Il **doit
+> être désinstallé et son autostart retiré à la livraison** ; le boîtier en
+> exploitation n'a aucun accès distant hors du VNC local sur `eth2`.
+> Cette connectivité de mise au point est à déclarer au Plant IT Leader
+> (voir `CYBER_AUDIT.md`, §1.2.7 / §1.4.5) et son retrait à attester à la recette.
+
+RustDesk capture le display de la session VNC (`:99`). Deux réglages sont
+nécessaires :
+
+**1. Accès au display X pour le service RustDesk** (tourne en root) —
+`/etc/systemd/system/rustdesk.service.d/override.conf` :
+
+```ini
+[Service]
+Environment=DISPLAY=:99
+Environment=XAUTHORITY=/home/user-4itec/.Xauthority
+```
+
+**2. Autorisation `xhost` renouvelée à chaque session** (le cookie
+MIT-MAGIC-COOKIE-1 change) — [`autostart/rustdesk-xhost.desktop`](../../autostart/rustdesk-xhost.desktop),
+à copier dans `~/.config/autostart/` :
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=RustDesk xhost fix
+Exec=bash -c "DISPLAY=:99 xhost +local:root"
+X-GNOME-Autostart-enabled=true
+```
+
+> `xhost +local:root` abaisse le contrôle d'accès du serveur X pour root local
+> — acceptable le temps de la mise au point, à retirer avec RustDesk.
+
+**Retrait à la livraison :**
+
+```sh
+sudo systemctl disable --now rustdesk
+sudo apt purge rustdesk
+rm -f ~/.config/autostart/rustdesk-xhost.desktop
+sudo rm -f /etc/systemd/system/rustdesk.service.d/override.conf
+```
+
+**Diagnostic (pendant la mise au point) :**
+
+```sh
+sudo journalctl -u rustdesk -n 50 --no-pager | grep -iE "display|xauth|error|refused"
+DISPLAY=:99 XAUTHORITY=/home/user-4itec/.Xauthority xdpyinfo | grep "name of display"
+```
 
 ---
 
