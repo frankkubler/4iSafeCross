@@ -81,6 +81,25 @@ Une interface web Flask/Waitress (port 5050) sert le flux vidéo en direct, un �
 
 ## Tableau de conformité
 
+**Lecture des identifiants `CS-…`** — numérotation interne stable de ce référentiel d'audit (réduction de la norme **STLA-CS_STD_004 V4** aux exigences vérifiables sur un dépôt) ; ce ne sont pas des références officielles Stellantis. Format : `CS` – `<chapitre de la norme, points retirés>` – `<n° d'exigence dans le chapitre>`. La colonne **Chapitre** ci-dessous donne la section réelle de la norme.
+
+| Préfixe | Chapitre STLA-CS_STD_004 | Sujet |
+|---|---|---|
+| `CS-113-xx` | §1.1.3 | Contrôle d'accès logique — comptes, secrets, autologon |
+| `CS-1141-xx` | §1.1.4.1 | OS / firmware et correctifs |
+| `CS-1143-xx` | §1.1.4.3 | Protocoles et services sécurisés (protocoles interdits, TLS, services exposés) |
+| `CS-1144-xx` | §1.1.4.4 | Contrôle d'accès à l'écriture des variables / consignes |
+| `CS-123-xx` | §1.2.3 | OS approuvés (liste Windows) |
+| `CS-127-xx` | §1.2.7 | Internet et messagerie sur machines Manufacturing |
+| `CS-128-xx` | §1.2.8 | Outils de développement absents des machines de production |
+| `CS-R1-xx` … `CS-R8-xx` | §1.2.9, Règles 1 à 8 | Développement d'applications industrielles (données, identité, journalisation, protocoles constructeur, guides sécurisés, MCO, compat OS, audits) |
+| `CS-143-xx` | §1.4.3 | Filtrage des communications, cartographie des flux |
+| `CS-144-xx` | §1.4.4 | Supervision réseau, journalisation des flux rejetés |
+| `CS-145-xx` | §1.4.5 | Raccordement au réseau IT de l'usine, sans-fil, 3G/4G/5G |
+| `CS-15-xx` | §1.5 | Consoles et postes de développement du fournisseur |
+
+Exemple : **`CS-1143-01`** = §1.1.4.3, exigence n°1 — *« aucun protocole interdit n'est utilisé »* (HTTP en clair, FTP, TFTP, Telnet, SSHv1, SMBv1/2, RDP, SMTP en clair, SNMPv1/2, OPC-DA, MQTT non chiffré, MODBUS, Open Protocol). Quand deux exigences visent le même constat — typiquement `CS-1143-01` et `CS-R3-01` (§1.2.9 Règle 3, « protocoles non sécurisés proscrits ») — il n'est porté qu'une fois, l'autre ligne y renvoie.
+
 | ID | Chapitre | Exigence | Verdict | Sévérité | Preuve (fichier:ligne) | Action |
 |---|---|---|---|---|---|---|
 | CS-113-01 | §1.1.3 | Authentification via serveurs centraux Stellantis (RADIUS / AD / PingFederate) | Dérogation requise | Majeure | `src/web/app_factory.py:23-25` (HTTP Basic locale, deux variables d'env) ; `scripts/install_xrdp_jetson.sh` (compte local VNC) | Intégrer PingFederate pour l'IHM métier ; à défaut, formaliser par écrit le motif d'authentification locale (aucune solution centrale compatible sur équipement embarqué autonome) et adresser la dérogation au référent technique en phase d'étude |
