@@ -138,13 +138,9 @@ Le système relève **probablement de la catégorie Haut Risque** (AI Act Art. 6
 - `README.md §VNC` : restriction du port 5999 au sous-réseau `192.168.3.0/24` ✅
 
 **⚠️ Observable dans le dépôt — risque résiduel :**
-- `README.md` ligne **477** :
-  ```
-  user : user-4itec / mdp : ***REMOVED-PASSWORD***
-  ```
-  Credentials VNC présents dans le README. Le dépôt est **privé** (confirmé : HTTP 404 en accès public) et l'accès VNC nécessite un **câble physique direct** sur eth2 — le risque opérationnel immédiat est donc **faible**.
+- `README.md §eth2` : les identifiants du compte de maintenance étaient présents en clair dans le README.
 
-  Risque résiduel : un collaborateur avec accès au dépôt privé connaît le mot de passe. La suppression reste recommandée par hygiène (git history, risque si le dépôt change de visibilité).
+  **Corrigé (2026-08-31)** : retirés du README et de l'historique git (`git filter-repo`), remplacés par un pointeur vers le coffre-fort 4itec (Vaultwarden), identifiants désormais uniques par boîtier. Voir `CYBER_AUDIT.md`, constat `CS-113-04`.
 
 **Lacunes supplémentaires :**
 - ❌ Aucun guide de référence explicite cité (OWASP, ANSSI, NIST SP 800-218).

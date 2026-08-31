@@ -148,7 +148,7 @@ ls dataset/manifest.sha256 2>/dev/null && echo OK       # → manifeste présent
 pip show cyclonedx-bom                                  # → installé
 
 # Phase 3 — Long terme
-grep -n "***REMOVED-PASSWORD***" README.md                          # → 0 résultat (après maintenance)
+grep -nE "mdp *:|user-4itec.*/ *mdp" README.md         # → 0 résultat (identifiants retirés)
 ```
 
 > **Note** : Les vérifications `curl -o /dev/null -w "%{http_code}" http://jetson:5050/zone_editor/0` attendant un 401 ont été **retirées** — Flask sans authentification est acceptable dans ce contexte air-gap (accès physique requis sur eth2).

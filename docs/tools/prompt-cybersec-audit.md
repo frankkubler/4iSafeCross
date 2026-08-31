@@ -114,7 +114,7 @@ Pour chacune des 10 questions de l'Annexe 4 (critères de maturité cybersécuri
 - `.gitignore` : `.env` explicitement exclu du dépôt
 - `scripts/install_xrdp_jetson.sh` : UFW (deny incoming), Fail2ban (jail VNC), anti-lockout SSH
 - `README.md §VNC` : port VNC restreint au sous-réseau `192.168.3.0/24`, option Tailscale
-- ⚠️ `README.md §eth2` : **credentials VNC en clair** (`user-4itec / ***REMOVED-PASSWORD***`) — CRITIQUE
+- ⚠️ `README.md §eth2` : identifiants du compte de maintenance jadis en clair — **corrigé** (retirés du README et de l'historique, déplacés vers le coffre-fort 4itec)
 - Aucun guide de référence explicite (OWASP, ANSSI, NIST SP 800-218) cité
 - Aucune analyse statique de sécurité (Bandit, Semgrep) dans la CI/CD
 

@@ -716,7 +716,7 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l'arrière de la
 > - Caméra 0 : 192.168.2.156
 > - Caméra 1 : 192.168.2.157
 > Vous pouvez modifier ces adresses dans le fichier [`config/zones.ini`](config/zones.ini), variable `RTSP_HOST`.
-- **eth2** est réservé pour la connexion VNC de maintenance (port 5999), avec l'adresse IP 192.168.3.122. (masque 255.255.255.0) user : user-4itec / mdp : ***REMOVED-PASSWORD***
+- **eth2** est réservé pour la connexion VNC de maintenance (port 5999), avec l'adresse IP 192.168.3.122 (masque 255.255.255.0). Identifiants du compte de maintenance : uniques par boîtier, stockés dans le coffre-fort 4itec (Vaultwarden), accessibles aux personnes habilitées. Ne jamais les inscrire ici.
 
 ## Gestion de la rotation des logs (logrotate)
 
