@@ -4,7 +4,7 @@
 - **Complément** : passe d'hygiène cyber générique (hors référentiel, section dédiée)
 - **Dépôt** : `frankkubler/4iSafeCross`
 - **Commit audité** : `8d3c9cf` — branche `fix-mapping-classes-dataset`
-- **Date** : 2026-08-31 (révision 2 — intégration du modèle de déploiement confirmé par le fournisseur)
+- **Date** : 2026-08-31 (révision 3 — `CS-113-04` corrigé : secrets révoqués/rotés et historique git réécrit)
 - **Méthode** : analyse statique du code, de la configuration, de la CI/CD, de l'historique git et de la documentation. Aucune vérification sur cible.
 - **Périmètre retenu** : le boîtier livré (appliance de vision Jetson Orin NX) et son logiciel embarqué. Hors périmètre : le matériel au catalogue, les licences ACRONIS/CrowdStrike/StellarProtect, l'installation physique, l'exploitation, et les serveurs d'inférence externes (`inf_jetson_yolo`, `inf_jetson_rf-detr`) référencés mais non inclus dans ce dépôt.
 
@@ -18,24 +18,27 @@
 
 | Verdict | Nombre |
 |---|---|
-| Conforme | 2 |
-| Non conforme | 25 |
+| Conforme | 3 |
+| Non conforme | 24 |
 | Dérogation requise | 8 |
 | Non applicable | 3 |
 | Hors dépôt | 8 |
 
-**Décompte des non-conformités par sévérité** (constats `Non conforme` + `Dérogation requise`, 33 lignes) :
+**Décompte des non-conformités par sévérité** (constats `Non conforme` + `Dérogation requise`, 32 lignes) :
 
 | Sévérité | Nombre |
 |---|---|
-| Bloquante | 2 (CS-R3-01 partage le constat de CS-1143-01) |
+| Bloquante | 1 (CS-R3-01 partage le constat de CS-1143-01) |
 | Majeure | 24 |
 | Mineure | 6 |
 
-**Non-conformités bloquantes** :
+**Non-conformité bloquante restante** :
 
-- `CS-113-04` — Secrets réels dans l'historique git : token du bot Telegram + `chat_id`, identifiants des caméras RTSP (`admin` / mot de passe partagé du site), clé HMAC de licence (`licenses/license_state.key`), et mot de passe du compte de maintenance `user-4itec` (même mot de passe partagé) en clair dans `README.md:719` de l'arbre courant. **L'air-gap ne corrige pas ce constat** : un secret publié reste extractible et valide tant qu'il n'est pas révoqué. *(Valeurs littérales retirées de ce rapport ; elles restent dans l'historique git tant que celui-ci n'est pas réécrit.)*
 - `CS-1143-01` / `CS-R3-01` — **RDP (port 3389) est un protocole explicitement interdit** par le tableau du §1.1.4.3, et le fournisseur le désigne comme l'unique moyen d'accès en exploitation. IHM de supervision servie en **HTTP en clair** (`run.py:32`). VNC de maintenance en `VncAuth` sans TLS. Le remplaçant imposé par la norme est **VNC chiffré (STLA-CS_STD_129)**.
+
+**Corrigé depuis la révision 2** :
+
+- `CS-113-04` (était `Bloquante`) — **corrigé le 2026-08-31**. Token du bot Telegram révoqué (BotFather), mots de passe des caméras RTSP et du compte `user-4itec` changés (uniques par boîtier, dans le coffre-fort 4itec), clé HMAC de licence régénérée — **rotation attestée par 4itec** (hors dépôt). Identifiants retirés de l'arbre courant ; **historique git réécrit** (`git filter-repo`, 573 commits) et force-pushé sur GitHub et GitLab ; MR/PR et pipelines porteurs des anciens commits supprimés (GitLab Repository cleanup, dépôt GitHub recréé). Vérifié le 2026-08-31 : **0 occurrence des secrets sur l'ensemble des refs des deux remotes**. Barrière ajoutée : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml`.
 
 ---
 
@@ -48,7 +51,8 @@
 **Effet du modèle de déploiement confirmé sur les sévérités.** Le référentiel Stellantis raisonne « exposition réseau ». Un boîtier autonome, sans réseau partagé, dont l'accès exige une présence physique et un câble point-à-point, réduit la vraisemblance des scénarios réseau distants — mais **pas** la non-conformité du protocole employé (la recette FOR_509 applique une *zero-tolerance* sur la liste des protocoles interdits, indépendamment du contexte). En conséquence :
 
 - passent de `Bloquante` à `Majeure` : `CS-1143-05`, `CS-127-01`, `CS-143-01`, `CS-143-02`, `CS-1144-01` ;
-- restent `Bloquante` : `CS-113-04` (secrets — non lié à l'exposition) et `CS-1143-01` (RDP est nommé dans la liste des interdits, et c'est le moyen d'accès retenu, pas un résidu) ;
+- reste `Bloquante` : `CS-1143-01` (RDP est nommé dans la liste des interdits, et c'est le moyen d'accès retenu, pas un résidu) ;
+- **corrigé (révision 3)** : `CS-113-04` (secrets — voir *Synthèse* et le détail plus bas) ;
 - **apparaissent** comme dérogations à formaliser en phase d'étude : `CS-145-01` et `CS-145-02` (connexion Internet provisoire + clé 4G pendant la mise au point).
 
 **Réponses de cadrage (Phase 2)** :
@@ -82,7 +86,7 @@ Une interface web Flask/Waitress (port 5050) sert le flux vidéo en direct, un �
 | CS-113-01 | §1.1.3 | Authentification via serveurs centraux Stellantis (RADIUS / AD / PingFederate) | Dérogation requise | Majeure | `src/web/app_factory.py:23-25` (HTTP Basic locale, deux variables d'env) ; `scripts/install_xrdp_jetson.sh` (compte local VNC) | Intégrer PingFederate pour l'IHM métier ; à défaut, formaliser par écrit le motif d'authentification locale (aucune solution centrale compatible sur équipement embarqué autonome) et adresser la dérogation au référent technique en phase d'étude |
 | CS-113-02 | §1.1.3 | Au moins deux comptes distincts : Administrateur et Opérateur | Non conforme | Majeure | `src/web/app_factory.py:28-34` (une seule paire d'identifiants, un seul niveau) | Introduire un rôle Opérateur (consultation, acquittement) distinct du rôle Administrateur (édition des zones, toggle détection, arrêt) et l'appliquer dans le garde d'accès |
 | CS-113-03 | §1.1.3 | Comptes par défaut supprimés, comptes inutilisés désactivés | Non conforme | Majeure | `utils/constants.py:202` (`fallback='admin'` pour `RTSP_LOGIN`) ; `README.md:719` (`user-4itec`) | Supprimer le fallback `admin` ; renommer le compte `user-4itec` en compte nominatif ; désactiver les comptes de démonstration à la recette. Constat lié à `CS-113-04` |
-| CS-113-04 | §1.1.3 | Aucun secret en dur dans le code **ni dans l'historique git** | Non conforme | Bloquante | `README.md:719` ; historique : `git show 144ad43`, `6739ad0`, `6e2c019`, `7a68ac1` ; `licenses/license_state.key` (retiré en `f011f5b`, extractible) | Voir « Non-conformités bloquantes — détail ». Révocation d'abord, réécriture d'historique ensuite. **Non atténué** par l'air-gap ni par le fait que Nuitka/Cython n'embarquent pas ces valeurs sur la cible : l'exigence porte sur le dépôt et son historique. Alternative conforme pour la base de connaissance 4itec : store `pass`/GPG (déjà utilisé pour le token GitLab), valeur unique par boîtier hors dépôt |
+| CS-113-04 | §1.1.3 | Aucun secret en dur dans le code **ni dans l'historique git** | Conforme *(corrigé 2026-08-31 — était `Non conforme` / `Bloquante`)* | — | Arbre courant sans secret ; historique réécrit (`git filter-repo`, 573 commits) et force-pushé sur les deux remotes ; MR/PR + pipelines porteurs des anciens commits supprimés ; vérif `git clone --mirror` + `git log --all -S` = **0 occurrence sur toutes les refs** de GitHub et GitLab. Job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` | Terminé. Rotation des secrets (token Telegram, mots de passe RTSP et `user-4itec`, clé HMAC) **attestée par 4itec** — hors dépôt, à confirmer au pilote. Reste hygiène : retirer l'allowlist `replacements.txt` de `.gitleaks.toml` |
 | CS-113-05 | §1.1.3 | Autologon autorisé seulement si compte Opérateur + IHM runtime + pas d'accès OS + hors Internet | Non conforme | Majeure | `docs/deployment/script-deploiement.md:38-44` (`AutomaticLogin=user-4itec`, GDM3) | En cible autonome, la condition « machine non connectée à Internet » est satisfaite, mais les deux autres non (session XFCE complète, accès shell, compte non Opérateur). Supprimer l'autologin ou le restreindre à un compte Opérateur sans accès OS |
 | CS-113-06 | §1.1.3 | Politique de mot de passe Stellantis, rotation, changement des mots de passe par défaut à la recette | Non conforme | Majeure | `README.md:719` (mot de passe partagé du site) ; `git show 6e2c019:config/config.ini` (`PASSWORD` renseigné en clair) | Mot de passe faible réutilisé (maintenance + caméras RTSP). Appliquer la politique Stellantis, imposer un changement à la recette, mettre en place la rotation. Constat lié à `CS-113-04` |
 | CS-1141-01 | §1.1.4.1 | Version d'OS/firmware/runtime = dernière approuvée, **identique pour les équipements de même référence** | Dérogation requise | Majeure | `README.md:312` (« JetPack 6.2 / L4T 36.4.3 ») vs `Dockerfile:253,296` (CUDA 13.2.1, dépôt apt L4T `r39.2` = JetPack 7.2) | Incohérence de version de firmware cible entre le README et l'image ARM64. Trancher la version officielle, la faire homologuer par le référent technique, garantir l'identité du firmware sur tout le parc de boîtiers d'une même référence |
@@ -130,11 +134,13 @@ Une interface web Flask/Waitress (port 5050) sert le flux vidéo en direct, un �
 
 ## Non-conformités bloquantes — détail
 
-La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire, accès résiduel RJ45 + RDP) a fait passer cinq constats de `Bloquante` à `Majeure` — tous liés à l'exposition réseau, désormais réduite par l'absence de réseau partagé et l'exigence d'accès physique. **Deux constats restent bloquants**, parce qu'ils ne dépendent pas de l'exposition.
+La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire, accès résiduel RJ45 + RDP) a fait passer cinq constats de `Bloquante` à `Majeure` — tous liés à l'exposition réseau, désormais réduite par l'absence de réseau partagé et l'exigence d'accès physique. La révision 3 acte la correction de `CS-113-04`. **Un seul constat reste bloquant** : `CS-1143-01` (RDP).
 
-### 1. `CS-113-04` — Secrets réels dans l'historique git et dans l'arbre courant
+### 1. `CS-113-04` — Secrets dans l'historique git et l'arbre courant — **CORRIGÉ (2026-08-31)**
 
-**Constats** :
+> **Statut : résolu.** Rotation des secrets attestée par 4itec (token Telegram révoqué via BotFather ; mots de passe RTSP et `user-4itec` changés, uniques par boîtier, dans le coffre-fort Vaultwarden 4itec ; clé HMAC de licence régénérée). Identifiants retirés de l'arbre courant (commit `9a02cac`). Historique réécrit (`git filter-repo`) sur les 573 commits, force-push GitHub + GitLab. Refs internes porteuses des anciens commits éliminées (GitLab : suppression des MR + Repository cleanup ; GitHub : dépôt recréé). Contrôle final `git clone --mirror` + `git log --all -S` sur les deux remotes : **0 occurrence**. Prévention : job CI `security:gitleaks` bloquant, hook `.githooks/pre-commit`, `.gitleaks.toml`. Le constat ci-dessous est conservé pour mémoire de l'état avant correction.
+
+**Constats (état avant correction)** :
 
 - **Token du bot Telegram + `chat_id`**, en clair, non commentés dans `config/config.ini` aux commits `144ad43` et `6739ad0` (`TOKEN = 6741846240:AAG…`, `CHAT_ID = -4115…` — valeurs complètes dans l'historique). Deux tokens de bot de développement supplémentaires (`7161709928:AAG…` et `7161709928:AAE…`) figurent en commentaire dans l'historique (`57a13f4`).
 
@@ -158,7 +164,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 3. Purger l'historique (`git filter-repo --replace-text`) ou reconstruire le dépôt ; forcer la rotation de tout secret ayant transité par la CI.
 4. **Base de connaissance maintenance 4itec** : conserver dans le dépôt privé un runbook décrivant la procédure, le compte et la méthode d'accès, et **l'emplacement** du mot de passe (entrée `pass` `4isafecross/<site>/maintenance` ou coffre 4itec) — pas la valeur. Si la valeur doit être versionnée, la stocker en blob **chiffré GPG** (`pass`), déchiffrable seulement par les clés autorisées — même mécanisme que celui déjà prescrit au `README.md:374-395` pour le token GitLab.
 
-**Statut de remédiation (2026-08-31)** : identifiants retirés de l'arbre courant (`README.md`, `docs/security/rapport-cybersec.md`, `docs/tools/prompt-cybersec-audit.md`, `docs/security/cybersec-implementation-plan.md`) ; `licenses/license_state.json` en cours de dé-suivi. **Restent à faire** : réécriture de l'historique (`git filter-repo`), révocation du token Telegram, changement des mots de passe RTSP et `user-4itec` (uniques par boîtier), stockage dans le coffre-fort 4itec (Vaultwarden). Constat maintenu `Bloquante` tant que l'historique n'est pas purgé et les secrets non révoqués.
+**Statut de remédiation — CLÔTURÉ le 2026-08-31** : identifiants retirés de l'arbre courant (`README.md`, `docs/security/rapport-cybersec.md`, `docs/tools/prompt-cybersec-audit.md`, `docs/security/cybersec-implementation-plan.md`) et `licenses/license_state.json` dé-suivi (commit `9a02cac`) ; historique réécrit (`git filter-repo`) et force-pushé sur GitHub + GitLab ; refs internes (MR/PR, pipelines) porteuses des anciens commits éliminées ; token Telegram révoqué, mots de passe RTSP et `user-4itec` changés (uniques par boîtier, Vaultwarden), clé HMAC régénérée — **rotation attestée par 4itec**. Contrôle `--mirror` sur les deux remotes : 0 occurrence. Constat passé de `Bloquante` à `Conforme`.
 
 **Position du fournisseur et réponse d'audit** : 4itec fait valoir que le dépôt est privé (accès limité aux employés 4itec, base de connaissance de maintenance) et que le déploiement par Nuitka ou Docker+Cython ne copie pas ces valeurs sur la machine cible. **Constaté exact sur l'artefact** : `config/config.ini` à HEAD ne contient aucun secret (`TOKEN=`, `CHAT_ID=`, `LOGIN=`, `PASSWORD=` vides) et le durcissement du build est réel (crédité en *Constats hors référentiel*). **Sans effet sur le verdict** : `CS-113-04` porte sur le dépôt et son historique, pas sur le binaire livré. Le secret reste lisible par quiconque obtient une copie du dépôt — clone, fork, sauvegarde, cache CI, départ d'un collaborateur, changement de visibilité, ou communication du dépôt à l'auditeur Stellantis pour étayer le dossier (`CS-R8-01`). La visibilité privée n'est pas un contrôle de secret ; la norme écrit « ni dans le code ni dans l'historique git », sans exception. De plus, un mot de passe unique documenté et partagé sur tout le parc contredit `CS-113-06` (unicité, changement à la recette, rotation) et `CS-R2-03` (traçabilité d'un compte partagé). Le token Telegram et le mot de passe RTSP présents dans l'historique sont par ailleurs des credentials externes vivants dont la révocation est requise indépendamment de cette discussion. Le mécanisme conforme (`pass`/GPG) est déjà en usage dans le dépôt — il ne s'agit donc pas d'une contrainte technique justifiant une `Dérogation requise`.
 
@@ -209,7 +215,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 ## Constats hors référentiel
 
-- **CI — analyses de sécurité non bloquantes** : `.gitlab-ci.yml` — le job `security:sast` porte `allow_failure: true` et le passage JSON de `bandit`/`pip-audit` est suffixé `|| true`. Les vulnérabilités sont visibles mais ne cassent jamais le pipeline (cohérent avec `TECH_DEBT_AUDIT.md` F043). *(2026-08-31 : ajout d'un job `security:gitleaks` bloquant — détection de secrets sur tout l'historique — et d'un hook `.githooks/pre-commit` ; ce job échoue tant que l'historique CS-113-04 n'est pas purgé.)*
+- **CI — analyses de sécurité non bloquantes** : `.gitlab-ci.yml` — le job `security:sast` porte `allow_failure: true` et le passage JSON de `bandit`/`pip-audit` est suffixé `|| true`. Les vulnérabilités sont visibles mais ne cassent jamais le pipeline (cohérent avec `TECH_DEBT_AUDIT.md` F043). *(2026-08-31 : ajout d'un job `security:gitleaks` **bloquant** — détection de secrets sur tout l'historique — et d'un hook `.githooks/pre-commit` ; historique purgé le même jour, le job passe au vert. `security:sast` reste à basculer en `allow_failure: false`, cf. `CS-R6-01`.)*
 - **CI — runner privilégié** : `.gitlab-ci.yml:77` `docker run --rm --privileged tonistiigi/binfmt:...` ; le runner partage le daemon Docker de l'hôte (`resource_group: docker-host`).
 - **CI — token dans une ligne de commande** : `uv pip compile --extra-index-url "https://${GITLAB_DEPLOY_USERNAME_38}:${GITLAB_DEPLOY_TOKEN_38}@..."` expose le token dans l'`argv` du process. Préférer `UV_INDEX_..._PASSWORD` en variable d'environnement.
 - **Conteneur root + privilèges maximaux** : aucun `USER` dans le `Dockerfile` ; `privileged: true`, `network_mode: host`, `ipc: host`, `-v /dev:/dev`. Un exploit applicatif s'exécute avec les droits root sur l'hôte Jetson. Ajouter `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `read_only: true` + `tmpfs`, et un utilisateur dédié.
@@ -281,9 +287,9 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 ### Avant réception sur site (non-conformités bloquantes)
 
-- [ ] Révoquer le token du bot Telegram, changer les mots de passe RTSP et `user-4itec` (un mot de passe **unique par boîtier**), régénérer la clé HMAC de licence *(coût : faible)* — `CS-113-04`
-- [ ] Retirer les identifiants en clair de `README.md:719` et `docs/security/rapport-cybersec.md:143` *(coût : faible)* — `CS-113-04`
-- [ ] Purger l'historique git des secrets (`git filter-repo`) ou reconstruire le dépôt *(coût : moyen)* — `CS-113-04`
+- [x] Révoquer le token du bot Telegram, changer les mots de passe RTSP et `user-4itec` (un mot de passe **unique par boîtier**), régénérer la clé HMAC de licence *(fait 2026-08-31 — rotation attestée par 4itec)* — `CS-113-04`
+- [x] Retirer les identifiants en clair de `README.md:719` et `docs/security/rapport-cybersec.md:143` *(fait — commit `9a02cac`)* — `CS-113-04`
+- [x] Purger l'historique git des secrets (`git filter-repo`) ou reconstruire le dépôt *(fait 2026-08-31 — réécriture + force-push GitHub/GitLab, refs internes purgées, vérif 0 occurrence)* — `CS-113-04`
 - [ ] Remplacer RDP/xrdp par VNC chiffré (STLA-CS_STD_129), ou obtenir une dérogation argumentée + mesures compensatoires écrites *(coût : moyen)* — `CS-1143-01`
 - [ ] Basculer l'IHM en HTTPS/TLS et binder sur `eth2` (`run.py:32`, `scripts/4isafecross.sh:10`) *(coût : moyen)* — `CS-1143-01`, `CS-143-02`
 
@@ -305,12 +311,12 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 - [ ] Réaligner `README.md` et `docs/deployment/*` sur le modèle de déploiement autonome *(coût : faible)* — hygiène / `CS-R8-01`
 - [ ] Retirer la bannière de version des réponses publiques ; passer `/debug_info` derrière authentification *(coût : faible)* — `CS-R8-01`
 - [ ] Activer le chiffrement TLS du transport VNC si conservé (`install_xrdp_jetson.sh:111`) *(coût : faible)* — `CS-1143-01`
-- [ ] Retirer `licenses/license_state.json` du suivi git ; retirer `licenses/license_state.key` de l'historique *(coût : faible)* — hygiène / `CS-113-04`
+- [x] Retirer `licenses/license_state.json` du suivi git ; retirer `licenses/license_state.key` de l'historique *(fait 2026-08-31 — dé-suivi + supprimé de tout l'historique par `git filter-repo --invert-paths`)* — hygiène / `CS-113-04`
 - [ ] Ajouter protection CSRF et en-têtes de sécurité HTTP ; demander les guides Stellantis Python et HTML/JS *(coût : faible)* — `CS-R4-01`
 
 ### Phase RUN (non-conformités mineures et volet contractuel)
 
-- [x] Détection de secrets : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml` *(fait 2026-08-31 ; retirer l'allowlist `replacements.txt` de `.gitleaks.toml` après la purge de l'historique)* — `CS-113-04`
+- [x] Détection de secrets : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml` *(fait 2026-08-31 ; historique purgé — retirer l'allowlist `replacements.txt` de `.gitleaks.toml` et, si présent, basculer le job sur `gitleaks git` plein historique)* — `CS-113-04`
 - [ ] Ajouter `SECURITY.md` + canal de signalement de vulnérabilité *(coût : faible)* — `CS-1141-03`
 - [ ] Documenter la procédure d'effacement sécurisé des supports en fin de vie / retour SAV *(coût : faible)* — `CS-R1-03`
 - [ ] Mettre en place un export des logs (support amovible ou syslog lors des interventions) *(coût : moyen)* — `CS-R2-04`

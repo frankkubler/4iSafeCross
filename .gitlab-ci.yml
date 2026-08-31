@@ -65,11 +65,7 @@ security:sast:
 # ─── Detection de secrets (gitleaks) ────────────────────────────────────────
 # BLOQUANT : un secret (token, cle, mot de passe) dans le code OU dans
 # l'historique git fait echouer le pipeline. Voir CYBER_AUDIT.md, CS-113-04.
-#
-# /!\  Tant que l'historique n'a pas ete purge (git filter-repo, cf. CS-113-04),
-#      ce job ECHOUE sur les fuites deja connues. Fusionner cette configuration
-#      AVEC ou APRES la MR de purge. Pour un etat intermediaire vert, basculer
-#      sur la variante « arbre courant uniquement » commentee ci-dessous.
+# L'historique a ete purge le 2026-08-31 (git filter-repo) : ce job doit etre vert.
 security:gitleaks:
   stage: security
   image:
