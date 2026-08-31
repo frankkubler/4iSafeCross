@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=RustDesk xhost fix
-Exec=bash -c "DISPLAY=:1 xhost +local:root"
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true

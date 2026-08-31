@@ -4,6 +4,27 @@ Ce document décrit l'ensemble des scripts Bash et fichiers systemd fournis dans
 dossier [`scripts/`](../../scripts/) pour automatiser le déploiement, la
 configuration matérielle et la maintenance du boîtier Jetson.
 
+> Ce document remplace l'ancien `script-deploiement.md` (accès distant RustDesk /
+> xrdp), supprimé : **RustDesk et xrdp/RDP ne sont plus utilisés**. Le contenu
+> encore pertinent (affichage headless, GDM3) a été repris ci-dessous.
+
+---
+
+## Contexte de déploiement
+
+Le boîtier fonctionne **autonome, sans connexion Internet** en exploitation.
+
+| Élément | En mise au point (sur site) | En exploitation (RUN) |
+|---|---|---|
+| Connectivité | Clé **4G** provisoire (téléchargement d'image, réglages) — retirée à la livraison | Aucune |
+| Accès distant | SSH + VNC local ; option Tailscale possible | **VNC local uniquement** (câble RJ45 point-à-point sur `eth2`) |
+| Caméras | `eth1`, sous-réseau dédié `192.168.2.x` (PoE) | Idem |
+
+**Accès de maintenance : TigerVNC chiffré** (port `5999`, `SecurityTypes X509Vnc,RA2ne`).
+RDP/xrdp est proscrit (§1.1.4.3 du référentiel Stellantis STLA-CS_STD_004) et
+n'est **pas** installé. Le bot Telegram et l'option Tailscale sont des commodités
+de mise au point à désactiver/retirer pour l'état RUN — voir `CYBER_AUDIT.md`.
+
 ---
 
 ## Vue d'ensemble
@@ -119,6 +140,61 @@ sudo systemctl enable check-dummy-display.service
 sudo systemctl start check-dummy-display.service
 ```
 
+**Fichier dummy requis : `/usr/share/X11/xorg.conf.d/xorg.conf.bak`**
+
+`switch-display.sh` bascule ce fichier entre `xorg.conf` (dummy actif, headless)
+et `xorg.conf.bak` (HDMI présent). Il **doit exister**. Le recréer si absent
+(par ex. après réinstallation du stack graphique) :
+
+```bash
+sudo tee /usr/share/X11/xorg.conf.d/xorg.conf.bak << 'EOF'
+Section "Device"
+    Identifier  "Tegra0"
+    Driver      "dummy"
+    VideoRam    256000
+EndSection
+
+Section "Monitor"
+    Identifier  "DummyMonitor"
+    HorizSync   28.0-80.0
+    VertRefresh 48.0-75.0
+    Modeline "1920x1080" 148.50 1920 2008 2052 2200 1080 1084 1089 1125 +hsync +vsync
+EndSection
+
+Section "Screen"
+    Identifier  "DummyScreen"
+    Device      "Tegra0"
+    Monitor     "DummyMonitor"
+    DefaultDepth 24
+    SubSection "Display"
+        Depth   24
+        Modes   "1920x1080"
+    EndSubSection
+EndSection
+EOF
+```
+
+Prérequis paquet : `xserver-xorg-video-dummy`.
+
+---
+
+## Session graphique headless (GDM3)
+
+Pour qu'une session XFCE soit disponible via VNC sur un boîtier sans écran, GDM3
+ouvre une session au boot. `/etc/gdm3/custom.conf` :
+
+```ini
+[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=user-4itec
+WaylandEnable=false
+```
+
+> **Point de conformité (`CYBER_AUDIT.md`, `CS-113-05`)** : cet autologon n'est
+> admis par la norme que sur un **compte Opérateur** sans accès à l'OS depuis le
+> runtime. À restreindre (compte dédié sans shell, ou session verrouillée) ou à
+> supprimer si l'accès graphique n'est pas indispensable en RUN.
+
 ---
 
 ## Scripts Bash
@@ -223,11 +299,14 @@ graphique distant (VNC sur port `5999`, display `:99`).
 **Ce que fait le script :**
 
 - Installe TigerVNC et XFCE4.
-- Installe **UFW** et applique les politiques par défaut (`deny incoming`,
-  `allow outgoing`).
+- Crée le service systemd `vncserver@99` avec **`-SecurityTypes X509Vnc,RA2ne`** :
+  la session est **chiffrée** (TLS/X509 — certificat auto-généré dans `~/.vnc/`,
+  empreinte à vérifier au 1er accès ; ou RSA-AES). `VncAuth` et `None` (session
+  en clair) sont **refusés**.
+- Installe **UFW** (`deny incoming` / `allow outgoing`) et n'ouvre `5999/tcp` que
+  depuis le sous-réseau de maintenance.
 - Installe et configure **Fail2ban** (jail `tigervnc-auth`, backend systemd,
   action UFW).
-- Crée le service systemd `vncserver@99`.
 - Configure le clavier AZERTY (`setxkbmap fr`).
 - En exécution distante SSH : ajoute une règle anti-lockout pour le port `22`.
 - Nettoie les anciennes règles UFW (`3389`, `5999` global) avant d'appliquer les
@@ -238,66 +317,51 @@ graphique distant (VNC sur port `5999`, display `:99`).
 | Option | Description |
 |---|---|
 | `--subnet <CIDR>` | Sous-réseau autorisé pour VNC (défaut `192.168.3.0/24`) |
-| `--tailscale` | Autorise aussi le port VNC via `tailscale0` |
+| `--tailscale` | Autorise aussi le port VNC via `tailscale0` — **mise au point uniquement**, à retirer pour l'état RUN (boîtier autonome) |
 
-**Usage :**
+**Usage — état RUN (recommandé) :**
 
 ```sh
-# Accès local RJ45 uniquement
 sudo bash scripts/install_vnc_jetson.sh --subnet 192.168.3.0/24
-
-# Recommandé : XFCE + VNC + accès Tailscale distant
-sudo bash scripts/install_vnc_jetson.sh --tailscale
 ```
 
-**Configuration réseau maintenance recommandée (NetworkManager) :**
+**Configuration réseau maintenance (NetworkManager, port `eth2`) :**
 
 - Interface : eth2 / enP1p1s0
 - IPv4 : Manuel — `192.168.3.122/24`
-- Passerelle : vide
-- DNS : vide
-- Route par défaut : désactivée (`never-default`)
+- Passerelle : vide · DNS : vide · Route par défaut : désactivée (`never-default`)
 
 **Après installation (obligatoire) :**
 
 ```sh
-# 1. Définir le mot de passe VNC (utilisateur normal)
+# 1. Mot de passe VNC — UNIQUE PAR BOÎTIER, à stocker dans le coffre-fort 4itec
 vncpasswd
 
-# 2. Vérifier UFW et les règles 5999/22
-sudo ufw status numbered
-
-# 3. Vérifier Fail2ban
-sudo fail2ban-client status tigervnc-auth
-
-# 4. Démarrer le service VNC
+# 2. Démarrer le service
 sudo systemctl start vncserver@99.service
 
-# 5. Connexion Remmina : VNC | hôte:5999
+# 3. Contrôle du chiffrement : une connexion NON chiffrée doit être REFUSÉE
+vncviewer -SecurityTypes VncAuth 127.0.0.1:5999    # → doit échouer
+vncviewer -SecurityTypes X509Vnc,RA2ne 127.0.0.1:5999   # → doit aboutir
+
+# 4. Vérifier UFW et Fail2ban
+sudo ufw status numbered
+sudo fail2ban-client status tigervnc-auth
 ```
 
-#### Installation rapide de Tailscale (Jetson)
+Côté client (Remmina / TigerVNC viewer) : **activer le chiffrement**
+(TLS/X509 ou RSA-AES) ; refuser toute connexion « VNC » non chiffrée.
+
+**Option Tailscale — mise au point uniquement**
 
 ```sh
-# 1. Installer Tailscale
 sudo curl -fsSL https://tailscale.com/install.sh | sh
-
-# 2. Authentifier le Jetson dans votre tailnet
 sudo tailscale up
-
-# 3. Vérifier l'IP Tailscale
-tailscale status
-tailscale ip -4
-
-# 4. Lancer le script avec l'option Tailscale
 sudo bash scripts/install_vnc_jetson.sh --tailscale
-
-# 5. Définir le mot de passe VNC et démarrer
-vncpasswd
-sudo systemctl start vncserver@99.service
 ```
 
-Connexion via Remmina : **VNC** sur `<IP_Tailscale>:5999`.
+À la livraison : `sudo tailscale down && sudo apt purge tailscale`, puis
+re-lancer le script sans `--tailscale` pour rétablir le blocage UFW de `tailscale0`.
 
 ---
 
