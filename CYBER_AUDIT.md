@@ -34,7 +34,7 @@
 
 **Non-conformités bloquantes** :
 
-- `CS-113-04` — Secrets réels dans l'historique git : token du bot Telegram + `chat_id`, mot de passe des caméras RTSP (`admin` / `***REMOVED-PASSWORD***`), clé HMAC de licence (`licenses/license_state.key`), et mot de passe du compte de maintenance `user-4itec` (`***REMOVED-PASSWORD***`) en clair dans `README.md:719` de l'arbre courant. **L'air-gap ne corrige pas ce constat** : un secret publié reste extractible et valide tant qu'il n'est pas révoqué.
+- `CS-113-04` — Secrets réels dans l'historique git : token du bot Telegram + `chat_id`, identifiants des caméras RTSP (`admin` / mot de passe partagé du site), clé HMAC de licence (`licenses/license_state.key`), et mot de passe du compte de maintenance `user-4itec` (même mot de passe partagé) en clair dans `README.md:719` de l'arbre courant. **L'air-gap ne corrige pas ce constat** : un secret publié reste extractible et valide tant qu'il n'est pas révoqué. *(Valeurs littérales retirées de ce rapport ; elles restent dans l'historique git tant que celui-ci n'est pas réécrit.)*
 - `CS-1143-01` / `CS-R3-01` — **RDP (port 3389) est un protocole explicitement interdit** par le tableau du §1.1.4.3, et le fournisseur le désigne comme l'unique moyen d'accès en exploitation. IHM de supervision servie en **HTTP en clair** (`run.py:32`). VNC de maintenance en `VncAuth` sans TLS. Le remplaçant imposé par la norme est **VNC chiffré (STLA-CS_STD_129)**.
 
 ---
@@ -84,7 +84,7 @@ Une interface web Flask/Waitress (port 5050) sert le flux vidéo en direct, un �
 | CS-113-03 | §1.1.3 | Comptes par défaut supprimés, comptes inutilisés désactivés | Non conforme | Majeure | `utils/constants.py:202` (`fallback='admin'` pour `RTSP_LOGIN`) ; `README.md:719` (`user-4itec`) | Supprimer le fallback `admin` ; renommer le compte `user-4itec` en compte nominatif ; désactiver les comptes de démonstration à la recette. Constat lié à `CS-113-04` |
 | CS-113-04 | §1.1.3 | Aucun secret en dur dans le code **ni dans l'historique git** | Non conforme | Bloquante | `README.md:719` ; historique : `git show 144ad43`, `6739ad0`, `6e2c019`, `7a68ac1` ; `licenses/license_state.key` (retiré en `f011f5b`, extractible) | Voir « Non-conformités bloquantes — détail ». Révocation d'abord, réécriture d'historique ensuite. **Non atténué** par l'air-gap ni par le fait que Nuitka/Cython n'embarquent pas ces valeurs sur la cible : l'exigence porte sur le dépôt et son historique. Alternative conforme pour la base de connaissance 4itec : store `pass`/GPG (déjà utilisé pour le token GitLab), valeur unique par boîtier hors dépôt |
 | CS-113-05 | §1.1.3 | Autologon autorisé seulement si compte Opérateur + IHM runtime + pas d'accès OS + hors Internet | Non conforme | Majeure | `docs/deployment/script-deploiement.md:38-44` (`AutomaticLogin=user-4itec`, GDM3) | En cible autonome, la condition « machine non connectée à Internet » est satisfaite, mais les deux autres non (session XFCE complète, accès shell, compte non Opérateur). Supprimer l'autologin ou le restreindre à un compte Opérateur sans accès OS |
-| CS-113-06 | §1.1.3 | Politique de mot de passe Stellantis, rotation, changement des mots de passe par défaut à la recette | Non conforme | Majeure | `README.md:719` (`***REMOVED-PASSWORD***`) ; `git show 6e2c019:config/config.ini` (`PASSWORD = ***REMOVED-PASSWORD***`) | Mot de passe faible réutilisé (maintenance + caméras RTSP). Appliquer la politique Stellantis, imposer un changement à la recette, mettre en place la rotation. Constat lié à `CS-113-04` |
+| CS-113-06 | §1.1.3 | Politique de mot de passe Stellantis, rotation, changement des mots de passe par défaut à la recette | Non conforme | Majeure | `README.md:719` (mot de passe partagé du site) ; `git show 6e2c019:config/config.ini` (`PASSWORD` renseigné en clair) | Mot de passe faible réutilisé (maintenance + caméras RTSP). Appliquer la politique Stellantis, imposer un changement à la recette, mettre en place la rotation. Constat lié à `CS-113-04` |
 | CS-1141-01 | §1.1.4.1 | Version d'OS/firmware/runtime = dernière approuvée, **identique pour les équipements de même référence** | Dérogation requise | Majeure | `README.md:312` (« JetPack 6.2 / L4T 36.4.3 ») vs `Dockerfile:253,296` (CUDA 13.2.1, dépôt apt L4T `r39.2` = JetPack 7.2) | Incohérence de version de firmware cible entre le README et l'image ARM64. Trancher la version officielle, la faire homologuer par le référent technique, garantir l'identité du firmware sur tout le parc de boîtiers d'une même référence |
 | CS-1141-02 | §1.1.4.1 | Procédure et outils de mise à jour du firmware/OS livrés pour la phase RUN | Non conforme | Mineure | `docs/deployment/flash-jetson-reserver-j4012-jetpack62.md` (flash initial) ; `scripts/deploy-jetson.sh` (MAJ image applicative uniquement) | Ajouter une procédure de mise à jour L4T/JetPack **hors ligne** en phase RUN (le boîtier étant autonome), avec canal de sécurité et procédure de rollback |
 | CS-1141-03 | §1.1.4.1 | Engagement à développer les correctifs en cas de faille en phase RUN | Hors dépôt | — | Aucun `SECURITY.md` ni politique de divulgation ; `docs/security/cve-2026-47265-suivi.md` (suivi CVE manuel ponctuel) | Formaliser l'engagement contractuel de MCO cyber ; ajouter `SECURITY.md` avec canal de signalement. À confirmer avec le pilote (volet contractuel) |
@@ -136,28 +136,11 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 **Constats** :
 
-- **Token du bot Telegram + `chat_id`**, en clair, non commentés :
-  ```
-  git show 144ad43:config/config.ini
-  TOKEN = ***REMOVED-TELEGRAM-TOKEN***
-  CHAT_ID = ***REMOVED-CHAT-ID***
-  ```
-  Également présents dans `6739ad0`. Deux tokens de bot de développement supplémentaires (`7161709928:AAGHAUEQ...`, `***REMOVED-TELEGRAM-TOKEN***`) figurent en commentaire dans l'historique (`57a13f4`).
+- **Token du bot Telegram + `chat_id`**, en clair, non commentés dans `config/config.ini` aux commits `144ad43` et `6739ad0` (`TOKEN = 6741846240:AAG…`, `CHAT_ID = -4115…` — valeurs complètes dans l'historique). Deux tokens de bot de développement supplémentaires (`7161709928:AAG…` et `7161709928:AAE…`) figurent en commentaire dans l'historique (`57a13f4`).
 
-- **Identifiants des caméras RTSP**, en clair :
-  ```
-  git show 6e2c019:config/config.ini      (Initial commit)
-  LOGIN = admin
-  PASSWORD = ***REMOVED-PASSWORD***
-  ```
-  Également dans `7a68ac1` et `6739ad0`.
+- **Identifiants des caméras RTSP**, en clair dans `config/config.ini` au commit initial `6e2c019` (`LOGIN = admin`, `PASSWORD = <mot de passe partagé du site>`), également dans `7a68ac1` et `6739ad0`.
 
-- **Mot de passe du compte de maintenance `user-4itec`**, en clair **dans l'arbre courant** :
-  ```
-  README.md:719
-  eth2 ... user : user-4itec / mdp : ***REMOVED-PASSWORD***
-  ```
-  Répété dans `docs/security/rapport-cybersec.md:143`. Quasi identique au mot de passe des caméras (`***REMOVED-PASSWORD***` / `***REMOVED-PASSWORD***`) : mot de passe de site partagé. **C'est aussi le mot de passe qui ouvrira les sessions RDP en exploitation.**
+- **Mot de passe du compte de maintenance `user-4itec`**, en clair **dans l'arbre courant** : `README.md:719` (`user : user-4itec / mdp : <valeur en clair>`), répété dans `docs/security/rapport-cybersec.md:143`. Identique (à la casse près) au mot de passe des caméras RTSP : mot de passe de site partagé. **C'est aussi le mot de passe qui ouvrira les sessions RDP en exploitation.**
 
 - **Clé HMAC de l'état de licence** : `licenses/license_state.key` (32 octets binaires) a été versionnée puis retirée en `f011f5b` ; elle reste extractible de tout clone. Cette clé signe `license_state.json` ; sa connaissance permet de forger un état de licence valide et de contourner la protection anti-retour d'horloge (`README.md:474-483`).
 
@@ -168,9 +151,10 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 1. **Révoquer d'abord** : régénérer le token du bot via BotFather (`/revoke`) ; changer le mot de passe sur toutes les caméras RTSP ; changer le mot de passe `user-4itec` sur tous les boîtiers, avec un mot de passe **unique par boîtier** ; régénérer la clé HMAC de licence (suppression de `license_state.key`/`license_state.json` sur cible, recréation au démarrage).
 2. Retirer `README.md:719` et `docs/security/rapport-cybersec.md:143` :
    ```diff
-   - - **eth2** est réservé pour la connexion VNC de maintenance (port 5999) ... user : user-4itec / mdp : ***REMOVED-PASSWORD***
+   - - **eth2** est réservé pour la connexion VNC de maintenance (port 5999) ... user : user-4itec / mdp : <valeur en clair>
    + - **eth2** est réservé pour la connexion de maintenance. Identifiants transmis hors dépôt, par canal sécurisé, uniques par boîtier.
    ```
+   *(fait dans le commit `68ce83f` du 2026-08-31)*
 3. Purger l'historique (`git filter-repo --replace-text`) ou reconstruire le dépôt ; forcer la rotation de tout secret ayant transité par la CI.
 4. **Base de connaissance maintenance 4itec** : conserver dans le dépôt privé un runbook décrivant la procédure, le compte et la méthode d'accès, et **l'emplacement** du mot de passe (entrée `pass` `4isafecross/<site>/maintenance` ou coffre 4itec) — pas la valeur. Si la valeur doit être versionnée, la stocker en blob **chiffré GPG** (`pass`), déchiffrable seulement par les clés autorisées — même mécanisme que celui déjà prescrit au `README.md:374-395` pour le token GitLab.
 
