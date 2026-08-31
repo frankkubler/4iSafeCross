@@ -4,7 +4,7 @@
 - **Complément** : passe d'hygiène cyber générique (hors référentiel, section dédiée)
 - **Dépôt** : `frankkubler/4iSafeCross`
 - **Commit audité** : `8d3c9cf` — branche `fix-mapping-classes-dataset`
-- **Date** : 2026-08-31 (révision 3 — `CS-113-04` corrigé : secrets révoqués/rotés et historique git réécrit)
+- **Date** : 2026-08-31 (révision 4 — RDP/xrdp remplacé par TigerVNC ; `CS-1143-01` n'est plus bloquant. Révision 3 : `CS-113-04` corrigé)
 - **Méthode** : analyse statique du code, de la configuration, de la CI/CD, de l'historique git et de la documentation. Aucune vérification sur cible.
 - **Périmètre retenu** : le boîtier livré (appliance de vision Jetson Orin NX) et son logiciel embarqué. Hors périmètre : le matériel au catalogue, les licences ACRONIS/CrowdStrike/StellarProtect, l'installation physique, l'exploitation, et les serveurs d'inférence externes (`inf_jetson_yolo`, `inf_jetson_rf-detr`) référencés mais non inclus dans ce dépôt.
 
@@ -12,7 +12,7 @@
 
 ## Synthèse
 
-**Modèle de déploiement confirmé par le fournisseur (révision 2)** : le boîtier est destiné à fonctionner **autonome, sans connexion Internet**. Il est connecté **provisoirement, via une clé 4G, pendant la phase de mise au point sur site**. Une fois réglé, la clé 4G est retirée et le seul accès résiduel est **local, par câble RJ45, en RDP**. Cette clarification résout la question ouverte n°2 et fait passer cinq non-conformités de `Bloquante` à `Majeure` (voir *Périmètre et limites*). Elle ne modifie ni les constats sur les secrets ni celui sur le protocole RDP.
+**Modèle de déploiement confirmé par le fournisseur (révision 2)** : le boîtier est destiné à fonctionner **autonome, sans connexion Internet**. Il est connecté **provisoirement, via une clé 4G, pendant la phase de mise au point sur site**. Une fois réglé, la clé 4G est retirée et le seul accès résiduel est **local, par câble RJ45, en VNC** (TigerVNC — révision 4 : le fournisseur a remplacé RDP/xrdp par TigerVNC, la doc `docs/deployment/script-deploiement.md` n'était pas à jour). Cette clarification résout la question ouverte n°2 et fait passer cinq non-conformités de `Bloquante` à `Majeure` (voir *Périmètre et limites*). Elle ne modifie pas les constats sur les secrets (traités séparément — `CS-113-04` corrigé).
 
 **Décompte par verdict** (46 exigences du référentiel réduit) :
 
@@ -24,21 +24,18 @@
 | Non applicable | 3 |
 | Hors dépôt | 8 |
 
-**Décompte des non-conformités par sévérité** (constats `Non conforme` + `Dérogation requise`, 32 lignes) :
+**Décompte des non-conformités par sévérité** (constats `Non conforme` + `Dérogation requise`, 32 lignes ; `CS-R3-01` partage le constat de `CS-1143-01` et n'est pas compté deux fois) :
 
 | Sévérité | Nombre |
 |---|---|
-| Bloquante | 1 (CS-R3-01 partage le constat de CS-1143-01) |
-| Majeure | 24 |
+| Bloquante | 0 |
+| Majeure | 25 |
 | Mineure | 6 |
 
-**Non-conformité bloquante restante** :
+**Aucune non-conformité bloquante ne subsiste après la révision 4.** Les deux qui l'ont été :
 
-- `CS-1143-01` / `CS-R3-01` — **RDP (port 3389) est un protocole explicitement interdit** par le tableau du §1.1.4.3, et le fournisseur le désigne comme l'unique moyen d'accès en exploitation. IHM de supervision servie en **HTTP en clair** (`run.py:32`). VNC de maintenance en `VncAuth` sans TLS. Le remplaçant imposé par la norme est **VNC chiffré (STLA-CS_STD_129)**.
-
-**Corrigé depuis la révision 2** :
-
-- `CS-113-04` (était `Bloquante`) — **corrigé le 2026-08-31**. Token du bot Telegram révoqué (BotFather), mots de passe des caméras RTSP et du compte `user-4itec` changés (uniques par boîtier, dans le coffre-fort 4itec), clé HMAC de licence régénérée — **rotation attestée par 4itec** (hors dépôt). Identifiants retirés de l'arbre courant ; **historique git réécrit** (`git filter-repo`, 573 commits) et force-pushé sur GitHub et GitLab ; MR/PR et pipelines porteurs des anciens commits supprimés (GitLab Repository cleanup, dépôt GitHub recréé). Vérifié le 2026-08-31 : **0 occurrence des secrets sur l'ensemble des refs des deux remotes**. Barrière ajoutée : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml`.
+- `CS-113-04` (secrets — était `Bloquante`) — **corrigé le 2026-08-31**. Token du bot Telegram révoqué (BotFather), mots de passe des caméras RTSP et du compte `user-4itec` changés (uniques par boîtier, coffre-fort 4itec), clé HMAC de licence régénérée — **rotation attestée par 4itec** (hors dépôt). Identifiants retirés de l'arbre courant ; **historique git réécrit** (`git filter-repo`, 573 commits) et force-pushé sur GitHub et GitLab ; MR/PR et pipelines porteurs des anciens commits supprimés (GitLab Repository cleanup, dépôt GitHub recréé). Vérifié : **0 occurrence des secrets sur l'ensemble des refs des deux remotes** (contrôle `git clone --mirror` + `git log --all -S`, et scan CI `gitleaks` = aucune fuite). Barrière ajoutée : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml`.
+- `CS-1143-01` / `CS-R3-01` (protocoles — était `Bloquante`) — **rétrogradé en `Majeure` (révision 4)**. RDP/xrdp remplacé par **TigerVNC** ; RDP n'est donc plus le moyen d'accès. Résiduel : le service TigerVNC ne fixe pas explicitement `-SecurityTypes` (chiffrement de session à vérifier/forcer sur la cible — STLA-CS_STD_129), l'IHM Flask reste en **HTTP en clair** (`run.py:32`), le transport RTSP caméras est en clair. Correctifs de niveau configuration, plus de refonte d'architecture.
 
 ---
 
@@ -51,7 +48,7 @@
 **Effet du modèle de déploiement confirmé sur les sévérités.** Le référentiel Stellantis raisonne « exposition réseau ». Un boîtier autonome, sans réseau partagé, dont l'accès exige une présence physique et un câble point-à-point, réduit la vraisemblance des scénarios réseau distants — mais **pas** la non-conformité du protocole employé (la recette FOR_509 applique une *zero-tolerance* sur la liste des protocoles interdits, indépendamment du contexte). En conséquence :
 
 - passent de `Bloquante` à `Majeure` : `CS-1143-05`, `CS-127-01`, `CS-143-01`, `CS-143-02`, `CS-1144-01` ;
-- reste `Bloquante` : `CS-1143-01` (RDP est nommé dans la liste des interdits, et c'est le moyen d'accès retenu, pas un résidu) ;
+- **révision 4** : `CS-1143-01` passe de `Bloquante` à `Majeure` — RDP/xrdp remplacé par TigerVNC, il ne reste que le chiffrement de session VNC à forcer et l'IHM à passer en TLS (config, pas architecture) ;
 - **corrigé (révision 3)** : `CS-113-04` (secrets — voir *Synthèse* et le détail plus bas) ;
 - **apparaissent** comme dérogations à formaliser en phase d'étude : `CS-145-01` et `CS-145-02` (connexion Internet provisoire + clé 4G pendant la mise au point).
 
@@ -105,13 +102,13 @@ Exemple : **`CS-1143-01`** = §1.1.4.3, exigence n°1 — *« aucun protocole in
 | CS-113-01 | §1.1.3 | Authentification via serveurs centraux Stellantis (RADIUS / AD / PingFederate) | Dérogation requise | Majeure | `src/web/app_factory.py:23-25` (HTTP Basic locale, deux variables d'env) ; `scripts/install_xrdp_jetson.sh` (compte local VNC) | Intégrer PingFederate pour l'IHM métier ; à défaut, formaliser par écrit le motif d'authentification locale (aucune solution centrale compatible sur équipement embarqué autonome) et adresser la dérogation au référent technique en phase d'étude |
 | CS-113-02 | §1.1.3 | Au moins deux comptes distincts : Administrateur et Opérateur | Non conforme | Majeure | `src/web/app_factory.py:28-34` (une seule paire d'identifiants, un seul niveau) | Introduire un rôle Opérateur (consultation, acquittement) distinct du rôle Administrateur (édition des zones, toggle détection, arrêt) et l'appliquer dans le garde d'accès |
 | CS-113-03 | §1.1.3 | Comptes par défaut supprimés, comptes inutilisés désactivés | Non conforme | Majeure | `utils/constants.py:202` (`fallback='admin'` pour `RTSP_LOGIN`) ; `README.md:719` (`user-4itec`) | Supprimer le fallback `admin` ; renommer le compte `user-4itec` en compte nominatif ; désactiver les comptes de démonstration à la recette. Constat lié à `CS-113-04` |
-| CS-113-04 | §1.1.3 | Aucun secret en dur dans le code **ni dans l'historique git** | Conforme *(corrigé 2026-08-31 — était `Non conforme` / `Bloquante`)* | — | Arbre courant sans secret ; historique réécrit (`git filter-repo`, 573 commits) et force-pushé sur les deux remotes ; MR/PR + pipelines porteurs des anciens commits supprimés ; vérif `git clone --mirror` + `git log --all -S` = **0 occurrence sur toutes les refs** de GitHub et GitLab. Job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` | Terminé. Rotation des secrets (token Telegram, mots de passe RTSP et `user-4itec`, clé HMAC) **attestée par 4itec** — hors dépôt, à confirmer au pilote. Reste hygiène : retirer l'allowlist `replacements.txt` de `.gitleaks.toml` |
+| CS-113-04 | §1.1.3 | Aucun secret en dur dans le code **ni dans l'historique git** | Conforme *(corrigé 2026-08-31 — était `Non conforme` / `Bloquante`)* | — | Arbre courant sans secret ; historique réécrit (`git filter-repo`, 573 commits) et force-pushé sur les deux remotes ; MR/PR + pipelines porteurs des anciens commits supprimés ; vérif `git clone --mirror` + `git log --all -S` = **0 occurrence sur toutes les refs** de GitHub et GitLab. Job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` ; scan CI = aucune fuite (un seul faux positif `admin:mon_mdp`, gabarit de doc, allowlisté) | Terminé. Rotation des secrets (token Telegram, mots de passe RTSP et `user-4itec`, clé HMAC) **attestée par 4itec** — hors dépôt, à confirmer au pilote |
 | CS-113-05 | §1.1.3 | Autologon autorisé seulement si compte Opérateur + IHM runtime + pas d'accès OS + hors Internet | Non conforme | Majeure | `docs/deployment/script-deploiement.md:38-44` (`AutomaticLogin=user-4itec`, GDM3) | En cible autonome, la condition « machine non connectée à Internet » est satisfaite, mais les deux autres non (session XFCE complète, accès shell, compte non Opérateur). Supprimer l'autologin ou le restreindre à un compte Opérateur sans accès OS |
 | CS-113-06 | §1.1.3 | Politique de mot de passe Stellantis, rotation, changement des mots de passe par défaut à la recette | Non conforme | Majeure | `README.md:719` (mot de passe partagé du site) ; `git show 6e2c019:config/config.ini` (`PASSWORD` renseigné en clair) | Mot de passe faible réutilisé (maintenance + caméras RTSP). Appliquer la politique Stellantis, imposer un changement à la recette, mettre en place la rotation. Constat lié à `CS-113-04` |
 | CS-1141-01 | §1.1.4.1 | Version d'OS/firmware/runtime = dernière approuvée, **identique pour les équipements de même référence** | Dérogation requise | Majeure | `README.md:312` (« JetPack 6.2 / L4T 36.4.3 ») vs `Dockerfile:253,296` (CUDA 13.2.1, dépôt apt L4T `r39.2` = JetPack 7.2) | Incohérence de version de firmware cible entre le README et l'image ARM64. Trancher la version officielle, la faire homologuer par le référent technique, garantir l'identité du firmware sur tout le parc de boîtiers d'une même référence |
 | CS-1141-02 | §1.1.4.1 | Procédure et outils de mise à jour du firmware/OS livrés pour la phase RUN | Non conforme | Mineure | `docs/deployment/flash-jetson-reserver-j4012-jetpack62.md` (flash initial) ; `scripts/deploy-jetson.sh` (MAJ image applicative uniquement) | Ajouter une procédure de mise à jour L4T/JetPack **hors ligne** en phase RUN (le boîtier étant autonome), avec canal de sécurité et procédure de rollback |
 | CS-1141-03 | §1.1.4.1 | Engagement à développer les correctifs en cas de faille en phase RUN | Hors dépôt | — | Aucun `SECURITY.md` ni politique de divulgation ; `docs/security/cve-2026-47265-suivi.md` (suivi CVE manuel ponctuel) | Formaliser l'engagement contractuel de MCO cyber ; ajouter `SECURITY.md` avec canal de signalement. À confirmer avec le pilote (volet contractuel) |
-| CS-1143-01 | §1.1.4.3 | Aucun protocole interdit (HTTP, FTP, Telnet, **RDP**, SMBv1/2, SNMPv1/2, MQTT clair, MODBUS…) | Non conforme | Bloquante | `docs/deployment/script-deploiement.md:15,27` (xrdp / RDP 3389, désigné comme accès d'exploitation) ; `run.py:32` (HTTP clair 5050) ; `scripts/install_xrdp_jetson.sh:111` (`-localhost no`, `VncAuth` par défaut, pas de TLS) ; `src/camera_manager.py:152` (`rtsp://` en clair) | Remplacer RDP par **VNC chiffré selon STLA-CS_STD_129** (TigerVNC `-SecurityTypes TLSVnc`/`X509Vnc`), retirer xrdp ; basculer l'IHM en HTTPS/TLS ; documenter l'isolement du sous-réseau caméras. Si RDP doit absolument être conservé : dérogation argumentée au référent technique, mesures compensatoires (accès physique exclusif, pas de réseau partagé, durcissement du PC de maintenance) |
+| CS-1143-01 | §1.1.4.3 | Aucun protocole interdit (HTTP, FTP, Telnet, RDP, SMBv1/2, SNMPv1/2, MQTT clair, MODBUS…) | Non conforme | Majeure | RDP/xrdp **abandonné** au profit de TigerVNC (`scripts/install_xrdp_jetson.sh:57` installe `tigervnc-standalone-server`) — les mentions RDP de `docs/deployment/script-deploiement.md:15,27` sont de la doc périmée. Résiduel : `scripts/install_xrdp_jetson.sh:111` lance `vncserver` **sans `-SecurityTypes`** et supprime `~/.vnc/config` (l.89-91) → chiffrement de session non garanti (défaut souvent `VncAuth`, session en clair) ; `run.py:32` (IHM en HTTP clair) ; `src/camera_manager.py:152` (`rtsp://` en clair) | Fixer explicitement `-SecurityTypes X509Vnc` (+ certificat) dans le service TigerVNC, ou le configurer dans `/etc/tigervnc/` — et **vérifier sur la cible** que la session est bien chiffrée (STLA-CS_STD_129) ; placer l'IHM derrière TLS et la binder sur `eth2` ; isoler strictement le sous-réseau caméras ; corriger/supprimer la doc RDP/xrdp et renommer `install_xrdp_jetson.sh` |
 | CS-1143-02 | §1.1.4.3 | Protocoles autorisés employés correctement (TLS vérifié, SSHv2, SNMPv3, MQTTS…) | Conforme | — | `src/bot_aiogram.py:68,103` (HTTPS `api.telegram.org`, vérification TLS par défaut de `requests`/`aiohttp`) ; aucune occurrence de `verify=False` / `InsecureSkipVerify` dans le dépôt | Rien à signaler pour les flux TLS existants. Couverture faible : TLS globalement absent de l'IHM et de l'inférence (voir `CS-1143-01`) |
 | CS-1143-03 | §1.1.4.3 | Seuls les protocoles et services nécessaires installés/activés ; éviter les options par défaut | Non conforme | Majeure | `docker-compose-arm64.yml:5,7,9` (`network_mode: host`, `privileged: true`, `ipc: host`) ; `scripts/deploy-jetson.sh:79-93` (`--privileged`, `-v /dev:/dev`, `--network host`) ; `Dockerfile` (aucun `USER`, exécution root ; `gstreamer1.0-tools`, `vainfo`, `curl`, `iputils-ping` dans le stage final) | Retirer `privileged`/`host`/`/dev:/dev` ; publier uniquement le port utile ; `cap_drop: [ALL]` + capacité minimale ; `security_opt: [no-new-privileges]` ; `USER` non-root ; purger les outils de diagnostic de l'image finale. **Non atténué par l'air-gap** (durcissement anti-évasion de conteneur) |
 | CS-1143-04 | §1.1.4.3 | Protocoles de découverte automatique et de connexion à distance désactivés après vérification | Non conforme | Majeure | `docs/deployment/script-deploiement.md` (RustDesk en service systemd au boot) ; `docs/deployment/scripts-deploiement.md:283` (option Tailscale) ; `scripts/security_audit.sh:336-344` (avahi/rpcbind/cups à contrôler sur cible) | Retirer RustDesk **et** l'option Tailscale du livrable RUN (inutiles hors Internet, surface d'attaque). Ne conserver qu'un seul canal d'accès local chiffré. Contrôler mDNS/Avahi/UPnP sur la cible |
@@ -130,7 +127,7 @@ Exemple : **`CS-1143-01`** = §1.1.4.3, exigence n°1 — *« aucun protocole in
 | CS-R2-02 | §1.2.9 R2 | Droits limités au rôle et à la responsabilité de l'utilisateur | Non conforme | Majeure | `src/web/app_factory.py:51-65` (le garde autorise tout ou rien) | Constat identique à `CS-113-02`. Définir un modèle d'autorisation effectif |
 | CS-R2-03 | §1.2.9 R2 | Traçabilité des accès assurée par génération de logs | Non conforme | Majeure | `src/web/app_factory.py:61-65` (401 renvoyé sans journalisation) ; aucun log d'action privilégiée avec identité/horodatage/IP ; `docs/security/analyse-risques-cyber.md` R09 le reconnaît | Ajouter un journal d'audit : succès et échecs d'authentification, écriture de zone/masque/seuil, toggle détection — avec identité, horodatage, IP source. D'autant plus nécessaire que l'accès RDP est mono-compte et non nominatif |
 | CS-R2-04 | §1.2.9 R2 | Logs remontés vers un SIEM ; à défaut, générés localement a minima | Non conforme | Mineure | `docker-compose-*.yml` (`json-file`, 10 Mo × 5) ; `scripts/4isafecross.logrotate` ; aucun syslog / agent de collecte | Logs locaux présents mais non exploitables hors machine. Prévoir un export (support amovible ou syslog vers un collecteur lors des interventions de maintenance) |
-| CS-R3-01 | §1.2.9 R3 | Protocoles non sécurisés proscrits | Non conforme | Bloquante | Voir `CS-1143-01` (constat unique, non dupliqué) | Voir `CS-1143-01` |
+| CS-R3-01 | §1.2.9 R3 | Protocoles non sécurisés proscrits | Non conforme | Majeure | Voir `CS-1143-01` (constat unique, non dupliqué) | Voir `CS-1143-01` |
 | CS-R3-02 | §1.2.9 R3 | Protocoles constructeur pour la communication avec automates/robots | Non applicable | — | Pas d'automate. Relais Yoctopuce pilotés via la bibliothèque constructeur officielle `yoctopuce` (`src/relay_pilot.py:1-2`, `pyproject.toml:21`) | Sans objet ; la bibliothèque relais est bien celle du constructeur |
 | CS-R4-01 | §1.2.9 R4 | Respect des guides de développement sécurisé Stellantis de la technologie (Python, HTML/JS) | Dérogation requise | Mineure | Fondamentaux OK : SQL paramétré (`src/detection_db.py:30-33`), pas d'`eval`/`exec`/`shell=True` (`utils/utils.py:49`, `src/core/gpu_metrics.py:117`), `ast.literal_eval` et non `eval` (`utils/constants.py:204`), `innerHTML` maîtrisé (`templates/index.html:632`). Manques : pas de protection CSRF sur les POST, pas d'en-têtes de sécurité HTTP (CSP, HSTS, X-Content-Type-Options) | Demander au pilote les guides Stellantis « Python » et « HTML/JS » (non joints à la note). Ajouter protection CSRF et en-têtes de sécurité sur l'IHM |
 | CS-R5-01 | §1.2.9 R5 | Engagement de résultat cybersécurité en BUILD et RUN, pénalités en cas de cyberattaque imputable | Hors dépôt | — | Aucune trace contractuelle dans le dépôt | À confirmer avec le pilote (volet contractuel / `SECURITY.md`) |
@@ -153,7 +150,7 @@ Exemple : **`CS-1143-01`** = §1.1.4.3, exigence n°1 — *« aucun protocole in
 
 ## Non-conformités bloquantes — détail
 
-La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire, accès résiduel RJ45 + RDP) a fait passer cinq constats de `Bloquante` à `Majeure` — tous liés à l'exposition réseau, désormais réduite par l'absence de réseau partagé et l'exigence d'accès physique. La révision 3 acte la correction de `CS-113-04`. **Un seul constat reste bloquant** : `CS-1143-01` (RDP).
+**Aucune non-conformité bloquante ne subsiste après la révision 4.** La révision 2 (modèle de déploiement autonome confirmé) a rétrogradé cinq constats d'exposition réseau ; la révision 3 a corrigé `CS-113-04` (secrets) ; la révision 4 rétrograde `CS-1143-01` en `Majeure` (RDP/xrdp remplacé par TigerVNC). Cette section conserve le détail des deux constats qui ont été bloquants.
 
 ### 1. `CS-113-04` — Secrets dans l'historique git et l'arbre courant — **CORRIGÉ (2026-08-31)**
 
@@ -165,11 +162,11 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 - **Identifiants des caméras RTSP**, en clair dans `config/config.ini` au commit initial `6e2c019` (`LOGIN = admin`, `PASSWORD = <mot de passe partagé du site>`), également dans `7a68ac1` et `6739ad0`.
 
-- **Mot de passe du compte de maintenance `user-4itec`**, en clair **dans l'arbre courant** : `README.md:719` (`user : user-4itec / mdp : <valeur en clair>`), répété dans `docs/security/rapport-cybersec.md:143`. Identique (à la casse près) au mot de passe des caméras RTSP : mot de passe de site partagé. **C'est aussi le mot de passe qui ouvrira les sessions RDP en exploitation.**
+- **Mot de passe du compte de maintenance `user-4itec`**, en clair **dans l'arbre courant** : `README.md:719` (`user : user-4itec / mdp : <valeur en clair>`), répété dans `docs/security/rapport-cybersec.md:143`. Identique (à la casse près) au mot de passe des caméras RTSP : mot de passe de site partagé. **C'est aussi le mot de passe qui ouvre les sessions de maintenance (VNC/SSH) en exploitation.**
 
 - **Clé HMAC de l'état de licence** : `licenses/license_state.key` (32 octets binaires) a été versionnée puis retirée en `f011f5b` ; elle reste extractible de tout clone. Cette clé signe `license_state.json` ; sa connaissance permet de forger un état de licence valide et de contourner la protection anti-retour d'horloge (`README.md:474-483`).
 
-**Impact** : un token de bot Telegram permet à un tiers d'émettre de faux messages, de lire l'historique du canal (images annotées de piétons — données personnelles) et de recevoir les captures — depuis n'importe où, tant que le token n'est pas révoqué. Le mot de passe RTSP donne accès aux flux des caméras. Le mot de passe `user-4itec` ouvre la session RDP du boîtier, donc l'IHM d'administration et le shell — et il est identique sur tout le parc. L'air-gap ne referme aucune de ces portes : un secret publié le reste.
+**Impact** : un token de bot Telegram permet à un tiers d'émettre de faux messages, de lire l'historique du canal (images annotées de piétons — données personnelles) et de recevoir les captures — depuis n'importe où, tant que le token n'est pas révoqué. Le mot de passe RTSP donne accès aux flux des caméras. Le mot de passe `user-4itec` ouvre la session de maintenance du boîtier (VNC, shell), donc l'IHM d'administration — et il était identique sur tout le parc. L'air-gap ne referme aucune de ces portes : un secret publié le reste.
 
 **Correction** :
 
@@ -187,27 +184,28 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 
 **Position du fournisseur et réponse d'audit** : 4itec fait valoir que le dépôt est privé (accès limité aux employés 4itec, base de connaissance de maintenance) et que le déploiement par Nuitka ou Docker+Cython ne copie pas ces valeurs sur la machine cible. **Constaté exact sur l'artefact** : `config/config.ini` à HEAD ne contient aucun secret (`TOKEN=`, `CHAT_ID=`, `LOGIN=`, `PASSWORD=` vides) et le durcissement du build est réel (crédité en *Constats hors référentiel*). **Sans effet sur le verdict** : `CS-113-04` porte sur le dépôt et son historique, pas sur le binaire livré. Le secret reste lisible par quiconque obtient une copie du dépôt — clone, fork, sauvegarde, cache CI, départ d'un collaborateur, changement de visibilité, ou communication du dépôt à l'auditeur Stellantis pour étayer le dossier (`CS-R8-01`). La visibilité privée n'est pas un contrôle de secret ; la norme écrit « ni dans le code ni dans l'historique git », sans exception. De plus, un mot de passe unique documenté et partagé sur tout le parc contredit `CS-113-06` (unicité, changement à la recette, rotation) et `CS-R2-03` (traçabilité d'un compte partagé). Le token Telegram et le mot de passe RTSP présents dans l'historique sont par ailleurs des credentials externes vivants dont la révocation est requise indépendamment de cette discussion. Le mécanisme conforme (`pass`/GPG) est déjà en usage dans le dépôt — il ne s'agit donc pas d'une contrainte technique justifiant une `Dérogation requise`.
 
-### 2. `CS-1143-01` / `CS-R3-01` — Protocole RDP interdit ; IHM et VNC non chiffrés
+### 2. `CS-1143-01` / `CS-R3-01` — Protocoles non chiffrés (VNC de maintenance, IHM, RTSP) — **`Majeure` depuis la révision 4**
 
-**Constats** :
+**Évolution** : RDP/xrdp — nommément interdit au §1.1.4.3 — a été **abandonné** ; l'accès de maintenance est désormais **TigerVNC** (`scripts/install_xrdp_jetson.sh:57` installe `tigervnc-standalone-server` ; le nom du script et `docs/deployment/script-deploiement.md:15,27` sont trompeurs, doc à corriger). Le constat n'est donc plus une non-conformité d'architecture mais une non-conformité de **configuration**.
 
-- **RDP (port 3389)** figure nommément dans le tableau des protocoles interdits du §1.1.4.3 (remplaçant imposé : « VNC **chiffré** — 5900, selon STLA-CS_STD_129 »). Le fournisseur confirme RDP comme **unique moyen d'accès en exploitation**. `docs/deployment/script-deploiement.md:15,27` documente xrdp (display `:99`, port 3389).
+**Constats résiduels** :
+
+- Le service systemd TigerVNC (`scripts/install_xrdp_jetson.sh:98-119`) lance `vncserver ... -localhost no` **sans `-SecurityTypes`**, et le script supprime tout `~/.vnc/config` (l.89-91). Le chiffrement de la session dépend alors des défauts TigerVNC/système sur la cible — souvent `VncAuth` seul : le mot de passe est protégé (challenge DES) mais **l'écran et les frappes clavier circulent en clair**. La norme §1.1.4.3 exige un **VNC chiffré (STLA-CS_STD_129)**. `-localhost no` élargit l'écoute à toutes interfaces (atténué par les règles UFW du script restreignant à `192.168.3.0/24` + fail2ban).
 - IHM de supervision servie en **HTTP non chiffré** (`run.py:32`, `scripts/4isafecross.sh:10`) : transporte les identifiants HTTP Basic et permet la reconfiguration des zones de sécurité.
-- Le serveur VNC alternatif (`scripts/install_xrdp_jetson.sh:111`) est lancé sans TLS (`-localhost no`, type de sécurité `VncAuth` par défaut, challenge DES, session en clair).
-- Transport RTSP en clair depuis les caméras (`src/camera_manager.py:152`).
+- Transport RTSP en clair depuis les caméras (`src/camera_manager.py:152`) — flux OT/OT sur le sous-réseau caméra dédié.
 
-**Impact** : la recette FOR_509 applique une *zero-tolerance* sur la liste des protocoles interdits. RDP en clair et VNC `VncAuth` exposent les identifiants et le contenu de session à quiconque a un accès local au segment ; le point-à-point RJ45 réduit la probabilité mais ne rend pas le protocole conforme. Pendant la fenêtre 4G, l'IHM HTTP en `0.0.0.0` est potentiellement joignable depuis la clé cellulaire.
+**Impact** : sur le segment de maintenance, un tiers ayant un accès local peut observer/injecter la session VNC (si `VncAuth`) et lire les identifiants de l'IHM. Le point-à-point RJ45 et l'air-gap réduisent fortement la vraisemblance ; la recette FOR_509 reste néanmoins *zero-tolerance* sur le chiffrement.
 
 **Correction** :
 
-1. Remplacer RDP/xrdp par **TigerVNC avec chiffrement TLS** (STLA-CS_STD_129) — `scripts/install_xrdp_jetson.sh:111` :
+1. Fixer explicitement le chiffrement TigerVNC — `scripts/install_xrdp_jetson.sh:111` :
    ```diff
    - ExecStart=/usr/bin/vncserver -fg :%i -geometry 1920x1080 -depth 24 -localhost no -xstartup ...
    + ExecStart=/usr/bin/vncserver -fg :%i -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes X509Vnc -X509Cert /etc/ssl/vnc/cert.pem -X509Key /etc/ssl/vnc/key.pem -xstartup ...
    ```
-   et désinstaller xrdp.
-2. Placer l'IHM derrière TLS (reverse-proxy local avec certificat interne, ou `ssl_context` Waitress) et binder sur `eth2` uniquement.
-3. Si RDP doit être conservé pour des raisons d'outillage client : dérogation argumentée au référent technique en phase d'étude (STLA-CS_STD_129 en référence), avec mesures compensatoires écrites — accès physique exclusif, pas de réseau partagé, durcissement et conformité STLA-CS_FOR_502 du PC de maintenance, pare-feu hôte actif.
+   ou l'équivalent dans `/etc/tigervnc/vncserver-config-mandatory`, puis **vérifier sur la cible** (`vncviewer` refuse la connexion non chiffrée).
+2. Placer l'IHM derrière TLS (reverse-proxy local avec certificat interne, ou `ssl_context` Waitress) et la binder sur `eth2`.
+3. Corriger `docs/deployment/script-deploiement.md` (retirer xrdp/RDP) et renommer `scripts/install_xrdp_jetson.sh` → `install_vnc_jetson.sh`.
 
 ---
 
@@ -220,8 +218,8 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 | OT→OT | Jetson 4iSafeCross | Caméras IP (`192.168.2.156`, `192.168.2.157`, `eth1`) | RTSP/RTP over TCP | 554 | Non | Réception des flux vidéo H.264 | Nécessaire ; transport non chiffré ; sous-réseau caméra dédié à isoler strictement |
 | OT→OT (intra-hôte) | 4iSafeCross (client d'inférence) | Serveur YOLO `inf_jetson_yolo` | HTTP | 8004 (`127.0.0.1`) | Non | `POST` frame → détections | Boucle locale même Jetson (`network_mode: host`) ; ne traverse aucun réseau |
 | OT→OT (intra-hôte) | 4iSafeCross | Serveur RF-DETR `inf_jetson_rf-detr` | HTTP | 8002 (`127.0.0.1`) | Non | `POST` frame → détections | Idem (numéros de port divergents entre `config/config.ini`, `README.md` et `docs/security/analyse-risques-cyber.md` — à fixer) |
-| IT→OT | PC de maintenance (`192.168.3.x`, `eth2`) | IHM Flask du Jetson (`docker-compose-amd64.yml:6`, `docker-compose-arm64.yml:5`) | HTTP | 5050 | Non | Supervision, édition des zones/masques, toggle détection, réglage des seuils | **Non chiffré, non authentifié par défaut** — à corriger (bloquante 2, `CS-1144-01`, `CS-143-02`) |
-| IT→OT | PC de maintenance (`eth2`) | Jetson — accès graphique de maintenance | **RDP** (3389) ou VNC `VncAuth` (5999) | 3389 / 5999 | **Non** | Bureau distant de maintenance — **seul accès d'exploitation** | **Protocole non conforme §1.1.4.3** — remplacer par VNC chiffré STLA-CS_STD_129 (bloquante 2) |
+| IT→OT | PC de maintenance (`192.168.3.x`, `eth2`) | IHM Flask du Jetson (`docker-compose-amd64.yml:6`, `docker-compose-arm64.yml:5`) | HTTP | 5050 | Non | Supervision, édition des zones/masques, toggle détection, réglage des seuils | **Non chiffré, non authentifié par défaut** — à corriger (`CS-1143-01`, `CS-1144-01`, `CS-143-02`) |
+| IT→OT | PC de maintenance (`eth2`, `192.168.3.0/24`) | Jetson — accès graphique de maintenance | VNC (TigerVNC) | 5999 | **À vérifier** — `-SecurityTypes` non fixé (défaut souvent `VncAuth`, session en clair) | Bureau distant de maintenance — **seul accès d'exploitation** | `CS-1143-01` (`Majeure`) — forcer `-SecurityTypes X509Vnc` + certificat (STLA-CS_STD_129) et contrôler sur cible ; UFW + fail2ban en place |
 | IT↔OT | Poste 4itec | Jetson (RustDesk self-hosted) | RustDesk (propriétaire) | serveur relais self-hosted | Oui | Télémaintenance graphique — **mise au point uniquement** | À **retirer** du livrable RUN (`CS-1143-04`) ; inutile hors Internet |
 | IT→OT | Poste 4itec | Jetson SSH | SSH v2 | 22 | Oui | Administration, `scripts/deploy-jetson.sh` — mise au point / interventions | UFW restreint à l'IP SSH courante (`install_xrdp_jetson.sh:164-168`) — acceptable si borné et local |
 | OT→Internet | Jetson | `api.telegram.org` | HTTPS | 443 | Oui | Bot Telegram : alertes + commandes `/take`, `/status` — **mise au point uniquement** | Inerte en cible (pas d'Internet) ; code à **retirer du boot** en RUN (`CS-127-01`) |
@@ -242,8 +240,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 - **Divulgation d'informations** : `/debug_info` (IP, `docker ps`, statut systemd, chemins) et `/status` Telegram exposent l'infrastructure ; plusieurs routes renvoient `str(e)` au client (`src/web/routes_zones_api.py:107`, `src/web/routes_system.py:149`).
 - **Absence d'en-têtes de sécurité HTTP** et **pas de protection CSRF** sur les `POST` JSON de l'IHM.
 - **`xhost +local:root`** (`autostart/rustdesk-xhost.desktop`) désactive le contrôle d'accès au serveur X pour root local.
-- **Documentation incohérente avec le modèle autonome** : le `README.md` (ports réseau, section Telegram, `eth0` internet) et `docs/deployment/script-deploiement.md` (RustDesk, xrdp, autologin) décrivent une machine connectée ; à réaligner sur le déploiement autonome confirmé, faute de quoi l'auditeur Stellantis constatera la contradiction.
-- **Deux procédures d'accès distant concurrentes** : `scripts/install_xrdp_jetson.sh` (TigerVNC 5999, supprime la règle 3389) vs `docs/deployment/script-deploiement.md` (xrdp 3389). Fixer une architecture d'accès unique.
+- **Documentation périmée** : `README.md` (ports réseau, section Telegram, `eth0` internet) et `docs/deployment/script-deploiement.md` (RustDesk, **xrdp/RDP**, autologin) décrivent une machine connectée et un accès RDP qui **ne correspondent plus au déploiement réel** (autonome, accès TigerVNC). À réaligner impérativement avant présentation à l'auditeur Stellantis, sinon contradiction constatée. Le script `scripts/install_xrdp_jetson.sh` installe en fait TigerVNC — à renommer (`install_vnc_jetson.sh`).
 - **Points positifs relevés** (à conserver) : rédaction des identifiants RTSP avant journalisation (`src/camera_manager.py:19-27`, commit `27c3349`) ; secrets lus depuis l'environnement avec `.env` gitignoré ; build Docker multi-étapes avec secret BuildKit (pas de token dans les couches d'image) ; UFW `default deny` + fail2ban dans `install_xrdp_jetson.sh` ; sonde `/health` distincte du mode fail-safe ; SQL entièrement paramétré.
 
 ---
@@ -255,7 +252,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 | §1.1.1 / §1.2.1 | Référence Jetson Orin NX / reServer J4012 au catalogue STLA-CS_STD_605.G ; RAM ≥ 8 Go, stockage ≥ 240 Go SSD, CPU/mémoire < 50 % en charge | Référent technique Stellantis |
 | §1.1.2 | Bloqueurs de ports mécaniques USB/RJ45/M12, désactivation logicielle des interfaces `eth0`/`eth3`/`eth4` inutilisées en cible | Maintenance Stellantis |
 | §1.1.4.1 / §1.2.3 | Version de firmware JetPack/L4T homologuée et **identique sur tout le parc** de boîtiers de même référence (incohérence README 6.2 vs Dockerfile 7.2 à lever) | Référent technique Stellantis |
-| §1.1.4.3 / STLA-CS_STD_129 | Décision sur l'accès de maintenance : VNC chiffré (conforme) ou dérogation RDP argumentée | Référent technique Stellantis |
+| §1.1.4.3 / STLA-CS_STD_129 | **Vérifier sur la cible** que la session TigerVNC est chiffrée (`SecurityTypes` = `TLSVnc`/`X509Vnc`, pas `VncAuth`) — le script ne le fixe pas explicitement | À contrôler sur cible / 4itec |
 | §1.2.2 / §1.4.1 | Hébergement en armoire fermée, local sous contrôle d'accès | Maintenance Stellantis |
 | §1.2.4 | Sauvegarde image système **ACRONIS Cyber Protect – Backup**, licence, média bootable, sauvegarde KM0 avant réception | Pilote Stellantis (licence à transmettre à Yassine SALMI) |
 | §1.2.5 | Agent **CrowdStrike Falcon** — a priori sans objet (machine autonome non connectée) ; à confirmer | Pilote Stellantis |
@@ -266,7 +263,7 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 | §1.2.9 R4 | Guides de développement sécurisé Stellantis « Python » et « HTML/JS » (non joints à la note) | Pilote Stellantis |
 | §1.2.9 R5 / R8 | Engagement de résultat cybersécurité BUILD/RUN, acceptation des audits QUALYS / tests d'intrusion, certifications (ISO 27001) | Pilote Stellantis (volet contractuel) |
 | §1.3 | Consoles de programmation Stellantis : dédiées, non connectées à Internet ni aux réseaux IT, éteintes hors usage, fonction unique | Maintenance Stellantis |
-| §1.5 | PC 4itec de mise au point et de maintenance (ouvre les sessions 4G, SSH, RDP/VNC, RustDesk) : OS à jour, antivirus **professionnel**, définitions < 7 j, scan complet < 7 j — audit STLA-CS_FOR_502, intervention stoppée si non conforme | 4itec (fournisseur) |
+| §1.5 | PC 4itec de mise au point et de maintenance (ouvre les sessions 4G, SSH, VNC, RustDesk) : OS à jour, antivirus **professionnel**, définitions < 7 j, scan complet < 7 j — audit STLA-CS_FOR_502, intervention stoppée si non conforme | 4itec (fournisseur) |
 | §2.1 | Checklist de recette : **STLA-CS_FOR_509** (équipement hors PC) — ou **STLA-CS_FOR_317** si le référent requalifie le boîtier en IPC ; auto-contrôle fournisseur puis double contrôle pilote en *zero-tolerance* | Pilote Stellantis |
 
 ---
@@ -297,23 +294,24 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 3. ~~Clé 4G~~ — **résolu (révision 2)** : confirmée, usage limité à la mise au point. Reste à formaliser la dérogation `CS-145-02` et la fenêtre auprès du PIL.
 4. **Version de JetPack cible** : 6.2 / L4T 36.4.3 (README) ou 7.2 / L4T r39.2 (Dockerfile ARM64) ? Et quelle version le référent technique homologue-t-il ?
 5. **Classification des données** : les images de piétons/opérateurs sont-elles C2 ou C3 au sens Stellantis ? Conditionne l'obligation de chiffrement au repos (`CS-R1-01`).
-6. **Accès de maintenance** : RDP en clair conservé (→ dérogation STLA-CS_STD_129) ou bascule vers VNC chiffré ? Une seule procédure d'accès à retenir, les deux docs actuelles se contredisent.
+6. **Chiffrement de la session TigerVNC** : le service ne fixe pas `-SecurityTypes` — la session est-elle chiffrée (`TLSVnc`/`X509Vnc`) ou en `VncAuth` (clair) sur la cible ? À vérifier et à forcer explicitement. La doc `docs/deployment/script-deploiement.md` (RDP/xrdp) est à corriger.
 7. **Nettoyage du livrable RUN** : le client Telegram, RustDesk et l'option Tailscale sont-ils retirés de l'image et de la configuration livrées, ou seulement désactivés ?
 
 ---
 
 ## Plan de remédiation
 
-### Avant réception sur site (non-conformités bloquantes)
+### Avant réception sur site (non-conformités bloquantes) — toutes traitées
 
 - [x] Révoquer le token du bot Telegram, changer les mots de passe RTSP et `user-4itec` (un mot de passe **unique par boîtier**), régénérer la clé HMAC de licence *(fait 2026-08-31 — rotation attestée par 4itec)* — `CS-113-04`
 - [x] Retirer les identifiants en clair de `README.md:719` et `docs/security/rapport-cybersec.md:143` *(fait — commit `9a02cac`)* — `CS-113-04`
 - [x] Purger l'historique git des secrets (`git filter-repo`) ou reconstruire le dépôt *(fait 2026-08-31 — réécriture + force-push GitHub/GitLab, refs internes purgées, vérif 0 occurrence)* — `CS-113-04`
-- [ ] Remplacer RDP/xrdp par VNC chiffré (STLA-CS_STD_129), ou obtenir une dérogation argumentée + mesures compensatoires écrites *(coût : moyen)* — `CS-1143-01`
-- [ ] Basculer l'IHM en HTTPS/TLS et binder sur `eth2` (`run.py:32`, `scripts/4isafecross.sh:10`) *(coût : moyen)* — `CS-1143-01`, `CS-143-02`
+- [x] Remplacer RDP/xrdp par VNC *(fait par le fournisseur — TigerVNC ; reste à forcer le chiffrement de session, désormais `Majeure`, voir ci-dessous)* — `CS-1143-01`
 
 ### Avant réception définitive (non-conformités majeures)
 
+- [ ] **TigerVNC** : fixer `-SecurityTypes X509Vnc` + certificat (STLA-CS_STD_129) et **vérifier sur cible** que la session est chiffrée ; corriger/supprimer la doc RDP de `docs/deployment/script-deploiement.md` ; renommer `install_xrdp_jetson.sh` *(coût : faible)* — `CS-1143-01`
+- [ ] Basculer l'IHM en HTTPS/TLS et binder sur `eth2` (`run.py:32`, `scripts/4isafecross.sh:10`) *(coût : moyen)* — `CS-1143-01`, `CS-143-02`
 - [ ] Formaliser la dérogation **fenêtre 4G de mise au point** auprès du référent technique et l'expression de besoin auprès du PIL (durée, flux, retrait attesté de la clé, pare-feu hôte actif) *(coût : faible)* — `CS-145-01`, `CS-145-02`, `CS-145-03`, `CS-127-01`, `CS-1143-05`
 - [ ] Retirer du livrable RUN : client Telegram (boot), RustDesk, option Tailscale *(coût : faible)* — `CS-127-01`, `CS-127-02`, `CS-1143-04`
 - [ ] Rendre l'authentification **obligatoire** (refus de démarrage si `SAFECROSS_AUTH_*` absents) sur toutes les routes d'écriture *(coût : faible)* — `CS-1144-01`
@@ -327,15 +325,14 @@ La révision 2 (modèle de déploiement confirmé : autonome, clé 4G provisoire
 - [ ] Lever l'incohérence de version JetPack (README vs Dockerfile), faire homologuer la version par le référent, documenter le canal de mise à jour L4T **hors ligne** + rollback *(coût : moyen)* — `CS-1141-01`, `CS-1141-02`, `CS-123-03`
 - [ ] Confirmer la classification des images avec le pilote ; si ≥ C3, chiffrer `detections/`, `dataset/`, `db/` au repos *(coût : moyen à élevé)* — `CS-R1-01`
 - [ ] Produire la cartographie des flux au format Stellantis (base : section ci-dessus) *(coût : faible)* — `CS-143-01`
-- [ ] Réaligner `README.md` et `docs/deployment/*` sur le modèle de déploiement autonome *(coût : faible)* — hygiène / `CS-R8-01`
+- [ ] Réaligner `README.md` et `docs/deployment/*` sur le modèle de déploiement autonome (retrait RDP/RustDesk/Telegram/`eth0` internet) *(coût : faible)* — hygiène / `CS-R8-01`
 - [ ] Retirer la bannière de version des réponses publiques ; passer `/debug_info` derrière authentification *(coût : faible)* — `CS-R8-01`
-- [ ] Activer le chiffrement TLS du transport VNC si conservé (`install_xrdp_jetson.sh:111`) *(coût : faible)* — `CS-1143-01`
 - [x] Retirer `licenses/license_state.json` du suivi git ; retirer `licenses/license_state.key` de l'historique *(fait 2026-08-31 — dé-suivi + supprimé de tout l'historique par `git filter-repo --invert-paths`)* — hygiène / `CS-113-04`
 - [ ] Ajouter protection CSRF et en-têtes de sécurité HTTP ; demander les guides Stellantis Python et HTML/JS *(coût : faible)* — `CS-R4-01`
 
 ### Phase RUN (non-conformités mineures et volet contractuel)
 
-- [x] Détection de secrets : job CI `security:gitleaks` bloquant + hook `.githooks/pre-commit` + `.gitleaks.toml` *(fait 2026-08-31 ; historique purgé — retirer l'allowlist `replacements.txt` de `.gitleaks.toml` et, si présent, basculer le job sur `gitleaks git` plein historique)* — `CS-113-04`
+- [x] Détection de secrets : job CI `security:gitleaks` bloquant (scan plein historique) + hook `.githooks/pre-commit` + `.gitleaks.toml` *(fait 2026-08-31 ; historique purgé ; scan CI vert — seul faux positif `admin:mon_mdp` allowlisté ; installer `gitleaks` en local pour activer le hook)* — `CS-113-04`
 - [ ] Ajouter `SECURITY.md` + canal de signalement de vulnérabilité *(coût : faible)* — `CS-1141-03`
 - [ ] Documenter la procédure d'effacement sécurisé des supports en fin de vie / retour SAV *(coût : faible)* — `CS-R1-03`
 - [ ] Mettre en place un export des logs (support amovible ou syslog lors des interventions) *(coût : moyen)* — `CS-R2-04`
