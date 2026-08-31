@@ -18,3 +18,13 @@ paths = [
   # Modèle de configuration : uniquement des valeurs-gabarits <...>.
   '''\.env\.example''',
 ]
+stopwords = [
+  # Gabarit de mot de passe dans la doc historique
+  # (`curl -u admin:mon_mdp http://...`), pas un secret. Ligne retirée de
+  # l'arbre courant, subsiste dans l'historique.
+  "mon_mdp",
+]
+regexes = [
+  # Idem, au cas où la règle ciblerait la paire user:pass entière.
+  '''admin:mon_mdp''',
+]
