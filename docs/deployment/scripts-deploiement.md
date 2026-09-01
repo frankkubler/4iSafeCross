@@ -568,8 +568,8 @@ sudo logrotate -f /etc/logrotate.d/4isafecross
 
 ## Ordre d'installation recommandé sur un Jetson neuf
 
-Après le flash JetPack (voir
-[flash-jetson-reserver-j4012-jetpack62.md](flash-jetson-reserver-j4012-jetpack62.md)) :
+Après le flash **JetPack 7.2** (voir
+[flash-jetson-reserver-j4012-jetpack72.md](flash-jetson-reserver-j4012-jetpack72.md)) :
 
 ```
 1. disable-autosuspend.sh   → désactiver USB autosuspend + reboot
@@ -581,3 +581,6 @@ Après le flash JetPack (voir
 7. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
 8. 4isafecross.logrotate    → installer dans /etc/logrotate.d/
 ```
+
+> Mises à jour de sécurité L4T/OS en exploitation (hors ligne) + rollback :
+> [maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md).

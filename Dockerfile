@@ -80,6 +80,11 @@ RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
 
 # ═══════════════════════════════════════════════════════════════════
 # BUILDER ARM64 (Jetson Orin NX - JetPack 7.2 / L4T r39.2.0)
+# Version firmware cible UNIQUE et homologuée pour tout le parc :
+# voir docs/deployment/flash-jetson-reserver-j4012-jetpack72.md (tableau
+# d'homologation, CS-1141-01) et docs/deployment/maj-l4t-hors-ligne.md
+# (canal de mise à jour hors ligne, CS-1141-02 / CS-123-03).
+#
 # Ubuntu 24.04 nu et non l'image CUDA : la compilation Cython n'appelle
 # que gcc et aucune dependance du projet ne se lie a CUDA. Cela evite de
 # tirer les ~5 Go de l'image devel sous QEMU en CI. C'est le stage final

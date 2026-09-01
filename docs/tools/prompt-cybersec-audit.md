@@ -21,7 +21,7 @@ Si une pratique n'est pas visible dans le code ou la documentation, la réponse 
   et déclencher des alertes physiques (relais Yoctopuce) et numériques (Telegram)
 - **Modèles IA** : YOLO11m (détection d'objets) + YOLOv8-pose (estimation de pose COCO-17),
   avec mode `transfert` (modèle réentraîné sur site : classes `forklift`, `driver`, `person`)
-- **Infrastructure** : Nvidia Jetson Orin NX (JetPack 6.1), serveurs d'inférence HTTP dédiés
+- **Infrastructure** : Nvidia Jetson Orin NX (JetPack 7.2 / L4T r39.2), serveurs d'inférence HTTP dédiés
   (ports 8001/8002), Flask + Waitress, Docker, GitLab CI/CD
 - **Données traitées** : Flux RTSP H.264 de caméras industrielles, captures annotées (piétons),
   base SQLite locale des événements, dataset d'entraînement collecté automatiquement
