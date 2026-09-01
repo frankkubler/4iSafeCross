@@ -26,10 +26,12 @@ security:sast:
     - uv sync --frozen --only-group dev
   script:
     - echo "=== Analyse SAST avec Bandit ==="
-    # Le passage JSON tolere l'echec pour que l'artefact existe toujours ; le
-    # passage lisible ne le tolere pas, sinon le job ne peut jamais signaler
-    # quoi que ce soit. allow_failure garde le pipeline vert le temps d'une
-    # release, puis doit passer a false (voir TECH_DEBT_AUDIT.md, F043).
+    # Le passage JSON tolere l'echec pour que l'artefact soit toujours produit
+    # (bandit ecrit le rapport puis sort en code != 0 s'il trouve quelque chose).
+    # Le passage lisible qui suit ne tolere PAS l'echec : c'est lui qui fait
+    # echouer le job. Avec allow_failure: false (voir plus bas), une decouverte
+    # bandit OU pip-audit casse desormais le pipeline (CYBER_AUDIT.md CS-R6-01 ;
+    # TECH_DEBT_AUDIT.md F043).
     - .venv/bin/bandit -r src/ utils/ run.py -ll -f json -o bandit-report.json || true
     - .venv/bin/bandit -r src/ utils/ run.py -ll
     - echo "=== Audit des dependances avec pip-audit ==="
@@ -57,7 +59,10 @@ security:sast:
       - bandit-report.json
       - pip-audit-report.json
     expire_in: 30 days
-  allow_failure: true
+  # BLOQUANT (CYBER_AUDIT.md CS-R6-01, TECH_DEBT_AUDIT.md F043) : une decouverte
+  # bandit (-ll) ou pip-audit fait echouer le pipeline. Deroger ponctuellement
+  # via un commit explicite si un correctif de dependance n'est pas encore dispo.
+  allow_failure: false
   only:
     - main
     - merge_requests
