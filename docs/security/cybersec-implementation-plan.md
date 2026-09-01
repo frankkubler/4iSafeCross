@@ -5,9 +5,10 @@
 > (« pas des priorités », checks 401 retirés) **ne s'appliquent plus** :
 > - TLS de l'IHM : **fait** (rév. 8) — `waitress` sur `127.0.0.1` + reverse-proxy Caddy sur `eth2` (`CS-1143-01`, `CS-143-02`) ;
 > - Authentification : **obligatoire** (rév. 10) — l'application refuse de démarrer sans `SAFECROSS_AUTH_*` (`CS-1144-01`). Le contrôle de recette FOR_509 teste l'endpoint HTTP directement (401 attendu) et l'air-gap n'y déroge pas.
+> - **Plan réseau** (rév. 13) : « eth2 = maintenance » ci-dessous vaut pour le **site HAM**. Nouvelles installations = maintenance sur `eth1`, caméras sur `eth2`/`eth3`/`eth4` (`192.168.0.0/24`) — `README.md`, `docs/compliance/cartographie-flux-stellantis.md`.
 
 > Ce document découle du rapport `RAPPORT_CYBERSEC.md` (audit 26 mai 2026, révision 2 du 27 mai 2026).  
-> **Contexte de déploiement** : Jetson Orin NX air-gappé, eth0 non connecté, eth2 = câble RJ45 direct point-à-point (accès physique requis). Dépôt GitHub **privé**.  
+> **Contexte de déploiement** : Jetson Orin NX air-gappé, eth0 non connecté, port de maintenance = câble RJ45 direct point-à-point (accès physique requis). Dépôt GitHub **privé**.  
 > Chaque étape est indépendamment vérifiable. **Aucune modification de comportement fonctionnel.**
 
 ---

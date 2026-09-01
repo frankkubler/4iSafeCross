@@ -18,13 +18,20 @@ Le boîtier fonctionne **autonome, sans connexion Internet** en exploitation.
 | Élément | En mise au point (sur site) | En exploitation (RUN) |
 |---|---|---|
 | Connectivité | Clé **4G** provisoire (téléchargement d'image, réglages) — retirée à la livraison | Aucune |
-| Accès distant | SSH + VNC local ; **RustDesk** et/ou **Tailscale** provisoires | **VNC local uniquement** (câble RJ45 point-à-point sur `eth2`) |
-| IHM de supervision | HTTPS via Caddy sur `eth2` (`https://192.168.3.122`) ; ou tunnel SSH sur la 4G | HTTPS via Caddy sur `eth2` uniquement |
-| Caméras | `eth1`, sous-réseau dédié `192.168.2.x` (PoE) | Idem |
+| Accès distant | SSH + VNC local ; **RustDesk** et/ou **Tailscale** provisoires | **VNC local uniquement** (câble RJ45 point-à-point sur le port maintenance) |
+| IHM de supervision | HTTPS via Caddy sur le port maintenance (`https://192.168.3.122`) ; ou tunnel SSH sur la 4G | HTTPS via Caddy sur le port maintenance uniquement |
+| Caméras | sous-réseau partagé `192.168.0.0/24` sur `eth2`/`eth3`/`eth4` (bridge `br0` ou switch PoE) | Idem |
+
+> **Plan d'adressage (nouvelles installations)** : maintenance sur **`eth1`**
+> (`192.168.3.122/24`), caméras sur **`eth2`/`eth3`/`eth4`** (sous-réseau partagé
+> `192.168.0.0/24`, Jetson en `192.168.0.100`). Le **site HAM** est **en service à
+> ce jour sur le plan précédent** (caméras `eth1` / `192.168.2.x`, maintenance
+> `eth2`) et **sera migré ultérieurement** — détail dans le `README.md`. Voir aussi
+> `docs/compliance/cartographie-flux-stellantis.md`.
 
 **IHM en HTTPS** : `waitress` sert l'IHM Flask **en clair sur `127.0.0.1:5050` uniquement**
 (`run.py`) ; le reverse-proxy **Caddy** (`config/Caddyfile`, `scripts/caddy-4isafecross.service`)
-termine le TLS et l'expose sur `eth2`. Le port `5050` n'est jamais ouvert sur le réseau.
+termine le TLS et l'expose sur le port maintenance. Le port `5050` n'est jamais ouvert sur le réseau.
 Voir la section **« IHM en HTTPS (Caddy) »** ci-dessous. Conformité : `CYBER_AUDIT.md`
 (`CS-1143-01`, `CS-143-02`).
 
@@ -232,8 +239,8 @@ bash 4isafecross.sh
 ### `caddy-4isafecross.service` + `config/Caddyfile` — IHM en HTTPS (Caddy)
 
 `waitress` sert l'IHM Flask **en clair sur `127.0.0.1:5050`**. Le reverse-proxy
-**Caddy** termine le TLS et expose l'IHM en `https://192.168.3.122` sur le réseau
-de maintenance `eth2`. Il tourne **sur l'hôte** (le conteneur applicatif est en
+**Caddy** termine le TLS et expose l'IHM en `https://192.168.3.122` sur le port
+de maintenance (`eth1` sur les nouvelles installations, `eth2` sur HAM). Il tourne **sur l'hôte** (le conteneur applicatif est en
 `network_mode: host`, Caddy joint donc `127.0.0.1:5050` directement).
 
 - Certificat : **CA interne Caddy** (`tls internal`) — boîtier hors ligne, aucune
@@ -442,11 +449,18 @@ graphique distant (VNC sur port `5999`, display `:99`).
 sudo bash scripts/install_vnc_jetson.sh --subnet 192.168.3.0/24
 ```
 
-**Configuration réseau maintenance (NetworkManager, port `eth2`) :**
+**Configuration réseau maintenance (NetworkManager) :**
 
-- Interface : eth2 / enP1p1s0
+- Port : **`eth1`** sur les nouvelles installations (**`eth2`** sur le site HAM).
+  Nom d'interface Jetson (`enPxpxsx`) : `ip -br link`.
 - IPv4 : Manuel — `192.168.3.122/24`
 - Passerelle : vide · DNS : vide · Route par défaut : désactivée (`never-default`)
+
+**Configuration réseau caméras (nouvelles installations) :**
+
+- `eth2` + `eth3` + `eth4` réunis en un pont `br0` (ou via un switch PoE externe).
+- IPv4 de `br0` (ou de l'interface caméra) : Manuel — `192.168.0.100/24`, sans passerelle ni route par défaut.
+- Caméras (1 à 3) : `192.168.0.60` (obligatoire), `192.168.0.61`, `192.168.0.62` (optionnelles) — cf. `config/config.ini` `[RTSP] HOST`.
 
 **Après installation (obligatoire) :**
 
@@ -487,7 +501,7 @@ re-lancer le script sans `--tailscale` pour rétablir le blocage UFW de `tailsca
 > **Provisoire, comme la clé 4G et Tailscale.** RustDesk (self-hosted) sert
 > uniquement au réglage à distance pendant la mise au point sur site. Il **doit
 > être désinstallé et son autostart retiré à la livraison** ; le boîtier en
-> exploitation n'a aucun accès distant hors du VNC local sur `eth2`.
+> exploitation n'a aucun accès distant hors du VNC local sur le port de maintenance.
 > Cette connectivité de mise au point est à déclarer au Plant IT Leader
 > (voir `CYBER_AUDIT.md`, §1.2.7 / §1.4.5) et son retrait à attester à la recette.
 

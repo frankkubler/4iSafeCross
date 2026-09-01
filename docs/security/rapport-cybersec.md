@@ -1,5 +1,11 @@
 # Rapport d'audit de maturité cybersécurité — 4iSafeCross
 
+> ℹ️ **Plan réseau** : le tableau des interfaces ci-dessous reflète le **site HAM**
+> (caméras `192.168.2.x` / `eth1`, maintenance `eth2`). Les **nouvelles
+> installations** placent la maintenance sur `eth1` et les caméras sur
+> `eth2`/`eth3`/`eth4` (`192.168.0.0/24`) — voir `README.md` et
+> `docs/compliance/cartographie-flux-stellantis.md`.
+
 **Date d'audit** : 26 mai 2026 — **Révision 2** : 27 mai 2026 (air-gap + accès physique direct uniquement + dépôt privé) — **Révision 3** : 24 juillet 2026 (migration base image JetPack 7.2 / CUDA 13.2, voir Q3)  
 **Dépôt** : `frankkubler/4iSafeCross` — branche `main`  
 **Méthode** : Analyse statique du dépôt GitHub (code source, configuration, CI/CD, documentation)  

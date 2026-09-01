@@ -3,7 +3,8 @@
 # ------------------------------------------------------------
 # waitress sert l'IHM Flask EN CLAIR sur 127.0.0.1:5050 (run.py).
 # Caddy termine le TLS et l'expose :
-#   - sur eth2  (réseau de maintenance RJ45, 192.168.3.0/24) ;
+#   - sur le port de maintenance RJ45 (192.168.3.0/24) — eth1 sur les nouvelles
+#     installations, eth2 sur le site HAM ;
 #   - sur la boucle locale (accès depuis le bureau RustDesk/VNC en mise au point).
 #
 # Certificat : CA interne Caddy (`tls internal`). Le boîtier est hors ligne,
@@ -32,8 +33,8 @@
 # Caddy écoute sur :443 (toutes interfaces) et discrimine par nom d'hôte / SNI.
 # Le filtrage réseau RÉEL est fait par UFW : 443/tcp n'est ouvert qu'au
 # sous-réseau de maintenance 192.168.3.0/24 (voir scripts/install_vnc_jetson.sh).
-# On n'utilise pas la directive `bind 192.168.3.122` : si le câble eth2 est
-# débranché au boot, l'IP n'est pas encore posée et Caddy échouerait à démarrer.
+# On n'utilise pas la directive `bind 192.168.3.122` : si le câble de maintenance
+# est débranché au boot, l'IP n'est pas encore posée et Caddy échouerait à démarrer.
 https://192.168.3.122, https://localhost, https://127.0.0.1 {
 	tls internal
 

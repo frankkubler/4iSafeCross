@@ -674,24 +674,55 @@ le démarrage, la configuration matérielle et la maintenance du boîtier Jetson
 
 ## Schéma des ports RJ45, adresses IP et fonctions associées
 
-Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec leur configuration IP et leur usage :
+### Plan d'adressage — **nouvelles installations** (standard actuel)
+
+```
++-----------+---------------------+--------------------------------------------------+
+|   Port    |    Adresse IP       |                    Fonction                       |
++-----------+---------------------+--------------------------------------------------+
+|  eth0     | DHCP (inactif)      | Non raccordé en cible                             |
+|  eth1     | 192.168.3.122/24    | Maintenance : VNC 5999 + IHM HTTPS 443 (RJ45 P-à-P)|
+|  eth2     | \                   |                                                  |
+|  eth3     |  > 192.168.0.100/24 | Caméras IP — sous-réseau partagé (bridge / switch) |
+|  eth4     | /                   |                                                  |
++-----------+---------------------+--------------------------------------------------+
+```
+
+- **eth0** : non raccordé en exploitation (modèle autonome). À désactiver logiquement en cible.
+- **eth1** : port **maintenance** — câble RJ45 point-à-point vers le PC de maintenance. VNC chiffré port 5999 **et** IHM de supervision en **HTTPS port 443** (reverse-proxy Caddy devant `waitress`, lui-même lié à `127.0.0.1:5050` uniquement). Adresse `192.168.3.122/24`, UFW n'ouvre 443/5999 (et 22 borné) qu'au sous-réseau `192.168.3.0/24`. Identifiants du compte de maintenance : uniques par boîtier, coffre-fort 4itec — jamais dans le dépôt.
+- **eth2 / eth3 / eth4** : ports **caméras**, réunis en **un seul sous-réseau `192.168.0.0/24`** (bridge `br0` côté Jetson, ou switch PoE). Le Jetson y porte une IP unique (`192.168.0.100`). Une caméra peut être branchée sur n'importe lequel des trois ports. **1 à 3 caméras** :
+  - Caméra 0 : `192.168.0.60` (obligatoire)
+  - Caméra 1 : `192.168.0.61` (optionnelle)
+  - Caméra 2 : `192.168.0.62` (optionnelle)
+  - Ajuster la liste au nombre réel de caméras dans [`config/config.ini`](config/config.ini), section `[RTSP]`, clé `HOST`.
+
+Voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « IHM en HTTPS (Caddy) », `CYBER_AUDIT.md` (`CS-1143-01`, `CS-143-02`) et [`docs/compliance/cartographie-flux-stellantis.md`](docs/compliance/cartographie-flux-stellantis.md).
+
+<details>
+<summary><b>Site HAM — installation en service sur le plan d'adressage précédent</b></summary>
+
+Le boîtier déployé sur la **zone HAM tourne aujourd'hui** sur le plan d'adressage
+antérieur. Il **sera migré vers le nouveau plan ultérieurement** ; en attendant,
+sa configuration reste celle-ci — **ne pas l'appliquer aux nouvelles installations** :
 
 ```
 +-----------+-------------------+------------------------------------------+
 |   Port    |    Adresse IP     |                Fonction                  |
 +-----------+-------------------+------------------------------------------+
-|  eth0     | DHCP              | Accès internet / réseau principal        |
-|  eth1     | 192.168.2.100     | Caméra 1 (Entrée principale)             |
+|  eth0     | DHCP (inactif)    | Non raccordé                             |
+|  eth1     | 192.168.2.100     | Caméras IP — sous-réseau 192.168.2.x     |
 |  eth2     | 192.168.3.122     | Maintenance : VNC 5999 + IHM HTTPS 443   |
-|  eth3     | (non utilisé)     | Libre / extension future                 |
-|  eth4     | (non utilisé)     | Libre / extension future                 |
+|  eth3     | (non utilisé)     | —                                       |
+|  eth4     | (non utilisé)     | —                                       |
 +-----------+-------------------+------------------------------------------+
 ```
 
-- **eth0** : Connecté au réseau principal, permet l'accès internet, la supervision distante et la communication avec Telegram.
-- **eth1** : Port dédié à la caméra principale (sur sous-réseau isolé pour la vidéo).
-- **eth2** : Port réservé à la maintenance — VNC chiffré port 5999 **et** IHM de supervision en **HTTPS port 443** (reverse-proxy Caddy devant `waitress`, lui-même lié à `127.0.0.1:5050` uniquement). Voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « IHM en HTTPS (Caddy) » et `CYBER_AUDIT.md` (`CS-1143-01`, `CS-143-02`).
-- **eth3/eth4** : Disponibles pour ajout de caméras ou autres usages (à configurer selon besoin).
+- Caméras : `192.168.2.156`, `192.168.2.157` sur `eth1`.
+- Maintenance sur `eth2`.
+- Le sous-réseau de maintenance (`192.168.3.0/24`) et les règles UFW sont **identiques** au nouveau plan ; seuls les ports RJ45 et le sous-réseau caméras changent → la migration HAM se limite à recâbler et à repasser `config/config.ini` `[RTSP] HOST` en `192.168.0.x`.
+- La configuration réelle du site HAM vit dans `/data/4isafecross/config` sur le boîtier ; ce dépôt ne la modifie pas.
+
+</details>
 
 > Adaptez les adresses IP et fonctions selon votre architecture réseau réelle. Utilisez des VLAN ou des sous-réseaux séparés pour la sécurité et la performance.
 
@@ -715,12 +746,13 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l'arrière de la
 
 - **eth0** est toujours le port le plus à gauche lorsque vous regardez l'arrière de la machine.
 - L'ordre des ports va de gauche à droite : eth0, eth1, eth2, eth3, eth4.
-- **eth0** DHCP pour l'accès internet et la supervision distante.(connecter à un routeur ou switch)
-- **eth1** Les adresses IP fixes des caméras utilisées par défaut sont :
-> - Caméra 0 : 192.168.2.156
-> - Caméra 1 : 192.168.2.157
-> Vous pouvez modifier ces adresses dans le fichier [`config/zones.ini`](config/zones.ini), variable `RTSP_HOST`.
-- **eth2** est réservé pour la maintenance (adresse IP 192.168.3.122, masque 255.255.255.0) : VNC chiffré port 5999 et IHM de supervision en HTTPS port 443. Le pare-feu UFW n'ouvre 443/tcp et 5999/tcp qu'au sous-réseau `192.168.3.0/24` ; le port 5050 (`waitress` en clair) n'est jamais exposé. Identifiants du compte de maintenance : uniques par boîtier, stockés dans le coffre-fort 4itec (Vaultwarden), accessibles aux personnes habilitées. Ne jamais les inscrire ici.
+- **eth0** : non raccordé en exploitation (modèle autonome).
+- **eth1** est réservé pour la **maintenance** (adresse IP `192.168.3.122`, masque `255.255.255.0`) : VNC chiffré port 5999 et IHM de supervision en HTTPS port 443. Le pare-feu UFW n'ouvre 443/tcp et 5999/tcp qu'au sous-réseau `192.168.3.0/24` ; le port 5050 (`waitress` en clair) n'est jamais exposé. Identifiants du compte de maintenance : uniques par boîtier, stockés dans le coffre-fort 4itec (Vaultwarden), accessibles aux personnes habilitées. Ne jamais les inscrire ici.
+- **eth2 / eth3 / eth4** : ports **caméras** sur un sous-réseau partagé `192.168.0.0/24` (bridge `br0` ou switch PoE ; le Jetson porte `192.168.0.100`). **1 à 3 caméras** :
+> - Caméra 0 : `192.168.0.60` (obligatoire)
+> - Caméra 1 : `192.168.0.61` (optionnelle)
+> - Caméra 2 : `192.168.0.62` (optionnelle)
+> À ajuster dans [`config/config.ini`](config/config.ini), section `[RTSP]`, clé `HOST`.
 
 ## Gestion de la rotation des logs (logrotate)
 

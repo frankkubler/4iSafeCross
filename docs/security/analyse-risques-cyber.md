@@ -1,5 +1,12 @@
 # Analyse des risques cybersécurité — 4iSafeCross
 
+> ℹ️ **Plan réseau** : ce document décrit le plan d'adressage du **site HAM**
+> (caméras `192.168.2.x` sur `eth1`, maintenance `eth2`). Les **nouvelles
+> installations** utilisent un plan différent — maintenance sur `eth1`, caméras
+> sur `eth2`/`eth3`/`eth4` en `192.168.0.0/24` — décrit dans le `README.md` et
+> `docs/compliance/cartographie-flux-stellantis.md`. Les conclusions de risque
+> restent valables (même modèle point-à-point isolé + sous-réseau caméras dédié).
+
 > **Projet** : 4iSafeCross — Détection piétons en zone chariot élévateur  
 > **Méthode** : STRIDE (Microsoft Threat Modeling)  
 > **Date** : 27 mai 2026  

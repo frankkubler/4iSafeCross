@@ -7,7 +7,7 @@
 # obligatoire et n'est PAS reproductible par `waitress-serve --call`.
 #
 # run.py bind waitress sur 127.0.0.1:5050 UNIQUEMENT. Le TLS et l'exposition
-# sur eth2 sont assurés par Caddy en frontal (config/Caddyfile).
+# sur le port de maintenance sont assurés par Caddy en frontal (config/Caddyfile).
 # Conformité : CYBER_AUDIT.md — CS-1143-01, CS-143-02.
 
 APP_PATH="$HOME/github/4iSafeCross/"

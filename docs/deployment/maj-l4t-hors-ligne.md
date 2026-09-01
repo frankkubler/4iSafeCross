@@ -14,7 +14,7 @@ Le boîtier fonctionne **autonome, sans connexion Internet** en exploitation
 dépôts Ubuntu ou NVIDIA. Toute mise à jour du système d'exploitation, du BSP L4T
 ou du firmware :
 
-- se fait par **intervention physique** sur site (câble RJ45 point-à-point `eth2`,
+- se fait par **intervention physique** sur site (câble RJ45 point-à-point sur le port de maintenance,
   session VNC chiffrée) et **support amovible** ;
 - utilise une **machine relais** 4itec connectée, pendant une fenêtre de
   connectivité **déclarée au Plant IT Leader** (même formalisme que la fenêtre 4G
@@ -82,8 +82,8 @@ toute MAJ de la couche C, et non touchés par A/B.
 
 > L'air-gap réduit fortement l'exploitabilité des paquets réseau (ex. pile TCP,
 > clients HTTP) mais **pas** celle des composants sur le chemin de démarrage /
-> vérification de licence, ni des failles à accès local (le segment maintenance
-> `eth2` est un vecteur). Ne pas se dispenser des correctifs sur cette base.
+> vérification de licence, ni des failles à accès local (le segment de
+> maintenance est un vecteur). Ne pas se dispenser des correctifs sur cette base.
 
 ---
 
@@ -92,7 +92,7 @@ toute MAJ de la couche C, et non touchés par A/B.
 ### 5.1 Préparation (machine relais connectée, fenêtre déclarée)
 
 1. **Cloner l'état des paquets** du boîtier : récupérer `dpkg -l` et
-   `/etc/apt/sources.list*` du boîtier cible (via VNC / `scp` sur `eth2`).
+   `/etc/apt/sources.list*` du boîtier cible (via VNC / `scp` sur le port de maintenance).
 2. Sur une machine **arm64** (ou un conteneur `--platform linux/arm64`) alignée
    sur la même version, préparer les `.deb` :
 
@@ -125,7 +125,7 @@ toute MAJ de la couche C, et non touchés par A/B.
 4. Copier `maj-l4t/` sur un **support amovible chiffré** (LUKS). Y joindre le
    bulletin de sécurité de référence et la liste des paquets.
 
-### 5.2 Application (sur le boîtier, via VNC `eth2`)
+### 5.2 Application (sur le boîtier, via VNC sur le port de maintenance)
 
 ```bash
 # 1. Sauvegarde préalable — voir §6

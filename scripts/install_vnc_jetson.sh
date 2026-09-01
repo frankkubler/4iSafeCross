@@ -265,12 +265,13 @@ echo "   4. Contrôle local  : curl -k https://127.0.0.1/health           → 20
 echo "      Contrôle réseau : curl -k https://192.168.3.122/health       → 200 depuis le PC maintenance"
 echo "      Port en clair   : curl http://192.168.3.122:${IHM_HTTP_PORT}/health → doit ÉCHOUER (connexion refusée)"
 echo ""
-echo " Workflow port maintenance :"
-echo "   1. Brancher le câble RJ45"
-echo "   2. Ouvrir NetworkManager (GUI) et forcer l'IP manuellement sur le port maintenance"
+echo " Workflow port maintenance (eth1 sur les nouvelles installations, eth2 sur HAM) :"
+echo "   1. Brancher le câble RJ45 sur le port de maintenance"
+echo "   2. Ouvrir NetworkManager (GUI) et forcer l'IP manuellement sur ce port"
 echo "      IPv4: Manuel | Adresse: 192.168.3.122/24 | Passerelle: vide"
 echo "      DNS: vide | Route par défaut: désactivée (never-default)"
 echo "   3. Se connecter depuis Remmina sur 192.168.3.122:${VNC_PORT}"
+echo "      (le nom d'interface Jetson — enPxpxsx — se lit avec 'ip -br link')"
 if [ "$USE_TAILSCALE" = true ]; then
     echo ""
     echo " Accès distant sécurisé (option Tailscale) :"
@@ -308,9 +309,11 @@ print(data.get("Self", {}).get("DNSName", "").rstrip("."))' 2>/dev/null || true)
 fi
 
 echo ""
-echo " Pour créer le profil maintenance NetworkManager :"
+echo " Pour créer le profil maintenance NetworkManager (remplacer <IFACE> par le"
+echo " nom d'interface du port de maintenance — 'ip -br link' ; eth1 sur les"
+echo " nouvelles installations, eth2 sur HAM) :"
 cat << 'NMCLI_EXAMPLE'
-     sudo nmcli connection add type ethernet ifname enP1p1s0 \
+     sudo nmcli connection add type ethernet ifname <IFACE> \
          con-name maintenance \
          ipv4.method manual \
          ipv4.addresses 192.168.3.122/24 \

@@ -12,7 +12,8 @@
 
 - **Équipement** : appliance de vision 4iSafeCross — Nvidia Jetson Orin NX (reServer Industrial J4012)
 - **Modèle de déploiement** : autonome, **sans Internet** en exploitation (RUN) ; clé 4G **provisoire** en mise au point sur site (déclarée au Plant IT Leader)
-- **Date** : 2026-09-01 · **Révision** : 11 (suit `CYBER_AUDIT.md`)
+- **Plan d'adressage** : **nouvelles installations** — maintenance sur **`eth1`** (`192.168.3.122/24`), caméras sur **`eth2`/`eth3`/`eth4`** réunis en un sous-réseau partagé `192.168.0.0/24` (bridge `br0` ou switch PoE ; Jetson en `192.168.0.100`), **1 à 3 caméras** : `192.168.0.60` (obligatoire), `192.168.0.61`, `192.168.0.62` (optionnelles). Le **site HAM** est **en service à ce jour sur le plan précédent** — caméras `eth1` / `192.168.2.x`, maintenance `eth2` — et **sera migré vers le nouveau plan ultérieurement** (détail dans le `README.md`) ; les sous-réseaux `192.168.3.0/24` (maintenance) et les règles UFW sont identiques dans les deux plans, seuls les ports RJ45 et le sous-réseau caméras diffèrent.
+- **Date** : 2026-09-01 · **Révision** : 13 (suit `CYBER_AUDIT.md`)
 - **État** : rédigé côté fournisseur — **à valider par le référent technique Stellantis** (bloc de validation en fin de document)
 
 ---
@@ -23,10 +24,10 @@
 |---|---|---|---|
 | **Zone 0 — Internet** | — | — | **RUN : non raccordé.** Présente uniquement en mise au point, via clé 4G temporaire (fenêtre déclarée PIL — `CS-145-xx`) |
 | **Zone 1 — IT fournisseur** | PC de maintenance 4itec, poste 4itec de mise au point, machine relais de MAJ | variable | Dans le périmètre **STLA-CS_FOR_502** (`CS-15-xx`) |
-| **Conduit IT↔OT (RUN)** | Câble RJ45 **point-à-point** `eth2` + pare-feu hôte UFW | `192.168.3.0/24` | Accès physique requis. `default deny incoming`, ports ouverts au seul `192.168.3.0/24` |
+| **Conduit IT↔OT (RUN)** | Câble RJ45 **point-à-point** `eth1` (`eth2` sur HAM) + pare-feu hôte UFW | `192.168.3.0/24` | Accès physique requis. `default deny incoming`, ports ouverts au seul `192.168.3.0/24` |
 | **Conduit IT↔OT (mise au point)** | Clé **4G** USB — temporaire | CGNAT opérateur | Retirée à la livraison, retrait attesté à la recette |
-| **Zone 2 — OT Supervision** | Services d'accès du boîtier : Caddy (443), TigerVNC (5999), SSH (22) ; IHM Flask | `192.168.3.122` (eth2) | Pare-feu hôte + fail2ban |
-| **Zone 3 — OT Process / Terrain** | Sous-réseau caméras `eth1` ; module relais Yoctopuce (USB) | `192.168.2.0/24` (eth1) | Sous-réseau caméras **dédié et isolé** |
+| **Zone 2 — OT Supervision** | Services d'accès du boîtier : Caddy (443), TigerVNC (5999), SSH (22) ; IHM Flask | `192.168.3.122` (`eth1` ; `eth2` sur HAM) | Pare-feu hôte + fail2ban |
+| **Zone 3 — OT Process / Terrain** | Sous-réseau caméras (`eth2`/`eth3`/`eth4`, bridge `br0` ou switch) ; module relais Yoctopuce (USB) | `192.168.0.0/24` — Jetson `192.168.0.100` ; caméras `192.168.0.60` (oblig.), `.61`, `.62` (opt.) — HAM : `192.168.2.x` sur `eth1` | Sous-réseau caméras **dédié et isolé** |
 | **Intra-hôte (loopback)** | Flux `127.0.0.1` sur le Jetson (Caddy→waitress, client d'inférence→serveurs YOLO/RF-DETR) | `127.0.0.1` | Comptés OT↔OT ; **ne traversent aucun média réseau** |
 
 ### Schéma
@@ -40,16 +41,18 @@
    (IT fournisseur)              │   machine relais MAJ   │ (STLA-CS_FOR_502)
                     IO-01 HTTPS 443 │ IO-02 VNC 5999 │ IO-03 SSH 22
                     IO-04 RustDesk  │ IO-05 Tailscale│ (mise au point)
-   ═══ conduit eth2 (RJ45 point-à-point, 192.168.3.0/24, UFW) ══════════
+   ═══ conduit eth1 (RJ45 point-à-point, 192.168.3.0/24, UFW) ══════════
+      (eth2 sur le site HAM — mêmes IP et mêmes règles UFW)
    ZONE 2                        │  Boîtier 4iSafeCross — Jetson Orin NX
    (OT Supervision)              │  Caddy:443  ──►  waitress:5050  (OO-04, loopback)
                                  │  TigerVNC:5999   SSH:22   UFW default deny
    intra-hôte (127.0.0.1)        │  client inférence ─► YOLO:8004 / RF-DETR:8002 (OO-02/03)
-                    OO-01 RTSP 554 │ (eth1)                    OO-05 USB │
-   ZONE 3                  ┌──────┴─────────────┐        ┌──────────────┴────┐
-   (OT Process)            │ Caméras IP         │        │ Module relais     │
-                           │ 192.168.2.156/157  │        │ Yoctopuce (USB)   │
-                           └────────────────────┘        └───────────────────┘
+              OO-01 RTSP 554 │ (br0 = eth2+eth3+eth4, 192.168.0.0/24)   OO-05 USB │
+   ZONE 3                  ┌──────┴───────────────────┐        ┌──────────────┴────┐
+   (OT Process)            │ Caméras IP               │        │ Module relais     │
+                           │ 192.168.0.60 (+.61/.62)  │        │ Yoctopuce (USB)   │
+                           │ (HAM : .2.156/.157 eth1) │        └───────────────────┘
+                           └──────────────────────────┘
 ```
 
 ---
@@ -58,8 +61,8 @@
 
 | N° | Source (Zone) | Destination (Zone) | Protocole / service | Port · sens | Chiffrement | Authentification | Phase |
 |---|---|---|---|---|---|---|---|
-| IO-01 | PC maintenance 4itec — Z1 (`192.168.3.0/24`, eth2) | Boîtier / IHM supervision — Z2 (`192.168.3.122`) | HTTPS (TLS) | 443/TCP · requête unidir., session bidir. | **Oui** — Caddy `tls internal`, CA interne | **Oui** — HTTP Basic **obligatoire** (`SAFECROSS_AUTH_*`, refus de démarrage sans) | RUN |
-| IO-02 | PC maintenance 4itec — Z1 (eth2) | Boîtier / bureau distant de maintenance — Z2 | VNC (TigerVNC) | 5999/TCP · bidir. | **Oui** — `-SecurityTypes X509Vnc,RA2ne` (TLS/X509 ou RSA-AES) | **Oui** — mot de passe VNC **unique par boîtier** | RUN — *seul accès graphique d'exploitation* |
+| IO-01 | PC maintenance 4itec — Z1 (`192.168.3.0/24`, `eth1` ; `eth2` sur HAM) | Boîtier / IHM supervision — Z2 (`192.168.3.122`) | HTTPS (TLS) | 443/TCP · requête unidir., session bidir. | **Oui** — Caddy `tls internal`, CA interne | **Oui** — HTTP Basic **obligatoire** (`SAFECROSS_AUTH_*`, refus de démarrage sans) | RUN |
+| IO-02 | PC maintenance 4itec — Z1 (`eth1` ; `eth2` sur HAM) | Boîtier / bureau distant de maintenance — Z2 | VNC (TigerVNC) | 5999/TCP · bidir. | **Oui** — `-SecurityTypes X509Vnc,RA2ne` (TLS/X509 ou RSA-AES) | **Oui** — mot de passe VNC **unique par boîtier** | RUN — *seul accès graphique d'exploitation* |
 | IO-03 | Poste 4itec — Z1 | Boîtier / SSH — Z2 | SSH v2 | 22/TCP · bidir. | **Oui** | **Oui** — clé + mot de passe compte | Mise au point + interventions ponctuelles |
 | IO-04 | Poste 4itec via clé 4G / relais — Z1↔Z0 | Boîtier / RustDesk (relais self-hosted) — Z2 | RustDesk (propriétaire) | port relais · bidir. (sortant des 2 côtés) | **Oui** — chiffrement de bout en bout RustDesk | **Oui** — ID + clé RustDesk | **Mise au point uniquement** — à désinstaller (`CS-1143-04/05`) |
 | IO-05 | Poste 4itec via clé 4G — Z1↔Z0 | Boîtier / Tailscale — Z2 | WireGuard + HTTPS | 41641/UDP, 443/TCP · bidir. | **Oui** | **Oui** — tailnet | **Mise au point, optionnel** — à retirer du RUN (`CS-1143-04`) |
@@ -72,7 +75,7 @@
 
 | N° | Source (Zone) | Destination (Zone) | Protocole / service | Port · sens | Chiffrement | Authentification | Phase |
 |---|---|---|---|---|---|---|---|
-| OO-01 | Boîtier 4iSafeCross — Z2/Z3 (`192.168.2.100`, eth1) | Caméras IP `192.168.2.156`, `192.168.2.157` — Z3 (`192.168.2.0/24`) | RTSP + RTP/RTCP interleaved over TCP | 554/TCP · requête + flux retour même session | **Non** | **Oui** — `RTSP_LOGIN` / `RTSP_PASSWORD` | RUN (permanent) |
+| OO-01 | Boîtier 4iSafeCross — Z2/Z3 (`192.168.0.100`, bridge `br0` = `eth2`+`eth3`+`eth4`) | 1 à 3 caméras IP `192.168.0.60` (oblig.), `.61`, `.62` (opt.) — Z3 (`192.168.0.0/24`) — *HAM : `192.168.2.156/157` sur `eth1`* | RTSP + RTP/RTCP interleaved over TCP | 554/TCP · requête + flux retour même session | **Non** | **Oui** — `RTSP_LOGIN` / `RTSP_PASSWORD` | RUN (permanent) |
 | OO-02 | Client d'inférence 4iSafeCross — intra-hôte | Serveur YOLO `inf_jetson_yolo` — intra-hôte | HTTP | 8004/TCP `127.0.0.1` · requête→réponse | **Non** — boucle locale, ne traverse aucun média | Non | RUN |
 | OO-03 | Client d'inférence 4iSafeCross — intra-hôte | Serveur RF-DETR `inf_jetson_rf-detr` — intra-hôte | HTTP | 8002/TCP `127.0.0.1` · requête→réponse | **Non** — boucle locale | Non | RUN |
 | OO-04 | Reverse-proxy Caddy — intra-hôte | `waitress` / IHM Flask — intra-hôte | HTTP | 5050/TCP `127.0.0.1` · requête→réponse | **Non** — terminaison TLS en amont (Caddy, IO-01) | **Oui** — HTTP Basic appliqué par l'application | RUN |
@@ -93,7 +96,7 @@
 | IO-07 | `docker pull` de l'image applicative, paquets L4T | Sortant via clé 4G | `CS-145-01/02/03` — **fenêtre 4G à déclarer au PIL** ; en RUN, déploiement par support local |
 | IO-08 | Constitution du support de mise à jour L4T de sécurité (hors ligne) | Machine relais 4itec en Zone IT ; le boîtier ne se connecte jamais | `CS-1141-02` / `CS-123-03` — procédure `docs/deployment/maj-l4t-hors-ligne.md` ; cadence trimestrielle |
 | IO-09 | — | Port `eth0` non câblé ; désactivation logique demandée (annexe §1.1.2) | **Résolu par l'architecture** — à attester sur cible |
-| OO-01 | Réception des flux vidéo H.264 des caméras | Sous-réseau caméras **dédié** sur `eth1`, isolé physiquement du reste | `CS-1143-01` **résiduel** — transport non chiffré ; isoler strictement ; évaluer RTSPS si le modèle caméra le permet |
+| OO-01 | Réception des flux vidéo H.264 des caméras (1 à 3) | Sous-réseau caméras **dédié** `192.168.0.0/24` (`br0` = `eth2`/`eth3`/`eth4`, ou switch PoE), isolé du reste ; aucune route par défaut | `CS-1143-01` **résiduel** — transport non chiffré ; isoler strictement ; évaluer RTSPS si le modèle caméra le permet |
 | OO-02 | `POST` frame → détections (pipeline d'inférence YOLO) | `127.0.0.1` — non joignable hors hôte | Acceptable (intra-hôte). Retirer `network_mode: host` (`CS-1143-03`) pour cloisonner les conteneurs |
 | OO-03 | `POST` frame → détections (pipeline RF-DETR) | `127.0.0.1` — non joignable hors hôte | Idem OO-02. **Incohérence de n° de port** entre `config/config.ini`, `README.md`, `docs/security/analyse-risques-cyber.md` — à fixer |
 | OO-04 | Terminaison TLS (Caddy) → application (waitress) | `run.py` lie `waitress` à `127.0.0.1` seul ; aucune règle n'ouvre 5050 | `CS-143-02` — **conforme** ; l'authentification applicative s'applique aussi à ce segment |
@@ -107,7 +110,8 @@
 - **Flux de mise au point uniquement, à retirer + attester à la livraison** : IO-04, IO-05, IO-06, IO-07 (et la clé 4G elle-même).
 - **Aucun flux entrant depuis Internet.** Aucun flux vers Internet en RUN.
 - **Transport non chiffré résiduel** : OO-01 (RTSP caméras, sous-réseau dédié isolé) ; les flux `127.0.0.1` (OO-02/03/04) ne traversent aucun média réseau.
-- **Point-à-point `eth2`** : accès physique requis ; pare-feu hôte `default deny` ; seuls 443 et 5999 (et 22 borné) ouverts, au seul `192.168.3.0/24`.
+- **Conduit de maintenance point-à-point** (`eth1` ; `eth2` sur HAM) : accès physique requis ; pare-feu hôte `default deny` ; seuls 443 et 5999 (et 22 borné) ouverts, au seul `192.168.3.0/24`.
+- **Caméras** : `eth2`/`eth3`/`eth4` en un seul sous-réseau `192.168.0.0/24` sans passerelle ; les caméras n'ont aucun accès sortant.
 
 ---
 

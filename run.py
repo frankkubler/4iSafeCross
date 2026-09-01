@@ -30,8 +30,9 @@ if __name__ == '__main__':
     waitress_logger.propagate = True
 
     # IHM servie en clair sur la boucle locale UNIQUEMENT.
-    # Le chiffrement TLS et l'exposition sur le réseau de maintenance (eth2,
-    # 192.168.3.0/24) sont assurés par le reverse-proxy Caddy en frontal :
+    # Le chiffrement TLS et l'exposition sur le réseau de maintenance
+    # (192.168.3.0/24 — eth1 sur les nouvelles installations, eth2 sur HAM)
+    # sont assurés par le reverse-proxy Caddy en frontal :
     #   - config/Caddyfile               (vhosts + `tls internal` + en-têtes)
     #   - scripts/caddy-4isafecross.service  (unité systemd, hors conteneur)
     #   - scripts/install_vnc_jetson.sh  (ouvre 443/tcp au seul sous-réseau maintenance)

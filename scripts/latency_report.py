@@ -10,7 +10,7 @@ cycle de détection, pour arbitrer sur l'intérêt d'un transport ZeroMQ :
 Usage (depuis la Jetson, les deux services étant en network_mode: host) :
 
     python3 scripts/latency_report.py
-    python3 scripts/latency_report.py --host 192.168.2.10
+    python3 scripts/latency_report.py --host 192.168.0.10
     python3 scripts/latency_report.py --reset      # vide les fenêtres puis sort
 
 Protocole de mesure conseillé :
