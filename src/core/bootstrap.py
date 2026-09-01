@@ -25,7 +25,7 @@ from src.core.detection_pipeline import detection_callback_factory, get_frame_fu
 from src.core.state import state
 from src.inference import InferenceServerThread
 from src.relay_pilot import YoctoMultiRelay
-from src.web.app_factory import create_app
+from src.web.app_factory import create_app, require_auth_config
 from utils.constants import (MOTIONTHRESHOLD, RTSP_LOGIN,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL,
                              ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP,
@@ -218,6 +218,12 @@ def _purge_dataset_files():
 
 def create_application():
     """Boote tout le système et retourne (app Flask, state)."""
+    # CS-1144-01 : l'IHM ne démarre pas sans authentification. Contrôle placé
+    # avant tout effet de bord (thread asyncio, licence, relais fail-safe,
+    # caméras, threads d'inférence) pour échouer proprement sur une config
+    # incomplète — définir SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD (.env).
+    require_auth_config()
+
     state.main_loop = _start_main_loop()
 
     logs_settings()

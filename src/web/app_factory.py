@@ -16,13 +16,33 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 logger = logging.getLogger(__name__)
 
-# Authentification HTTP Basic, activée uniquement si les deux variables sont
-# définies. Basic plutôt qu'un en-tête X-API-Key : le navigateur gère lui-même
-# le défi et rejoue les identifiants sur tous les fetch() du tableau de bord,
-# donc aucune modification du frontend n'est nécessaire.
+# Authentification HTTP Basic — OBLIGATOIRE (CS-1144-01). L'écriture des
+# consignes de sécurité (zones, seuils de mouvement, toggle détection, relais)
+# doit être protégée par mot de passe ; l'application refuse de démarrer si les
+# deux variables ne sont pas définies (voir require_auth_config()).
+# Basic plutôt qu'un en-tête X-API-Key : le navigateur gère lui-même le défi et
+# rejoue les identifiants sur tous les fetch() du tableau de bord, donc aucune
+# modification du frontend n'est nécessaire.
 AUTH_USER = os.environ.get('SAFECROSS_AUTH_USER', '')
 AUTH_PASSWORD = os.environ.get('SAFECROSS_AUTH_PASSWORD', '')
 AUTH_ENABLED = bool(AUTH_USER and AUTH_PASSWORD)
+
+_AUTH_MISSING_MSG = (
+    "SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD absents : l'IHM ne démarre "
+    "pas sans authentification (CS-1144-01 — écriture des consignes de sécurité "
+    "protégée par mot de passe). Renseigner .env depuis .env.example."
+)
+
+
+def require_auth_config():
+    """Refuse le démarrage si l'authentification de l'IHM n'est pas configurée.
+
+    Appelé tôt dans la séquence de boot (src/core/bootstrap.py), avant tout
+    effet de bord (thread asyncio, licence, relais fail-safe, caméras), pour
+    échouer proprement sur une erreur de configuration.
+    """
+    if not AUTH_ENABLED:
+        raise RuntimeError(_AUTH_MISSING_MSG)
 
 
 def _credentials_valid(auth) -> bool:
@@ -35,16 +55,14 @@ def _credentials_valid(auth) -> bool:
 
 
 def _register_auth(app):
-    """Installe le contrôle d'accès sur toutes les routes de l'application."""
+    """Installe le contrôle d'accès sur toutes les routes de l'application.
+
+    Défense en profondeur : si create_app() est appelé sans passer par la
+    séquence de boot (require_auth_config() non exécuté), on échoue fermé
+    plutôt que de servir l'IHM sans authentification.
+    """
     if not AUTH_ENABLED:
-        logger.warning(
-            "⚠️  INTERFACE WEB NON AUTHENTIFIÉE : toute machine joignant le port "
-            "5050 peut modifier les zones de sécurité, désactiver la détection "
-            "ou couper les alertes. Définir SAFECROSS_AUTH_USER et "
-            "SAFECROSS_AUTH_PASSWORD (voir .env.example) pour activer "
-            "l'authentification HTTP Basic."
-        )
-        return
+        raise RuntimeError(_AUTH_MISSING_MSG)
 
     logger.info("🔐 Authentification HTTP Basic active (utilisateur : %s)", AUTH_USER)
 

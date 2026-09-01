@@ -74,6 +74,23 @@ else
     echo "   ✅ Configuration existante conservee (non ecrasee)"
 fi
 
+# .env : credentials RTSP + authentification OBLIGATOIRE de l'IHM (CS-1144-01).
+# Sans SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD, le conteneur refuse de
+# demarrer (l'ecriture des consignes de securite doit etre protegee).
+ENV_FILE="$(pwd)/.env"
+if [ ! -f "${ENV_FILE}" ]; then
+    echo "❌ ${ENV_FILE} introuvable."
+    echo "   Le creer depuis .env.example et renseigner au minimum"
+    echo "   SAFECROSS_AUTH_USER et SAFECROSS_AUTH_PASSWORD."
+    exit 1
+fi
+if ! grep -qE '^SAFECROSS_AUTH_USER=.+' "${ENV_FILE}" \
+   || ! grep -qE '^SAFECROSS_AUTH_PASSWORD=.+' "${ENV_FILE}"; then
+    echo "❌ SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD non renseignes dans ${ENV_FILE}."
+    echo "   L'IHM ne demarre pas sans authentification (CS-1144-01)."
+    exit 1
+fi
+
 # Lancer le nouveau conteneur
 echo "🚀 Lancement du conteneur..."
 docker run -d \
@@ -81,6 +98,7 @@ docker run -d \
   --runtime nvidia \
   --restart unless-stopped \
   --privileged \
+  --env-file "${ENV_FILE}" \
   -v "${DATA_DIR}/config":/app/config \
   -v "${DATA_DIR}/db":/app/db \
   -v "${DATA_DIR}/detections":/app/detections \

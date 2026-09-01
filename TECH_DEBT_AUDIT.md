@@ -15,11 +15,15 @@ F034, F040, F041, F043, F044, F045, F056.
 
 Findings **PARTIEL** :
 
-- **F004** — le mécanisme d'authentification existe (HTTP Basic,
-  `src/web/app_factory.py`) mais reste inactif tant que `SAFECROSS_AUTH_USER` /
-  `SAFECROSS_AUTH_PASSWORD` ne sont pas définis sur la cible ; un avertissement
-  est journalisé au démarrage. `/health` est explicitement exempté du défi
-  d'authentification (le HEALTHCHECK Docker interroge sans identifiants).
+- **F004** — **RESOLVED (2026-09-01, `CYBER_AUDIT.md` rév. 10, `CS-1144-01`)** :
+  l'authentification HTTP Basic (`src/web/app_factory.py`) est désormais
+  **obligatoire**. `require_auth_config()` lève une `RuntimeError` si
+  `SAFECROSS_AUTH_USER` / `SAFECROSS_AUTH_PASSWORD` sont absents ; il est appelé
+  en tête de `src/core/bootstrap.py::create_application()`, avant tout effet de
+  bord. `before_request` couvre toutes les routes sauf `static` et `/health`
+  (exempté pour le HEALTHCHECK Docker). `deploy-jetson.sh`, `4isafecross.service`
+  et `.env.example` sont alignés. Restant : CSRF (`CS-R4-01`), rôles (`CS-113-02`),
+  journal d'audit (`CS-144-01`).
 - **F042** — le groupe `[dependency-groups] dev` existe et épingle
   `bandit`/`pip-audit`/`pytest`/`ruff`/`nuitka` via `uv.lock` ; la CI l'installe
   avec `uv sync --frozen --only-group dev`. Le pin `cython==3.2.8` reste dans le
@@ -51,8 +55,9 @@ Détails notables :
   dépôt distant n'est pas strictement privé.
 - **F002** — **révoquer les deux tokens Telegram** via BotFather. Les
   supprimer du code ne les invalide pas.
-- **F004** — définir les deux variables d'authentification dans le `.env` de
-  chaque site.
+- **F004** — définir `SAFECROSS_AUTH_USER` / `SAFECROSS_AUTH_PASSWORD` dans le
+  `.env` de chaque site (mot de passe unique par boîtier, coffre-fort 4itec).
+  Depuis la rév. 10 (`CS-1144-01`), l'application **refuse de démarrer** sans.
 - **F006** — le premier déploiement après cette modification doit amorcer
   `/data/4isafecross` depuis l'image (`scripts/deploy-jetson.sh` le fait
   automatiquement ; voir le commentaire dans les fichiers compose pour la
@@ -163,7 +168,7 @@ Configuration is INI files parsed at *import time* in `utils/constants.py`, with
 | F001 | Security | `licenses/license_state.key`, `licenses/4isafecross.lic` | Critical | S | Both are tracked by git. `.gitignore:6-8` only covers the old `config/` paths abandoned in commit `80fc3ec`. README.md:557 explicitly states they must not be versioned. The HMAC key authenticates the anti-rollback licence state. | `git rm --cached licenses/license_state.key licenses/4isafecross.lic`; add `licenses/*.lic`, `licenses/license_state.*` to `.gitignore`; rotate the HMAC key and reissue the licence; purge from history if the remote is not private. |
 | F002 | Security | `src/bot_aiogram.py:67`, `utils/constants.py:5-6` | Critical | S | Two live-format Telegram bot tokens and a chat ID left in commented-out code, and present in git history from `6e2c019` onward. | Revoke both tokens via BotFather. Delete the comments. Treat history as compromised. |
 | F003 | Security | `src/web/routes_system.py:215-229` | Critical | M | `/shutdown` (GET, no auth) releases all cameras; `/quit` (POST, no auth) reaches `os._exit(0)` because waitress provides no `werkzeug.server.shutdown`. GET means a prefetch or an `<img>` tag can trigger it. Called from `templates/index.html` via `fetch('/quit')`. | Delete both routes, or gate them behind an auth check and make `/shutdown` POST-only. There is no legitimate remote-kill requirement for a safety supervisor. |
-| F004 | Security | `src/web/app_factory.py:15-40` | Critical | L | No authentication, session, or CSRF protection on any of the 32 registered routes. `POST /api/zones/<cid>` rewrites the safety-zone geometry; `POST /toggle_detection/<cid>` disables detection entirely; `POST /set_motion_param/<cid>` can set the motion threshold high enough to suppress all inference. Deployed with `network_mode: host` on `0.0.0.0:5050`. | Add a `before_request` auth hook on the blueprint set (shared secret header or basic auth behind TLS at minimum), and bind to the management interface rather than `0.0.0.0`. |
+| F004 | Security | `src/web/app_factory.py` | Critical | L | ~~No authentication…on any of the 32 registered routes.~~ **RESOLVED (rév. 10, `CS-1144-01`)**: HTTP Basic auth is now mandatory — `require_auth_config()` raises at boot if `SAFECROSS_AUTH_*` are unset, `before_request` covers every route except `static` and `/health`. `waitress` binds `127.0.0.1` only, Caddy terminates TLS on `eth2` (rév. 8). Still open: CSRF (`CS-R4-01`), Operator/Admin roles (`CS-113-02`), 401 audit log (`CS-144-01`). | Done. Follow-ups tracked under CS-R4-01 / CS-113-02 / CS-144-01. |
 | F005 | Security | `src/camera_manager.py:191`; `src/core/bootstrap.py:140,157,159` | High | S | The RTSP password is embedded in `cam_id` and logged at INFO: `logger.info(f"Pipeline GStreamer [{self.backend}]: {pipeline_str}")` prints `rtsp://login:password@host:554/stream1`, on every connect and every reconnect. Same for the ping loop. Logs are retained by the json-file driver (50 MB). | Add a `_redact(url)` helper replacing the userinfo segment; apply at all four sites. |
 | F006 | Reliability | `docker-compose-amd64.yml:32-35`, `docker-compose-arm64.yml:39-44` | Critical | M | No volume for `config/`, `db/`, `detections/`, or `dataset/`. The zone editor writes `config/zones.ini` inside the container layer. `/app/data` is mounted and referenced nowhere in the codebase (`grep -rn "app/data" src/ utils/` → 0 hits). Every image update discards site configuration and the relay-event audit trail. | Mount `./config:/app/config` and `./db:/app/db` (or point `DB_PATH`/`DATASET_OUTPUT_DIR` at `/app/data` and mount that). Verify a `docker compose pull && up -d` preserves zones before the next site deployment. |
 | F007 | Correctness | `src/alert_manager.py:223` ↔ `src/bot_aiogram.py:73` | High | S | `await self.telegram_bot.send_detection_frame(...)` awaits a plain `def` returning `None` → `TypeError: object NoneType can't be used in 'await' expression`, swallowed at `alert_manager.py:225`. Telegram detection alerts have never fired. | Drop the `await` and dispatch via `loop.run_in_executor` (see F008), or make `send_detection_frame` a coroutine. Add an ERROR log that distinguishes send failure from send skipped. |

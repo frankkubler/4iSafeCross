@@ -1,8 +1,13 @@
 # Plan d'implémentation — Corrections cybersécurité 4iSafeCross
 
+> ⚠️ **Partiellement supersédé par l'audit fournisseur Stellantis (`CYBER_AUDIT.md`).**
+> Les positions ci-dessous sur l'authentification Flask et le TLS du port 5050
+> (« pas des priorités », checks 401 retirés) **ne s'appliquent plus** :
+> - TLS de l'IHM : **fait** (rév. 8) — `waitress` sur `127.0.0.1` + reverse-proxy Caddy sur `eth2` (`CS-1143-01`, `CS-143-02`) ;
+> - Authentification : **obligatoire** (rév. 10) — l'application refuse de démarrer sans `SAFECROSS_AUTH_*` (`CS-1144-01`). Le contrôle de recette FOR_509 teste l'endpoint HTTP directement (401 attendu) et l'air-gap n'y déroge pas.
+
 > Ce document découle du rapport `RAPPORT_CYBERSEC.md` (audit 26 mai 2026, révision 2 du 27 mai 2026).  
 > **Contexte de déploiement** : Jetson Orin NX air-gappé, eth0 non connecté, eth2 = câble RJ45 direct point-à-point (accès physique requis). Dépôt GitHub **privé**.  
-> L'authentification Flask et le TLS sur le port 5050 ne sont **pas des priorités** dans ce contexte — seuls un accès physique au boîtier permet d'atteindre ce port.  
 > Chaque étape est indépendamment vérifiable. **Aucune modification de comportement fonctionnel.**
 
 ---
@@ -105,7 +110,7 @@ Structure minimale à rédiger (5 scénarios STRIDE) :
 | R01 | Spoofing | Flux RTSP caméra | Injection de frames manipulées | MOG2 pré-filtre | Authentification RTSP, vérification intégrité flux |
 | R02 | Tampering | Dataset `dataset/` | Data poisoning → réentraînement biaisé | Purge automatique RGPD | Signature SHA256 images, validation humaine obligatoire |
 | R03 | Denial of Service | Serveur inférence HTTP (port 8001/8002) | Arrêt détection → fail-safe activé | Watchdog 30 s fail-safe | Rate limiting, authentification entre services |
-| R04 | Elevation of Privilege | Interface Flask port 5050 | Modification zones, désactivation détection | Accès physique requis (câble RJ45 direct) ✅ | Aucune action requise sauf évolution architecture |
+| R04 | Elevation of Privilege | Interface Flask port 5050 | Modification zones, désactivation détection | TLS Caddy sur `eth2` + `waitress` sur `127.0.0.1` (rév. 8) ; **authentification HTTP Basic obligatoire** (rév. 10, `CS-1144-01`) ; UFW `443` restreint à `192.168.3.0/24` | Journal d'audit des écritures + rejets 401 (`CS-144-01`) ; séparation rôles Opérateur/Admin (`CS-113-02`) |
 | R05 | Information Disclosure | Bot Telegram | Exfiltration captures vidéo si token compromis | Token en var d'env ✅ | Rotation périodique du token |
 
 ---
@@ -131,7 +136,7 @@ Structure minimale à rédiger (5 scénarios STRIDE) :
 | 3.3 | Tests de robustesse documentés (adversarial patch physique, occultation partielle, variations lumière) |
 | 3.4 | Documentation technique AI Act Art. 11 si classification Haut Risque confirmée |
 
-> **Note** : L'authentification Flask (port 5050) et le reverse proxy TLS ne sont **pas dans cette feuille de route** tant que le déploiement reste air-gappé avec accès physique uniquement. À réévaluer si l'architecture réseau évolue.
+> ~~**Note** : L'authentification Flask (port 5050) et le reverse proxy TLS ne sont pas dans cette feuille de route…~~ **Supersédé** (`CYBER_AUDIT.md` rév. 8 et 10) : reverse-proxy TLS Caddy en place, authentification HTTP Basic **obligatoire** (refus de démarrage sans `SAFECROSS_AUTH_*`). Voir `CS-1143-01`, `CS-143-02`, `CS-1144-01`.
 
 ---
 
@@ -151,4 +156,9 @@ pip show cyclonedx-bom                                  # → installé
 grep -nE "mdp *:|user-4itec.*/ *mdp" README.md         # → 0 résultat (identifiants retirés)
 ```
 
-> **Note** : Les vérifications `curl -o /dev/null -w "%{http_code}" http://jetson:5050/zone_editor/0` attendant un 401 ont été **retirées** — Flask sans authentification est acceptable dans ce contexte air-gap (accès physique requis sur eth2).
+> ~~**Note** : Les vérifications `curl … http://jetson:5050/zone_editor/0` attendant un 401 ont été retirées — Flask sans authentification est acceptable dans ce contexte air-gap.~~
+> **Supersédé (`CS-1144-01`, rév. 10)** : l'authentification est obligatoire. Contrôle de recette à rétablir — l'IHM répond en HTTPS via Caddy (`eth2`), `waitress` n'écoute plus que sur `127.0.0.1` :
+> ```sh
+> curl -k -o /dev/null -w "%{http_code}\n" https://192.168.3.122/zone_editor/0   # → 401
+> curl -k -o /dev/null -w "%{http_code}\n" -u "$USER:$PWD" https://192.168.3.122/zone_editor/0   # → 200
+> ```
