@@ -171,6 +171,9 @@ def _register_security(app):
     def _set_security_headers(response):
         for name, value in _SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
+        # Ne pas divulguer la pile serveur / sa version (CS-R8-01). Caddy pose
+        # aussi `-Server` ; on couvre l'accès direct à waitress.
+        response.headers['Server'] = '4iSafeCross'
         return response
 
 

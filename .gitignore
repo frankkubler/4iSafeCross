@@ -45,3 +45,6 @@ app.onefile-build/
 # Nuitka cache
 .nuitka/
 uv.toml
+
+# Base SQLite créée à l'exécution (init_db) — jamais versionnée (CS hygiène)
+db/*.db

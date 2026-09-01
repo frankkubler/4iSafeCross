@@ -75,7 +75,8 @@ ENV TARGET_ARCH=amd64
 RUN /app/.venv/bin/python setup_cython.py build_ext --inplace && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
-    rm -rf build/ *.c src/**/*.c utils/**/*.c
+    rm -rf build/ *.c src/**/*.c utils/**/*.c && \
+    uv pip uninstall --python /app/.venv/bin/python cython setuptools wheel
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -178,7 +179,8 @@ RUN attempt=1; max=5; \
     done && \
     find src/ -name "*.py" ! -name "constants.py" -type f -delete && \
     find utils/ -name "*.py" ! -name "constants.py" -type f -delete && \
-    rm -rf build/ *.c src/**/*.c utils/**/*.c
+    rm -rf build/ *.c src/**/*.c utils/**/*.c && \
+    uv pip uninstall --python /app/.venv/bin/python cython setuptools wheel
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -193,6 +195,9 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 
 
+# Pas de gstreamer1.0-tools / vainfo dans le stage final : outils de diagnostic
+# uniquement, jamais appelés au runtime (le pipeline GStreamer est monté via
+# l'API Python). CYBER_AUDIT.md — CS-128-01 / CS-127-02.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     libglib2.0-0t64 \
@@ -200,7 +205,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libcairo-gobject2 \
     gir1.2-gstreamer-1.0 \
-    gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
@@ -216,7 +220,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libva-x11-2 \
     intel-media-va-driver-non-free \
     i965-va-driver \
-    vainfo \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -267,6 +270,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Les couches apt (dont le pull BSP de ~130 Mo) viennent avant la copie du venv :
 # dans l'ordre inverse, la moindre modification de dependance Python les
 # invalidait toutes et relancait l'installation complete sous QEMU.
+# Pas de gstreamer1.0-tools dans le stage final : diagnostic uniquement, jamais
+# appelé au runtime (pipeline monté via l'API Python). CYBER_AUDIT.md — CS-128-01.
+# `curl` est requis à la couche suivante (dépôt L4T) ; retiré ensuite.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     libglib2.0-0t64 \
@@ -274,7 +280,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libcairo-gobject2 \
     gir1.2-gstreamer-1.0 \
-    gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
@@ -304,6 +309,7 @@ RUN curl -fsSL https://repo.download.nvidia.com/jetson/jetson-ota-public.asc \
     && touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall \
     && apt-get update && apt-get install -y --no-install-recommends \
     nvidia-l4t-gstreamer \
+    && apt-get purge -y curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

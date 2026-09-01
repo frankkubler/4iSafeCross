@@ -51,21 +51,28 @@ def save_frame_to_file(frame, cid, timestamp):
 
 
 def get_non_local_ips():
+    """IPv4 non-loopback des interfaces locales.
+
+    Lecture directe des interfaces (psutil) — pas de `connect()` vers une IP
+    publique (8.8.8.8) : le boîtier est autonome, sans route par défaut, et
+    l'ancien procédé échouait ou déclenchait un trafic sortant inutile
+    (CYBER_AUDIT.md — hygiène / `docs/security/analyse-risques-cyber.md` R10).
+    """
     import socket
     ip_list = set()
     try:
-        for iface in socket.getaddrinfo(socket.gethostname(), None):
-            ip = iface[4][0]
-            if not ip.startswith("127.") and "." in ip:
-                ip_list.add(ip)
+        import psutil
+        for addrs in psutil.net_if_addrs().values():
+            for addr in addrs:
+                if addr.family == socket.AF_INET and not addr.address.startswith("127."):
+                    ip_list.add(addr.address)
     except Exception:
         pass
     if not ip_list:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.connect(("8.8.8.8", 80))
-                ip = s.getsockname()[0]
-                if not ip.startswith("127."):
+            for iface in socket.getaddrinfo(socket.gethostname(), None):
+                ip = iface[4][0]
+                if not ip.startswith("127.") and "." in ip:
                     ip_list.add(ip)
         except Exception:
             pass

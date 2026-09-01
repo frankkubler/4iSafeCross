@@ -18,7 +18,11 @@ dependencies = [
     # Voir docs/deployment/install-system-deps.md pour les commandes complètes par plateforme
     "pygobject<3.51.0; platform_system != 'Windows'",
     "requests>=2.32.3",
-    "setuptools>=80.8.0",
+    # setuptools / cython / wheel ne sont PAS des dépendances d'exécution
+    # (aucun `import setuptools`/`pkg_resources` dans src/ ou utils/). Ils sont
+    # installés à la volée dans le stage builder du Dockerfile pour la seule
+    # compilation Cython (setup_cython.py), puis désinstallés du venv avant la
+    # copie vers le stage final (CYBER_AUDIT.md — CS-128-01 / CS-127-02).
     "waitress>=3.0.2",
     "yoctopuce>=2.1.6320",
 ]

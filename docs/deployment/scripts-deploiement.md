@@ -58,6 +58,7 @@ désinstaller/retirer + attester à la recette (voir `CYBER_AUDIT.md`).
 | [`set_poe_gpio.sh`](../../scripts/set_poe_gpio.sh) | Bash | Positionne le GPIO PoE (utilisé par le service) |
 | [`switch-display.sh`](../../scripts/switch-display.sh) | Bash | Logique de détection HDMI / activation dummy Xorg |
 | [`install_vnc_jetson.sh`](../../scripts/install_vnc_jetson.sh) | Bash | TigerVNC + XFCE + UFW (VNC 5999 + IHM 443) + Fail2ban |
+| [`harden-run.sh`](../../scripts/harden-run.sh) | Bash | **Passage en état RUN** : retire RustDesk / Tailscale / bot Telegram / clé 4G, vérifie UFW — attestation de retrait à la recette (`CS-127-01/02`, `CS-1143-04/05`) |
 | [`4isafecross.logrotate`](../../scripts/4isafecross.logrotate) | logrotate | Rotation des logs applicatifs (10 Mo × 5) |
 
 ---
@@ -198,20 +199,33 @@ Prérequis paquet : `xserver-xorg-video-dummy`.
 
 ## Session graphique headless (GDM3)
 
-Pour qu'une session XFCE soit disponible via VNC sur un boîtier sans écran, GDM3
-ouvre une session au boot. `/etc/gdm3/custom.conf` :
+TigerVNC (`vncserver@99`) démarre sa **propre** session XFCE indépendamment de
+GDM3 (`install_vnc_jetson.sh`). **L'autologon GDM3 n'est donc pas nécessaire** au
+fonctionnement du VNC de maintenance.
+
+**Par défaut : ne pas activer l'autologon** (`CS-113-05`, `CS-113-01`).
+`/etc/gdm3/custom.conf` :
 
 ```ini
 [daemon]
-AutomaticLoginEnable=true
-AutomaticLogin=user-4itec
 WaylandEnable=false
+# AutomaticLoginEnable / AutomaticLogin : NON activés.
 ```
 
-> **Point de conformité (`CYBER_AUDIT.md`, `CS-113-05`)** : cet autologon n'est
-> admis par la norme que sur un **compte Opérateur** sans accès à l'OS depuis le
-> runtime. À restreindre (compte dédié sans shell, ou session verrouillée) ou à
-> supprimer si l'accès graphique n'est pas indispensable en RUN.
+Vérifier après flash :
+
+```sh
+grep -E 'AutomaticLogin' /etc/gdm3/custom.conf || echo "OK : pas d'autologon"
+```
+
+> **Si** un autologon est indispensable sur un site donné, le référentiel
+> Stellantis (`CS-113-05`) ne l'admet qu'aux **trois** conditions cumulatives,
+> à documenter dans le dossier de recette du boîtier :
+> 1. compte **dédié** à la seule session graphique, **sans shell** (`usermod -s /usr/sbin/nologin`) et sans `sudo` ;
+> 2. session **verrouillée** au démarrage (écran de verrouillage XFCE), déverrouillée seulement par l'intervenant de maintenance ;
+> 3. aucun accès à l'OS ni aux fichiers applicatifs depuis cette session (pas de terminal, gestionnaire de fichiers restreint).
+>
+> À défaut de pouvoir garantir les trois, **supprimer l'autologon**.
 
 ---
 
@@ -619,7 +633,53 @@ Après le flash **JetPack 7.2** (voir
 6. 4isafecross.service      → installer et activer
 7. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
 8. 4isafecross.logrotate    → installer dans /etc/logrotate.d/
+9. harden-run.sh            → à la LIVRAISON : retrait des outils de mise au point,
+                              sortie à joindre au dossier de recette
 ```
 
 > Mises à jour de sécurité L4T/OS en exploitation (hors ligne) + rollback :
 > [maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md).
+
+---
+
+## Matrice de compatibilité OS / runtime (`CS-R7-01`)
+
+| Composant | Version cible | Plancher de version dans le code | Plan de montée |
+|---|---|---|---|
+| JetPack / L4T | **7.2 / r39.2** (homologuée) | Base image `nvcr.io/nvidia/cuda:13.2.1-runtime-ubuntu24.04` ; dépôts apt `jetson … r39.2` | Toute montée réhomologuée par le référent + appliquée à tout le parc (`CS-1141-01`) |
+| Rootfs | Ubuntu 24.04 LTS | `python3.12` (Dockerfile) | 26.04 LTS : à évaluer avec JetPack ultérieur |
+| Python | 3.12 | `requires-python = ">=3.10,<3.13"` (`pyproject.toml`) | Lever le plafond `<3.13` dès que `pygobject` / `opencv-python` publient des roues 3.13 stables |
+| PyGObject | < 3.51.0 | `pygobject<3.51.0` (`pyproject.toml`) | Plafond posé pour compat GLib de L4T r39.2 ; réévaluer à chaque montée L4T |
+| GStreamer | 1.24 (Ubuntu 24.04) | Backend `jetson` (`nvv4l2decoder` + `nvvidconv`, dépôt L4T) | Suivre la version fournie par le BSP ; le backend `software` reste le repli universel |
+| CUDA / TensorRT | 13.2 / BSP r39.2 | image runtime + `nvidia-l4t-*` | Fournis par le BSP — pas de montée indépendante |
+
+Les plafonds (`<3.13`, `pygobject<3.51.0`) sont **volontaires** : ils garantissent
+la compatibilité avec les bibliothèques système de JetPack 7.2. Ils sont à revoir
+à chaque réhomologation de version de firmware.
+
+---
+
+## Effacement sécurisé des supports (fin de vie / retour SAV) (`CS-R1-03`)
+
+Le boîtier stocke des **images de personnes** (captures d'alerte, dataset) et des
+identifiants (`.env`, mots de passe VNC). Avant retour SAV, revente ou mise au
+rebut :
+
+1. **Arrêter** l'application et Docker : `sudo systemctl stop 4isafecross docker`.
+2. **Effacer les données applicatives** (`/data/4isafecross` = bind-mounts
+   `config`, `db`, `detections`, `dataset`, `logs`) :
+   ```sh
+   sudo find /data/4isafecross -type f -exec shred -u -n 3 {} +
+   sudo rm -rf /data/4isafecross
+   ```
+3. **Effacer les secrets hôte** : `.env`, `~/.vnc/passwd`, historique shell,
+   `journalctl --rotate && journalctl --vacuum-time=1s`.
+4. **Support de stockage** :
+   - NVMe : `sudo nvme format /dev/nvme0n1 --ses=1` (secure erase) si supporté,
+     sinon `blkdiscard` puis `shred` de la partition.
+   - eMMC (module Orin) : reflasher une image **vierge** (sans config ni licence)
+     via `l4t_initrd_flash.sh` — c'est la garantie la plus fiable.
+5. **Attester** l'effacement (date, méthode, n° de série) au dossier de fin de vie.
+
+> Pour un **retour SAV** où le disque doit rester lisible par le SAV : n'effacer
+> que l'étape 2 et 3, et retirer la licence (`licenses/`).

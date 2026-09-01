@@ -31,3 +31,5 @@ scripts/
 build/
 *.c
 *.so
+# Base SQLite locale (créée au runtime)
+db/*.db

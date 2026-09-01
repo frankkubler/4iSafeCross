@@ -17,7 +17,10 @@ import time
 from pathlib import Path
 
 from src.alert_manager import AlerteManager
-from src.bot_aiogram import BotThread
+# src.bot_aiogram (client Telegram) est importé paresseusement dans
+# create_application(), uniquement si TELEGRAM_ENABLED : hors de ce cas, le
+# client Telegram et sa pile aiogram/aiohttp ne sont pas chargés au boot
+# (CYBER_AUDIT.md — CS-127-01 : Internet/messagerie proscrits sur RUN).
 from src.camera_manager import CameraManager, redact_rtsp_url
 from src.collect_dataset import DatasetCollectionThread
 from src.core import caches, failsafe
@@ -238,8 +241,11 @@ def create_application():
         logger.debug(f"Relais {i} : {state.relays.get_relay_state(i)}")
     logger.warning(f"⚠️  MODE FAIL-SAFE ACTIVÉ : {len(state.relays.relays)} relais allumés par défaut")
 
-    # Lancer le bot Telegram au démarrage de l'app
+    # Lancer le bot Telegram au démarrage de l'app.
+    # Import paresseux : en RUN (TELEGRAM_ENABLED=false, défaut), src.bot_aiogram
+    # et la pile aiogram/aiohttp ne sont jamais chargés (CS-127-01).
     if TELEGRAM_ENABLED:
+        from src.bot_aiogram import BotThread
         state.telegram_bot = BotThread(overwrite_file=False, state=state)
         threading.Thread(target=state.telegram_bot.run, daemon=True).start()
     else:
