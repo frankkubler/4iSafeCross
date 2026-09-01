@@ -476,6 +476,41 @@ sudo bash scripts/install_vnc_jetson.sh --subnet 192.168.3.0/24
 - IPv4 de `br0` (ou de l'interface caméra) : Manuel — `192.168.0.100/24`, sans passerelle ni route par défaut.
 - Caméras (1 à 3) : `192.168.0.60` (obligatoire), `192.168.0.61`, `192.168.0.62` (optionnelles) — cf. `config/config.ini` `[RTSP] HOST`.
 
+**Transport chiffré des flux caméras — RTSPS (`CS-1143-01`) :**
+
+Caméras **TP-Link VIGI S485 / S455** (compatibles SRTP). `config/config.ini` `[RTSP]` :
+
+```ini
+SCHEME  = rtsps        ; rtsp/média sur TLS (site HAM : rtsp, jusqu'à migration)
+PORT    = 554          ; À CONFIRMER dans l'IHM VIGI (Paramètres → Réseau → RTSP/ONVIF)
+TLS_CA  =              ; PEM d'épinglage du certificat caméra (optionnel)
+```
+
+À faire côté caméra (IHM VIGI, sur chaque unité) :
+
+1. Activer **RTSP over TLS / SRTP** (selon le firmware : *Réseau → Services →
+   RTSP*, ou via ONVIF Media2). Relever le **port** et le **chemin de flux**
+   (`stream1` = principal).
+2. Contrôler depuis le Jetson :
+   ```sh
+   # le port RTSPS répond bien en TLS
+   openssl s_client -connect 192.168.0.60:<PORT_RTSPS> -brief </dev/null
+   # export du certificat pour épinglage (recommandé)
+   openssl s_client -connect 192.168.0.60:<PORT_RTSPS> </dev/null 2>/dev/null \
+     | openssl x509 > /data/4isafecross/config/vigi-ca.pem
+   # puis dans config.ini : TLS_CA = /app/config/vigi-ca.pem
+   ```
+3. Vérifier que le flux **décode** : `docker logs 4isafecross` → pipeline
+   `rtspsrc location=rtsps://…` sans erreur TLS, images reçues.
+
+> Si un modèle n'expose la sécurité que via ONVIF (pas d'URL `rtsps://` statique),
+> ou si le port n'est pas confirmé : remonter au référent — soit ajustement du
+> pipeline (`rtspsrc onvif-mode`), soit dérogation `CS-1143-01` justifiée par
+> l'isolation du segment caméras.
+>
+> **Site HAM** (caméras du plan précédent) : laisser `SCHEME = rtsp` jusqu'à la
+> migration réseau.
+
 **Après installation (obligatoire) :**
 
 ```sh

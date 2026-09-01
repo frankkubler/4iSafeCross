@@ -203,6 +203,13 @@ RTSP_PASSWORD = os.environ.get('RTSP_PASSWORD') or config.get('RTSP', 'PASSWORD'
 RTSP_HOST = ast.literal_eval(config.get('RTSP', 'HOST'))
 RTSP_PORT = config.getint('RTSP', 'PORT')
 RTSP_STREAM = config.get('RTSP', 'STREAM')
+# rtsp (clair) ou rtsps (RTSP/média sur TLS). Fallback rtsp pour compat des
+# configs existantes (site HAM). CYBER_AUDIT.md — CS-1143-01.
+RTSP_SCHEME = config.get('RTSP', 'SCHEME', fallback='rtsp').strip().lower()
+if RTSP_SCHEME not in ('rtsp', 'rtsps'):
+    RTSP_SCHEME = 'rtsp'
+# PEM optionnel pour épingler le certificat des caméras (rtsps).
+RTSP_TLS_CA = config.get('RTSP', 'TLS_CA', fallback='').strip()
 
 DB_PATH = config.get('APP', 'DB_PATH')
 RELAY_EVENTS_KEEP_DAYS = config.getint('APP', 'RELAY_EVENTS_KEEP_DAYS', fallback=365)

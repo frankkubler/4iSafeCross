@@ -30,7 +30,8 @@ from src.inference import InferenceServerThread
 from src.relay_pilot import YoctoMultiRelay
 from src.web.app_factory import create_app, require_auth_config
 from utils.constants import (MOTIONTHRESHOLD, RTSP_LOGIN,
-                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM, LOG_LEVEL,
+                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM,
+                             RTSP_SCHEME, RTSP_TLS_CA, LOG_LEVEL,
                              ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP,
                              DATASET_COLLECTION, DATASET_COLLECTION_INTERVAL,
                              DATASET_COLLECTION_START_HOUR, DATASET_COLLECTION_END_HOUR,
@@ -163,7 +164,9 @@ def _wait_for_rtsp_streams():
     """Attente active jusqu'à ce qu'au moins une caméra réponde au ping RTSP."""
     cam_ids = []
     for host in RTSP_HOST:
-        cam_ids.append(f"rtsp://{RTSP_LOGIN}:{RTSP_PASSWORD}@{host}:{RTSP_PORT}/{RTSP_STREAM}")
+        cam_ids.append(
+            f"{RTSP_SCHEME}://{RTSP_LOGIN}:{RTSP_PASSWORD}@{host}:{RTSP_PORT}/{RTSP_STREAM}"
+        )
 
     if not cam_ids:
         logger.error("Aucun flux RTSP configuré. Vérifiez la section RTSP du fichier config.ini")
@@ -276,7 +279,10 @@ def create_application():
     # Vérification des flux RTSP avant d'instancier CameraManager
     state.cam_ids = _wait_for_rtsp_streams()
     logger.info(f"Caméras RTSP disponibles : {[redact_rtsp_url(c) for c in state.cam_ids]}")
-    state.manager = CameraManager(state.cam_ids, frame_width=1920, frame_height=1080)
+    state.manager = CameraManager(
+        state.cam_ids, frame_width=1920, frame_height=1080,
+        rtsp_tls_ca=(RTSP_TLS_CA or None),
+    )
 
     for i in range(len(state.cam_ids)):
         state.stream_enabled[i] = False  # vidéo masquée par défaut

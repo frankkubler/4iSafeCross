@@ -47,18 +47,23 @@ def redact_rtsp_url(value):
 
 
 class CameraManager:
-    def __init__(self, cam_ids, buffer_size=5, frame_width=None, frame_height=None):
+    def __init__(self, cam_ids, buffer_size=5, frame_width=None, frame_height=None,
+                 rtsp_tls_ca=None):
         """Initialise le gestionnaire de caméras RTSP.
 
         Args:
-            cam_ids: Liste d'identifiants caméra (int pour V4L2, str pour RTSP).
+            cam_ids: Liste d'identifiants caméra (int pour V4L2, str pour RTSP/RTSPS).
             buffer_size: Taille du buffer (non utilisé directement par appsink).
             frame_width: Largeur cible des frames (None = résolution native caméra).
             frame_height: Hauteur cible des frames (None = résolution native caméra).
+            rtsp_tls_ca: Chemin d'un PEM pour épingler le certificat des caméras
+                en ``rtsps://`` (None = accepter le certificat auto-signé, cas
+                d'un sous-réseau caméras dédié et isolé).
         """
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         self.frame_width = frame_width
         self.frame_height = frame_height
+        self.rtsp_tls_ca = rtsp_tls_ca
         self.cams = {}
         filtered_cam_ids = []
         for cid in cam_ids:
@@ -148,8 +153,20 @@ class CameraManager:
             resize_caps = "video/x-raw,format=BGRx"
 
         # protocols=tcp : élimine le GPF causé par le thread pool UDP de rtspsrc
-        # sur kernel 6.17 + glibc 2.35 Docker (cf. commit message pour diagnostic complet)
-        source = f"rtspsrc location={cid} latency=200 protocols=tcp ! rtph264depay ! h264parse"
+        # sur kernel 6.17 + glibc 2.35 Docker (cf. commit message pour diagnostic complet).
+        # Avec protocols=tcp, un flux rtsps:// transporte aussi le média (RTP
+        # interleaved) DANS la connexion TLS → transport chiffré (CS-1143-01).
+        rtsp_opts = "latency=200 protocols=tcp"
+        if isinstance(cid, str) and cid.startswith("rtsps://"):
+            if self.rtsp_tls_ca:
+                # Épinglage : n'accepter que ce(s) certificat(s).
+                rtsp_opts += f' tls-database="{self.rtsp_tls_ca}"'
+            else:
+                # Sous-réseau caméras dédié et isolé : certificat auto-signé
+                # accepté (tls-validation-flags=0). Épingler via [RTSP] TLS_CA
+                # dès qu'un PEM caméra est disponible.
+                rtsp_opts += " tls-validation-flags=0"
+        source = f"rtspsrc location={cid} {rtsp_opts} ! rtph264depay ! h264parse"
         tail = "videoconvert ! video/x-raw,format=BGR ! appsink name=sink"
 
         if self.backend == 'jetson':
@@ -326,7 +343,7 @@ class CameraManager:
         logger = logging.getLogger(__name__).getChild('test_rtsp_stream')
         safe_cid = redact_rtsp_url(cid)
         logger.info(f"Test du flux RTSP {safe_cid} avec connexion TCP...")
-        match = re.match(r"rtsp://(?:[^@]+@)?([^/:]+)(?::(\d+))?", cid)
+        match = re.match(r"rtsps?://(?:[^@]+@)?([^/:]+)(?::(\d+))?", cid)
         if not match:
             logger.warning(f"Impossible d'extraire le host du flux RTSP : {safe_cid}")
             return False

@@ -982,9 +982,12 @@ def main() -> None:
     rtsp_login = cfg.get("RTSP", "LOGIN", fallback="admin")
     rtsp_pwd = cfg.get("RTSP", "PASSWORD", fallback="")
     rtsp_stream = cfg.get("RTSP", "STREAM", fallback="stream1")
+    rtsp_scheme = cfg.get("RTSP", "SCHEME", fallback="rtsp").strip().lower()
+    if rtsp_scheme not in ("rtsp", "rtsps"):
+        rtsp_scheme = "rtsp"
 
     cam_ids = [
-        f"rtsp://{rtsp_login}:{rtsp_pwd}@{host}:{rtsp_port}/{rtsp_stream}"
+        f"{rtsp_scheme}://{rtsp_login}:{rtsp_pwd}@{host}:{rtsp_port}/{rtsp_stream}"
         for host in rtsp_hosts
     ]
     logger.info(f"Connexion à {len(cam_ids)} caméra(s) RTSP…")

@@ -75,7 +75,7 @@
 
 | N° | Source (Zone) | Destination (Zone) | Protocole / service | Port · sens | Chiffrement | Authentification | Phase |
 |---|---|---|---|---|---|---|---|
-| OO-01 | Boîtier 4iSafeCross — Z2/Z3 (`192.168.0.100`, bridge `br0` = `eth2`+`eth3`+`eth4`) | 1 à 3 caméras IP `192.168.0.60` (oblig.), `.61`, `.62` (opt.) — Z3 (`192.168.0.0/24`) — *HAM : `192.168.2.156/157` sur `eth1`* | RTSP + RTP/RTCP interleaved over TCP | 554/TCP · requête + flux retour même session | **Non** | **Oui** — `RTSP_LOGIN` / `RTSP_PASSWORD` | RUN (permanent) |
+| OO-01 | Boîtier 4iSafeCross — Z2/Z3 (`192.168.0.100`, bridge `br0` = `eth2`+`eth3`+`eth4`) | 1 à 3 caméras IP `192.168.0.60` (oblig.), `.61`, `.62` (opt.) — Z3 (`192.168.0.0/24`) — *HAM : `192.168.2.156/157` sur `eth1`* | **RTSPS** — RTSP + RTP/RTCP interleaved **over TLS** (TP-Link VIGI S485/S455) ; *HAM : RTSP clair* | 554/TCP · requête + flux retour même session | **Oui** — TLS (`SCHEME=rtsps`), à confirmer sur cible ; *HAM : Non* | **Oui** — `RTSP_LOGIN` / `RTSP_PASSWORD` | RUN (permanent) |
 | OO-02 | Client d'inférence 4iSafeCross — intra-hôte | Serveur YOLO `inf_jetson_yolo` — intra-hôte | HTTP | 8004/TCP `127.0.0.1` · requête→réponse | **Non** — boucle locale, ne traverse aucun média | Non | RUN |
 | OO-03 | Client d'inférence 4iSafeCross — intra-hôte | Serveur RF-DETR `inf_jetson_rf-detr` — intra-hôte | HTTP | 8002/TCP `127.0.0.1` · requête→réponse | **Non** — boucle locale | Non | RUN |
 | OO-04 | Reverse-proxy Caddy — intra-hôte | `waitress` / IHM Flask — intra-hôte | HTTP | 5050/TCP `127.0.0.1` · requête→réponse | **Non** — terminaison TLS en amont (Caddy, IO-01) | **Oui** — HTTP Basic appliqué par l'application | RUN |
@@ -96,7 +96,7 @@
 | IO-07 | `docker pull` de l'image applicative, paquets L4T | Sortant via clé 4G | `CS-145-01/02/03` — **fenêtre 4G à déclarer au PIL** ; en RUN, déploiement par support local |
 | IO-08 | Constitution du support de mise à jour L4T de sécurité (hors ligne) | Machine relais 4itec en Zone IT ; le boîtier ne se connecte jamais | `CS-1141-02` / `CS-123-03` — procédure `docs/deployment/maj-l4t-hors-ligne.md` ; cadence trimestrielle |
 | IO-09 | — | Port `eth0` non câblé ; désactivation logique demandée (annexe §1.1.2) | **Résolu par l'architecture** — à attester sur cible |
-| OO-01 | Réception des flux vidéo H.264 des caméras (1 à 3) | Sous-réseau caméras **dédié** `192.168.0.0/24` (`br0` = `eth2`/`eth3`/`eth4`, ou switch PoE), isolé du reste ; aucune route par défaut | `CS-1143-01` **résiduel** — transport non chiffré ; isoler strictement ; évaluer RTSPS si le modèle caméra le permet |
+| OO-01 | Réception des flux vidéo H.264 des caméras (1 à 3) | Sous-réseau caméras **dédié** `192.168.0.0/24` (`br0` = `eth2`/`eth3`/`eth4`, ou switch PoE), isolé du reste ; aucune route par défaut | `CS-1143-01` — **RTSPS** activé côté dépôt (rév. 15, `[RTSP] SCHEME = rtsps`) ; caméras TP-Link VIGI S485/S455. Reste : confirmer le port/chemin RTSPS et le chiffrement effectif sur cible ; épingler le certificat caméra (`[RTSP] TLS_CA`). Site HAM : RTSP clair jusqu'à migration |
 | OO-02 | `POST` frame → détections (pipeline d'inférence YOLO) | `127.0.0.1` — non joignable hors hôte | Acceptable (intra-hôte). Retirer `network_mode: host` (`CS-1143-03`) pour cloisonner les conteneurs |
 | OO-03 | `POST` frame → détections (pipeline RF-DETR) | `127.0.0.1` — non joignable hors hôte | Idem OO-02. **Incohérence de n° de port** entre `config/config.ini`, `README.md`, `docs/security/analyse-risques-cyber.md` — à fixer |
 | OO-04 | Terminaison TLS (Caddy) → application (waitress) | `run.py` lie `waitress` à `127.0.0.1` seul ; aucune règle n'ouvre 5050 | `CS-143-02` — **conforme** ; l'authentification applicative s'applique aussi à ce segment |
@@ -109,7 +109,7 @@
 - **Flux permanents en RUN** : IO-01, IO-02, (IO-03 si conservé), OO-01, OO-02, OO-03, OO-04, OO-05.
 - **Flux de mise au point uniquement, à retirer + attester à la livraison** : IO-04, IO-05, IO-06, IO-07 (et la clé 4G elle-même).
 - **Aucun flux entrant depuis Internet.** Aucun flux vers Internet en RUN.
-- **Transport non chiffré résiduel** : OO-01 (RTSP caméras, sous-réseau dédié isolé) ; les flux `127.0.0.1` (OO-02/03/04) ne traversent aucun média réseau.
+- **Chiffrement des transports** : OO-01 en **RTSPS** (nouv. install.) — à confirmer sur cible ; site HAM en RTSP clair jusqu'à migration (sous-réseau caméras dédié isolé) ; les flux `127.0.0.1` (OO-02/03/04) ne traversent aucun média réseau.
 - **Conduit de maintenance point-à-point** (`eth1` ; `eth2` sur HAM) : accès physique requis ; pare-feu hôte `default deny` ; seuls 443 et 5999 (et 22 borné) ouverts, au seul `192.168.3.0/24`.
 - **Caméras** : `eth2`/`eth3`/`eth4` en un seul sous-réseau `192.168.0.0/24` sans passerelle ; les caméras n'ont aucun accès sortant.
 
