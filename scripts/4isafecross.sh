@@ -1,21 +1,19 @@
 #!/bin/bash
 
+# Lancement manuel de l'IHM en développement.
+#
+# Point d'entrée = run.py (identique au conteneur Docker et au service systemd) :
+# la séquence de boot — licence, relais fail-safe, caméras, threads — est
+# obligatoire et n'est PAS reproductible par `waitress-serve --call`.
+#
+# run.py bind waitress sur 127.0.0.1:5050 UNIQUEMENT. Le TLS et l'exposition
+# sur eth2 sont assurés par Caddy en frontal (config/Caddyfile).
+# Conformité : CYBER_AUDIT.md — CS-1143-01, CS-143-02.
 
-# Chemin vers votre script Python
-#SCRIPT="$HOME/github/person_detection_app/person_detection_dev.py"
 APP_PATH="$HOME/github/4iSafeCross/"
 
+# Changer de répertoire vers la racine du projet
+cd "$APP_PATH" || exit 1
 
-# Liste des paramètres à transmettre à votre script Python
-PARAMETRES="--threads=4 --host=0.0.0.0 --port=5050"
-
-# Changer de répertoire vers le chemin du script
-cd $APP_PATH
-
-# Exécuter le script Python dans l'environnement virtuel
-DISPLAY=:1 "$HOME/.local/bin/uv" run waitress-serve $PARAMETRES app:app
-
-# DISPLAY=:1 "$HOME/.local/bin/uv" run gunicorn -w 4 -k gevent -b 0.0.0.0:5050 app:app
-
-
-# uv run waitress-serve --threads=1 --host=0.0.0.0 --port=5050 app:app
+# Exécuter l'application dans l'environnement virtuel du projet
+DISPLAY=:1 "$HOME/.local/bin/uv" run python run.py

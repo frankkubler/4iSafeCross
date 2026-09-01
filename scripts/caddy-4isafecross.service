@@ -1,0 +1,65 @@
+# 4iSafeCross — reverse-proxy TLS de l'IHM (Caddy)
+# ------------------------------------------------------------
+# Termine le TLS devant waitress (127.0.0.1:5050) et expose l'IHM en HTTPS
+# sur le réseau de maintenance eth2. Tourne SUR L'HÔTE (pas dans le conteneur) :
+# le conteneur applicatif est en network_mode: host, Caddy joint donc
+# 127.0.0.1:5050 directement.
+#
+# Procédure complète (méthode A « en ligne / apt » et méthode B « hors ligne ») :
+#   docs/deployment/scripts-deploiement.md § « IHM en HTTPS (Caddy) ».
+#
+# CETTE UNITÉ est destinée à la MÉTHODE B (binaire statique dans /usr/local/bin) :
+#   1. Binaire « linux / arm64 » depuis https://caddyserver.com/download
+#      (aucun module requis), transféré par support local.
+#   2. sudo install -m 0755 caddy /usr/local/bin/caddy
+#   3. sudo useradd --system --home /var/lib/caddy --create-home --shell /usr/sbin/nologin caddy
+#   4. sudo mkdir -p /etc/caddy /var/log/caddy && sudo chown caddy:caddy /var/log/caddy
+#   5. sudo cp config/Caddyfile /etc/caddy/Caddyfile
+#   6. sudo cp scripts/caddy-4isafecross.service /etc/systemd/system/caddy.service
+#   7. sudo systemctl daemon-reload && sudo systemctl enable --now caddy
+#
+# MÉTHODE A (apt) : le paquet installe le binaire dans /usr/bin/caddy ET une unité
+# caddy.service fonctionnelle. Dans ce cas NE PAS copier ce fichier — garder
+# l'unité du paquet et ne remplacer que /etc/caddy/Caddyfile. Les deux unités
+# nommées caddy.service ne doivent JAMAIS coexister.
+#
+# Pare-feu : scripts/install_vnc_jetson.sh ouvre 443/tcp au seul sous-réseau
+# de maintenance (192.168.3.0/24) et referme 5050/tcp.
+#
+# Contrôles :
+#   curl -k https://127.0.0.1/health            # -> 200 (via Caddy -> waitress)
+#   curl    http://127.0.0.1:5050/health        # -> 200 en local uniquement
+#   nmap -p 5050 192.168.3.122   depuis le PC de maintenance   # -> filtré/fermé
+#   nmap -p 443  192.168.3.122   depuis le PC de maintenance   # -> ouvert
+
+[Unit]
+Description=4iSafeCross IHM — reverse-proxy TLS (Caddy)
+Documentation=https://caddyserver.com/docs/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+Restart=on-failure
+RestartSec=3
+
+# Durcissement systemd
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/caddy /var/log/caddy
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

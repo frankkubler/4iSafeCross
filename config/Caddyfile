@@ -1,0 +1,63 @@
+# ============================================================
+# Caddyfile — reverse-proxy TLS devant l'IHM 4iSafeCross
+# ------------------------------------------------------------
+# waitress sert l'IHM Flask EN CLAIR sur 127.0.0.1:5050 (run.py).
+# Caddy termine le TLS et l'expose :
+#   - sur eth2  (réseau de maintenance RJ45, 192.168.3.0/24) ;
+#   - sur la boucle locale (accès depuis le bureau RustDesk/VNC en mise au point).
+#
+# Certificat : CA interne Caddy (`tls internal`). Le boîtier est hors ligne,
+# aucune émission ACME publique n'est possible. L'empreinte est à vérifier au
+# 1er accès, comme le certificat auto-signé de TigerVNC.
+#
+# Pour supprimer l'avertissement du navigateur sur le PC de maintenance,
+# importer la racine interne de Caddy dans son magasin de certificats :
+#   # sur le Jetson, après le 1er démarrage du service :
+#   sudo cat /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+#   # -> transférer ce fichier sur le PC de maintenance et l'ajouter aux
+#   #    "Autorités de certification racines de confiance".
+#
+# Conformité : CYBER_AUDIT.md
+#   - CS-1143-01 : aucun protocole interdit (HTTP en clair -> HTTPS) ;
+#   - CS-143-02  : seuls les flux sécurisés nécessaires ouverts ;
+#   - CS-R4-01   : en-têtes de sécurité HTTP.
+# ============================================================
+
+{
+	admin off
+	# Boîtier hors ligne : ne jamais tenter d'émettre un certificat via Internet.
+	auto_https disable_redirects
+}
+
+# Caddy écoute sur :443 (toutes interfaces) et discrimine par nom d'hôte / SNI.
+# Le filtrage réseau RÉEL est fait par UFW : 443/tcp n'est ouvert qu'au
+# sous-réseau de maintenance 192.168.3.0/24 (voir scripts/install_vnc_jetson.sh).
+# On n'utilise pas la directive `bind 192.168.3.122` : si le câble eth2 est
+# débranché au boot, l'IP n'est pas encore posée et Caddy échouerait à démarrer.
+https://192.168.3.122, https://localhost, https://127.0.0.1 {
+	tls internal
+
+	reverse_proxy 127.0.0.1:5050 {
+		header_up X-Forwarded-Proto https
+	}
+
+	encode gzip
+
+	# En-têtes de sécurité HTTP de base (CS-R4-01).
+	# Pas de Strict-Transport-Security : avec un certificat de CA interne
+	# régénérable, un HSTS mémorisé rendrait l'IHM inaccessible sans recours
+	# si le certificat change.
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/4isafecross-ihm.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

@@ -29,4 +29,13 @@ if __name__ == '__main__':
     waitress_logger.handlers.clear()
     waitress_logger.propagate = True
 
-    serve(app, host='0.0.0.0', port=5050, threads=8)  # nosec B104
+    # IHM servie en clair sur la boucle locale UNIQUEMENT.
+    # Le chiffrement TLS et l'exposition sur le réseau de maintenance (eth2,
+    # 192.168.3.0/24) sont assurés par le reverse-proxy Caddy en frontal :
+    #   - config/Caddyfile               (vhosts + `tls internal` + en-têtes)
+    #   - scripts/caddy-4isafecross.service  (unité systemd, hors conteneur)
+    #   - scripts/install_vnc_jetson.sh  (ouvre 443/tcp au seul sous-réseau maintenance)
+    # Accès local depuis le bureau RustDesk/VNC : https://localhost (via Caddy).
+    # Conformité : CYBER_AUDIT.md — CS-1143-01 (protocoles chiffrés),
+    # CS-143-02 (seuls les flux sécurisés nécessaires ouverts).
+    serve(app, listen='127.0.0.1:5050', threads=8)

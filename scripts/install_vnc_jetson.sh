@@ -12,6 +12,11 @@ USE_TAILSCALE=false
 MAINTENANCE_SUBNET="192.168.3.0/24"
 VNC_DISPLAY=99
 VNC_PORT=5999
+# IHM 4iSafeCross : HTTPS via reverse-proxy Caddy (config/Caddyfile).
+# 443 est ouvert au seul sous-réseau de maintenance ; 5050 (waitress en clair,
+# lié à 127.0.0.1 uniquement) ne doit JAMAIS être joignable sur le réseau.
+IHM_HTTPS_PORT=443
+IHM_HTTP_PORT=5050
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -47,6 +52,7 @@ echo " Installation VNC - Jetson Orin NX"
 echo " Utilisateur  : $CURRENT_USER"
 echo " Session      : XFCE + TigerVNC"
 echo " Port VNC     : $VNC_PORT (display :$VNC_DISPLAY)"
+echo " Port IHM     : $IHM_HTTPS_PORT/tcp HTTPS (Caddy) — $IHM_HTTP_PORT fermé sur le réseau"
 echo " Sous-réseau  : $MAINTENANCE_SUBNET (port maintenance RJ45)"
 echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisation VNC via tailscale0)' || echo 'DÉSACTIVÉ')"
 echo "============================================"
@@ -162,6 +168,10 @@ ufw --force delete allow in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev
 ufw --force delete deny in on tailscale0 to any port $VNC_PORT proto tcp 2>/dev/null || true
 ufw --force delete deny from 100.64.0.0/10 to any port $VNC_PORT proto tcp 2>/dev/null || true
 ufw --force delete deny from fd7a:115c:a1e0::/48 to any port $VNC_PORT proto tcp 2>/dev/null || true
+# Anciennes règles IHM éventuelles (déploiements antérieurs en HTTP clair sur 0.0.0.0)
+ufw --force delete allow ${IHM_HTTP_PORT}/tcp 2>/dev/null || true
+ufw --force delete allow ${IHM_HTTPS_PORT}/tcp 2>/dev/null || true
+ufw --force delete allow from "$MAINTENANCE_SUBNET" to any port $IHM_HTTP_PORT proto tcp 2>/dev/null || true
 
 SSH_CLIENT_IP=""
 if [ -n "${SSH_CLIENT:-}" ]; then
@@ -182,6 +192,12 @@ echo "    UFW : politiques par défaut appliquées (deny incoming / allow outgoi
 
 ufw allow from "$MAINTENANCE_SUBNET" to any port $VNC_PORT proto tcp
 echo "    UFW : ${VNC_PORT}/tcp autorisé depuis $MAINTENANCE_SUBNET"
+
+# IHM en HTTPS (Caddy) — ouverte au seul sous-réseau de maintenance.
+# 5050 (waitress) reste lié à 127.0.0.1 dans run.py ; aucune règle ne l'ouvre,
+# la politique « deny incoming » par défaut suffit à le rendre injoignable.
+ufw allow from "$MAINTENANCE_SUBNET" to any port $IHM_HTTPS_PORT proto tcp
+echo "    UFW : ${IHM_HTTPS_PORT}/tcp (IHM HTTPS) autorisé depuis $MAINTENANCE_SUBNET"
 
 if [ "$USE_TAILSCALE" = true ]; then
     ufw --force delete deny from 100.64.0.0/10 to any port $VNC_PORT proto tcp 2>/dev/null || true
@@ -217,6 +233,8 @@ echo "[6/6] Vérification finale..."
 which vncserver > /dev/null 2>&1 && echo " TigerVNC     : INSTALLÉ" || echo " TigerVNC     : ERREUR"
 systemctl is-enabled "vncserver@${VNC_DISPLAY}.service" 2>/dev/null && echo " vncserver@${VNC_DISPLAY} : SERVICE ACTIVÉ" || true
 systemctl is-enabled fail2ban 2>/dev/null && echo " Fail2ban     : SERVICE ACTIVÉ" || true
+command -v caddy > /dev/null 2>&1 && echo " Caddy (IHM)  : INSTALLÉ" || echo " Caddy (IHM)  : ABSENT — voir scripts/caddy-4isafecross.service"
+systemctl is-enabled caddy.service 2>/dev/null && echo " caddy.service : SERVICE ACTIVÉ" || true
 
 echo ""
 echo "============================================"
@@ -237,6 +255,15 @@ echo "   4. Connexion Remmina/vncviewer : activer le chiffrement côté client"
 echo "      (TLS/X509 ou RSA-AES) ; une connexion 'VNC' non chiffrée doit être REFUSÉE."
 echo "   5. Contrôle : sudo -u $CURRENT_USER vncviewer -SecurityTypes VncAuth 127.0.0.1:${VNC_PORT}"
 echo "      → doit échouer ('No matching security types')."
+echo ""
+echo " IHM 4iSafeCross en HTTPS (reverse-proxy Caddy) :"
+echo "   Procédure : docs/deployment/scripts-deploiement.md § « IHM en HTTPS (Caddy) »"
+echo "   - Méthode A (en ligne / apt, clé 4G) : sudo apt install caddy ; garder l'unité du paquet"
+echo "   - Méthode B (hors ligne / binaire statique) : cp scripts/caddy-4isafecross.service"
+echo "   Dans les deux cas : sudo cp config/Caddyfile /etc/caddy/Caddyfile ; sudo systemctl enable --now caddy"
+echo "   4. Contrôle local  : curl -k https://127.0.0.1/health           → 200"
+echo "      Contrôle réseau : curl -k https://192.168.3.122/health       → 200 depuis le PC maintenance"
+echo "      Port en clair   : curl http://192.168.3.122:${IHM_HTTP_PORT}/health → doit ÉCHOUER (connexion refusée)"
 echo ""
 echo " Workflow port maintenance :"
 echo "   1. Brancher le câble RJ45"

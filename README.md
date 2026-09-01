@@ -678,7 +678,7 @@ Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec
 +-----------+-------------------+------------------------------------------+
 |  eth0     | DHCP              | Accès internet / réseau principal        |
 |  eth1     | 192.168.2.100     | Caméra 1 (Entrée principale)             |
-|  eth2     | 192.168.3.122     | Connexion directe VNC (maintenance)      |
+|  eth2     | 192.168.3.122     | Maintenance : VNC 5999 + IHM HTTPS 443   |
 |  eth3     | (non utilisé)     | Libre / extension future                 |
 |  eth4     | (non utilisé)     | Libre / extension future                 |
 +-----------+-------------------+------------------------------------------+
@@ -686,7 +686,7 @@ Ci-dessous, un tableau récapitulatif des ports réseau (RJ45) du système, avec
 
 - **eth0** : Connecté au réseau principal, permet l'accès internet, la supervision distante et la communication avec Telegram.
 - **eth1** : Port dédié à la caméra principale (sur sous-réseau isolé pour la vidéo).
-- **eth2** : Port réservé à la maintenance (connexion VNC directe port 5999, accès d'urgence ou debug).
+- **eth2** : Port réservé à la maintenance — VNC chiffré port 5999 **et** IHM de supervision en **HTTPS port 443** (reverse-proxy Caddy devant `waitress`, lui-même lié à `127.0.0.1:5050` uniquement). Voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « IHM en HTTPS (Caddy) » et `CYBER_AUDIT.md` (`CS-1143-01`, `CS-143-02`).
 - **eth3/eth4** : Disponibles pour ajout de caméras ou autres usages (à configurer selon besoin).
 
 > Adaptez les adresses IP et fonctions selon votre architecture réseau réelle. Utilisez des VLAN ou des sous-réseaux séparés pour la sécurité et la performance.
@@ -716,7 +716,7 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l'arrière de la
 > - Caméra 0 : 192.168.2.156
 > - Caméra 1 : 192.168.2.157
 > Vous pouvez modifier ces adresses dans le fichier [`config/zones.ini`](config/zones.ini), variable `RTSP_HOST`.
-- **eth2** est réservé pour la connexion VNC de maintenance (port 5999), avec l'adresse IP 192.168.3.122 (masque 255.255.255.0). Identifiants du compte de maintenance : uniques par boîtier, stockés dans le coffre-fort 4itec (Vaultwarden), accessibles aux personnes habilitées. Ne jamais les inscrire ici.
+- **eth2** est réservé pour la maintenance (adresse IP 192.168.3.122, masque 255.255.255.0) : VNC chiffré port 5999 et IHM de supervision en HTTPS port 443. Le pare-feu UFW n'ouvre 443/tcp et 5999/tcp qu'au sous-réseau `192.168.3.0/24` ; le port 5050 (`waitress` en clair) n'est jamais exposé. Identifiants du compte de maintenance : uniques par boîtier, stockés dans le coffre-fort 4itec (Vaultwarden), accessibles aux personnes habilitées. Ne jamais les inscrire ici.
 
 ## Gestion de la rotation des logs (logrotate)
 
