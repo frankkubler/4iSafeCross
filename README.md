@@ -695,7 +695,7 @@ le démarrage, la configuration matérielle et la maintenance du boîtier Jetson
   - Caméra 1 : `192.168.0.61` (optionnelle)
   - Caméra 2 : `192.168.0.62` (optionnelle)
   - Ajuster la liste au nombre réel de caméras dans [`config/config.ini`](config/config.ini), section `[RTSP]`, clé `HOST`.
-  - **Transport chiffré** : caméras TP-Link VIGI S485/S455 → `[RTSP] SCHEME = rtsps` (RTSP/média sur TLS, `CS-1143-01`). Voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « Transport chiffré des flux caméras ». Site HAM : `rtsp` clair jusqu'à migration.
+  - **Transport** : `[RTSP] SCHEME = rtsp`. Les caméras TP-Link VIGI S485/S455 n'exposent pas de RTSPS/SRTP → transport RTP en clair sur le segment caméras dédié et isolé, avec auth **Digest** utilisée par l'app (⚠️ la caméra accepte aussi Basic) ; dérogation `CS-1143-01`. Le code gère `SCHEME = rtsps` (+ `TLS_CA`) si des caméras compatibles TLS sont installées — voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « Transport des flux caméras ».
 
 Voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « IHM en HTTPS (Caddy) », `CYBER_AUDIT.md` (`CS-1143-01`, `CS-143-02`) et [`docs/compliance/cartographie-flux-stellantis.md`](docs/compliance/cartographie-flux-stellantis.md).
 

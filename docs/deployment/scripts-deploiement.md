@@ -58,7 +58,8 @@ désinstaller/retirer + attester à la recette (voir `CYBER_AUDIT.md`).
 | [`set_poe_gpio.sh`](../../scripts/set_poe_gpio.sh) | Bash | Positionne le GPIO PoE (utilisé par le service) |
 | [`switch-display.sh`](../../scripts/switch-display.sh) | Bash | Logique de détection HDMI / activation dummy Xorg |
 | [`install_vnc_jetson.sh`](../../scripts/install_vnc_jetson.sh) | Bash | TigerVNC + XFCE + UFW (VNC 5999 + IHM 443) + Fail2ban |
-| [`harden-run.sh`](../../scripts/harden-run.sh) | Bash | **Passage en état RUN** : retire RustDesk / Tailscale / bot Telegram / clé 4G, vérifie UFW — attestation de retrait à la recette (`CS-127-01/02`, `CS-1143-04/05`) |
+| [`setup-camera-net.sh`](../../scripts/setup-camera-net.sh) | Bash | Sous-réseau caméras **dédié et isolé** (`nmcli` : IP statique, sans passerelle/DNS/route par défaut) — mesure compensatoire `CS-1143-01` |
+| [`harden-run.sh`](../../scripts/harden-run.sh) | Bash | **Passage en état RUN** : retire RustDesk / Tailscale / bot Telegram / clé 4G, contrôle l'isolation du segment caméras, vérifie UFW — attestation à la recette (`CS-127-01/02`, `CS-1143-04/05`, `CS-1143-01`) |
 | [`4isafecross.logrotate`](../../scripts/4isafecross.logrotate) | logrotate | Rotation des logs applicatifs (10 Mo × 5) |
 
 ---
@@ -476,40 +477,42 @@ sudo bash scripts/install_vnc_jetson.sh --subnet 192.168.3.0/24
 - IPv4 de `br0` (ou de l'interface caméra) : Manuel — `192.168.0.100/24`, sans passerelle ni route par défaut.
 - Caméras (1 à 3) : `192.168.0.60` (obligatoire), `192.168.0.61`, `192.168.0.62` (optionnelles) — cf. `config/config.ini` `[RTSP] HOST`.
 
-**Transport chiffré des flux caméras — RTSPS (`CS-1143-01`) :**
+**Transport des flux caméras (`CS-1143-01`) — testé sur cible :**
 
-Caméras **TP-Link VIGI S485 / S455** (compatibles SRTP). `config/config.ini` `[RTSP]` :
+Caméras **TP-Link VIGI S485 / S455**. Constats vérifiés sur `192.168.0.62` :
+
+| Test | Résultat |
+|---|---|
+| Ports | 554 seulement — **322 / 8554 fermés**, aucun port RTSPS |
+| `SRTP = On` (Advance Settings) | La caméra **rejette tout `SETUP` non-SRTP** → `400 Bad Request` ; **aucun client tiers** (GStreamer, ffmpeg, VLC, 4iSafeCross) ne peut lire le flux. Le SRTP TP-Link est réservé aux NVR VIGI. **→ SRTP doit rester `Off`.** |
+| `SRTP = Off` | SDP = `m=video 0 **RTP/AVP** 96` (H.264 High, 1080p). `SETUP RTP/AVP/TCP` → `200 OK`. GStreamer/ffmpeg lisent le flux en TCP **et** UDP. **Transport RTP en clair.** |
+| Authentification | Le `401` propose **`Digest` ET `Basic`**. `rtspsrc` choisit Digest (vérifié). ⚠️ **La caméra accepte aussi Basic** (`200 OK` testé) — le panneau VIGI n'a **pas** d'option pour désactiver Basic. |
 
 ```ini
-SCHEME  = rtsps        ; rtsp/média sur TLS (site HAM : rtsp, jusqu'à migration)
-PORT    = 554          ; À CONFIRMER dans l'IHM VIGI (Paramètres → Réseau → RTSP/ONVIF)
-TLS_CA  =              ; PEM d'épinglage du certificat caméra (optionnel)
+[RTSP]
+SCHEME = rtsp          ; aucun mode RTSP chiffré exploitable sur les VIGI S485/S455
+PORT   = 554
 ```
 
-À faire côté caméra (IHM VIGI, sur chaque unité) :
+**Mesures compensatoires (dérogation `CS-1143-01` — impossibilité matérielle) :**
 
-1. Activer **RTSP over TLS / SRTP** (selon le firmware : *Réseau → Services →
-   RTSP*, ou via ONVIF Media2). Relever le **port** et le **chemin de flux**
-   (`stream1` = principal).
-2. Contrôler depuis le Jetson :
-   ```sh
-   # le port RTSPS répond bien en TLS
-   openssl s_client -connect 192.168.0.60:<PORT_RTSPS> -brief </dev/null
-   # export du certificat pour épinglage (recommandé)
-   openssl s_client -connect 192.168.0.60:<PORT_RTSPS> </dev/null 2>/dev/null \
-     | openssl x509 > /data/4isafecross/config/vigi-ca.pem
-   # puis dans config.ini : TLS_CA = /app/config/vigi-ca.pem
-   ```
-3. Vérifier que le flux **décode** : `docker logs 4isafecross` → pipeline
-   `rtspsrc location=rtsps://…` sans erreur TLS, images reçues.
+| Mesure | État |
+|---|---|
+| **Digest Auth** | L'app (`rtspsrc`) négocie et utilise **Digest** (vérifié). ⚠️ Basic reste accepté par la caméra ; si le menu *Digest Authentication Algorithm* propose **SHA-256**, le choisir (plus fort que MD5). |
+| **Segment caméras dédié et isolé** | Appliqué par **`scripts/setup-camera-net.sh`** : `192.168.0.0/24` sur bridge `br-cameras` (ou une interface unique vers un switch PoE), **IP statique, sans passerelle, sans DNS, `never-default`, IPv6 off**. Contrôlé par `harden-run.sh` (étape « Segment caméras »). |
+| **Équipements dédiés** | Caméras = appliances à fonction unique. `harden-run.sh` liste les hôtes du `/24` et signale tout OUI non-TP-Link. **À attester à la recette** : une caméra ne joint aucune IP publique. |
+| **Bascule prête** | Le code gère `SCHEME = rtsps` (+ `TLS_CA`) si des caméras à RTSP chiffré sont installées un jour — seul `config.ini` change. Inexploitable avec les VIGI actuelles. |
 
-> Si un modèle n'expose la sécurité que via ONVIF (pas d'URL `rtsps://` statique),
-> ou si le port n'est pas confirmé : remonter au référent — soit ajustement du
-> pipeline (`rtspsrc onvif-mode`), soit dérogation `CS-1143-01` justifiée par
-> l'isolation du segment caméras.
->
-> **Site HAM** (caméras du plan précédent) : laisser `SCHEME = rtsp` jusqu'à la
-> migration réseau.
+À faire :
+
+1. **`SRTP = Off`** sur chaque caméra (*Advance Settings → SRTP Settings*).
+2. `scripts/setup-camera-net.sh` sur le Jetson (voir en-tête du script pour la topologie).
+3. Renseigner `RTSP_LOGIN` / `RTSP_PASSWORD` dans `.env`.
+4. **Formaliser la dérogation `CS-1143-01`** (flux caméras) avec le référent : impossibilité matérielle + tableau ci-dessus.
+5. Vérifier auprès de TP-Link un firmware VIGI ajoutant un vrai RTSP/TLS pour ces modèles.
+
+> Contrôle à la recette : `tcpdump -i <if-cam> -A port 554` — l'URL/SDP en clair,
+> **pas** d'identifiants Basic, et aucun autre hôte que les caméras sur le `/24`.
 
 **Après installation (obligatoire) :**
 
@@ -664,12 +667,13 @@ Après le flash **JetPack 7.2** (voir
 2. set_poe_gpio.sh          → installer set-poe-gpio.service
 3. switch-display.sh        → installer check-dummy-display.service
 4. install_vnc_jetson.sh    → VNC + UFW (VNC 5999 + IHM 443) + Fail2ban
-5. .env                     → créer et remplir depuis .env.example
-6. 4isafecross.service      → installer et activer
-7. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
-8. 4isafecross.logrotate    → installer dans /etc/logrotate.d/
-9. harden-run.sh            → à la LIVRAISON : retrait des outils de mise au point,
-                              sortie à joindre au dossier de recette
+5. setup-camera-net.sh      → sous-réseau caméras dédié isolé (192.168.0.0/24)
+6. .env                     → créer et remplir depuis .env.example (dont RTSP_LOGIN/PASSWORD)
+7. 4isafecross.service      → installer et activer
+8. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
+9. 4isafecross.logrotate    → installer dans /etc/logrotate.d/
+10. harden-run.sh           → à la LIVRAISON : retrait des outils de mise au point
+                              + contrôle isolation caméras ; sortie au dossier de recette
 ```
 
 > Mises à jour de sécurité L4T/OS en exploitation (hors ligne) + rollback :

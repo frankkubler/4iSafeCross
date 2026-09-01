@@ -94,8 +94,54 @@ for IF in $(ls /sys/class/net 2>/dev/null); do
     esac
 done
 
-# ── 5. UFW / fail2ban ─────────────────────────────────────
-step 5 "Pare-feu"
+# ── 5. Segment caméras (mesure compensatoire CS-1143-01) ──
+step 5 "Segment caméras — isolation"
+# Sous-réseau caméras : dérivé de config.ini [RTSP] HOST (1re IP → /24), sinon défaut.
+CAM_NET="192.168.0.0/24"
+if [ -n "$CFG" ]; then
+    CAM_IP1="$(grep -E '^\s*HOST\s*=' "$CFG" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+    [ -n "$CAM_IP1" ] && CAM_NET="$(echo "$CAM_IP1" | cut -d. -f1-3).0/24"
+fi
+CAM_PREFIX="$(echo "$CAM_NET" | cut -d/ -f1 | cut -d. -f1-3)"
+echo "  Sous-réseau caméras : $CAM_NET"
+
+# a) pas de route par défaut via une interface du segment caméras
+CAM_DEFROUTE="$(ip route show default 2>/dev/null | grep -E "src ${CAM_PREFIX}\.|dev (br-cameras|cameras)" || true)"
+if [ -n "$CAM_DEFROUTE" ]; then
+    warn "Route par défaut liée au segment caméras : $CAM_DEFROUTE — le segment doit être SANS passerelle"
+else
+    note "Aucune route par défaut via le segment caméras"
+fi
+
+# b) qui répond sur le /24 ? (doit être uniquement des caméras TP-Link)
+for i in $(seq 1 254); do ping -c1 -W1 "${CAM_PREFIX}.${i}" >/dev/null 2>&1 & done
+wait
+FOUND=0; NONCAM=0
+NEIGH="$(ip neigh show 2>/dev/null | grep -E "^${CAM_PREFIX//./\\.}\.[0-9]+ .* lladdr " || true)"
+while read -r line; do
+    [ -z "$line" ] && continue
+    ip="${line%% *}"
+    mac="$(echo "$line" | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)"
+    [ -z "$mac" ] && continue
+    FOUND=$((FOUND+1))
+    OUI="$(echo "$mac" | tr 'a-f' 'A-F' | cut -d: -f1-3)"
+    case "$OUI" in
+        EC:75:0C|E4:C3:2A|00:31:92|A4:2B:B0|30:DE:4B|B0:4E:26|D8:07:B6|1C:61:B4|50:C7:BF|CC:68:B6)
+            note "  $ip  $mac  (TP-Link)" ;;
+        *)
+            warn "  $ip  $mac  — OUI $OUI NON TP-Link : équipement étranger sur le segment caméras ?"
+            NONCAM=$((NONCAM+1)) ;;
+    esac
+done <<< "$NEIGH"
+[ "$FOUND" -eq 0 ] && warn "Aucune caméra détectée sur $CAM_NET (câblage / alimentation ?)"
+[ "$NONCAM" -eq 0 ] && [ "$FOUND" -gt 0 ] && note "Segment caméras : $FOUND caméra(s), uniquement TP-Link"
+
+# c) attestation : une caméra ne doit PAS joindre Internet (contrôle manuel possible
+#    depuis la caméra ou via un mirror de port). Rappel :
+note "À attester à la recette : une caméra ne peut joindre aucune IP publique (segment sans route)"
+
+# ── 6. UFW / fail2ban ─────────────────────────────────────
+step 6 "Pare-feu"
 if ufw status 2>/dev/null | grep -q "Status: active"; then
     note "UFW actif"
     ufw status | sed 's/^/    /'
@@ -104,8 +150,8 @@ else
 fi
 systemctl is-active --quiet fail2ban && note "fail2ban actif" || warn "fail2ban inactif"
 
-# ── 6. Récapitulatif ──────────────────────────────────────
-step 6 "Récapitulatif"
+# ── 7. Récapitulatif ──────────────────────────────────────
+step 7 "Récapitulatif"
 if [ "$RC" -eq 0 ]; then
     printf '\n  \033[32mÉtat RUN : OK.\033[0m Seul accès résiduel attendu : VNC chiffré local sur le port de maintenance.\n'
 else
