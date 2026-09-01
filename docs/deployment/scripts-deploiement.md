@@ -564,6 +564,31 @@ sudo cp scripts/4isafecross.logrotate /etc/logrotate.d/4isafecross
 sudo logrotate -f /etc/logrotate.d/4isafecross
 ```
 
+> `logs/audit.log` (journal d'audit, ci-dessous) **n'est pas** géré par logrotate :
+> il a sa propre rotation applicative (`RotatingFileHandler`, 5 Mo × 10). Ne pas
+> l'ajouter ici (double rotation).
+
+---
+
+## Journal d'audit — `logs/audit.log` (`CS-144-01` / `CS-R2-03`)
+
+L'IHM écrit une **ligne JSON par événement** dans `logs/audit.log` :
+
+- toute **écriture** (`POST` / `PUT` / `PATCH` / `DELETE` — zones, masques, seuils, toggle détection, relais) ;
+- tout **rejet** : `401` (non authentifié) et `403` (contrôle anti-CSRF d'`Origin`).
+
+Champs : `ts` (ISO 8601 avec fuseau), `ip` (source réelle via `X-Forwarded-For` posé par Caddy), `user` (identité présentée), `method`, `path`, `status`, `event` (`write` / `auth_reject` / `forbidden`), `origin` si présent.
+
+```json
+{"ts":"2026-09-01T14:32:07.412+02:00","ip":"192.168.3.50","user":"maintenance","method":"POST","path":"/api/zones/0","status":200,"event":"write"}
+{"ts":"2026-09-01T14:33:11.088+02:00","ip":"192.168.3.50","user":"-","method":"POST","path":"/toggle_detection/0","status":401,"event":"auth_reject"}
+```
+
+- **Rotation** : applicative, 5 Mo × 10 fichiers (`audit.log`, `audit.log.1`, …).
+- **Persistance** : `logs/` est monté en volume (`/data/4isafecross/logs`, `docker-compose-*.yml` et `scripts/deploy-jetson.sh`) — le journal survit aux mises à jour d'image.
+- **Revue / export** (`CS-R2-04`) : consulter avec `tail -f logs/audit.log | jq .` ; exporter sur support amovible lors des interventions, ou rediriger vers syslog si un collecteur est disponible.
+- **Recette FOR_509** : vérifier qu'un `curl` sans identifiants (`→ 401`) **et** une écriture authentifiée produisent chacun une ligne.
+
 ---
 
 ## Ordre d'installation recommandé sur un Jetson neuf

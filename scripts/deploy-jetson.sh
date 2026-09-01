@@ -62,7 +62,8 @@ docker pull ${FULL_IMAGE}
 DATA_DIR="/data/4isafecross"
 echo "📂 Verification de l'etat persistant dans ${DATA_DIR}..."
 sudo mkdir -p "${DATA_DIR}/config" "${DATA_DIR}/db" \
-              "${DATA_DIR}/detections" "${DATA_DIR}/dataset"
+              "${DATA_DIR}/detections" "${DATA_DIR}/dataset" \
+              "${DATA_DIR}/logs"
 
 if [ -z "$(ls -A "${DATA_DIR}/config" 2>/dev/null)" ]; then
     echo "   Premier deploiement : copie de la configuration par defaut..."
@@ -103,6 +104,7 @@ docker run -d \
   -v "${DATA_DIR}/db":/app/db \
   -v "${DATA_DIR}/detections":/app/detections \
   -v "${DATA_DIR}/dataset":/app/dataset \
+  -v "${DATA_DIR}/logs":/app/logs \
   -v "$(pwd)/licenses":/app/licenses \
   -v /etc/machine-id:/etc/machine-id:ro \
   -v /dev:/dev \

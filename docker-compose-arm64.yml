@@ -52,6 +52,8 @@ services:
       - /data/4isafecross/db:/app/db
       - /data/4isafecross/detections:/app/detections
       - /data/4isafecross/dataset:/app/dataset
+      # Journal d'audit JSON (CS-144-01 / CS-R2-03) — doit survivre aux MAJ d'image.
+      - /data/4isafecross/logs:/app/logs
       - ./licenses:/app/licenses
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro
