@@ -74,8 +74,8 @@ Déployé sur **Nvidia Jetson Orin NX** ([reServer Industrial J4012](https://wik
 ├── scripts/                  # Scripts systemd, déploiement Jetson, logrotate
 └── docs/
     ├── build/                # CI/CD, compilation Cython, GitHub Actions / GitLab CI
-    ├── compliance/           # Registre RGPD (Art. 30)
-    ├── deployment/           # Flash Jetson, dépendances système
+    ├── compliance/           # Registre RGPD (Art. 30), cartographie des flux Stellantis
+    ├── deployment/           # Flash Jetson, mise à jour L4T hors ligne, dépendances système
     ├── features/             # Documentation des fonctionnalités
     ├── security/             # Audits cybersécurité et plans de correction
     └── tools/                # Prompts et outils d'audit
@@ -111,6 +111,7 @@ La documentation technique du projet est organisée dans le dossier [`docs/`](do
 | [Rapport d'audit cybersécurité](docs/security/rapport-cybersec.md) | Audit de maturité complet : OWASP, exposition réseau, gestion des secrets |
 | [Analyse des risques cyber](docs/security/analyse-risques-cyber.md) | Matrice de risques et surfaces d'attaque identifiées |
 | [Plan d'implémentation cybersécurité](docs/security/cybersec-implementation-plan.md) | Corrections priorisées avec statut d'avancement |
+| [Cartographie des flux — modèle Stellantis](docs/compliance/cartographie-flux-stellantis.md) | Flux IT↔OT et OT↔OT, zones et conduits, filtrage et conformité par flux (`CS-143-01`) |
 | [Registre RGPD — Art. 30](docs/compliance/registre-traitements-rgpd.md) | Registre des activités de traitement des données personnelles |
 
 ### Build & CI/CD
