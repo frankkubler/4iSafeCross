@@ -483,10 +483,12 @@ Caméras **TP-Link VIGI S485 / S455**. Constats vérifiés sur `192.168.0.62` :
 
 | Test | Résultat |
 |---|---|
-| Ports | 554 seulement — **322 / 8554 fermés**, aucun port RTSPS |
-| `SRTP = On` (Advance Settings) | La caméra **rejette tout `SETUP` non-SRTP** → `400 Bad Request` ; **aucun client tiers** (GStreamer, ffmpeg, VLC, 4iSafeCross) ne peut lire le flux. Le SRTP TP-Link est réservé aux NVR VIGI. **→ SRTP doit rester `Off`.** |
-| `SRTP = Off` | SDP = `m=video 0 **RTP/AVP** 96` (H.264 High, 1080p). `SETUP RTP/AVP/TCP` → `200 OK`. GStreamer/ffmpeg lisent le flux en TCP **et** UDP. **Transport RTP en clair.** |
-| Authentification | Le `401` propose **`Digest` ET `Basic`**. `rtspsrc` choisit Digest (vérifié). ⚠️ **La caméra accepte aussi Basic** (`200 OK` testé) — le panneau VIGI n'a **pas** d'option pour désactiver Basic. |
+| **554** | RTSP standard. `SRTP=Off` : SDP `m=video 0 **RTP/AVP** 96` (H.264 High 1080p), `SETUP` → `200 OK`, GStreamer/ffmpeg lisent en TCP **et** UDP. **Transport RTP en clair.** |
+| **322 / 8554** | Fermés — aucun port RTSPS. |
+| **8443** (*HTTP(S) → Local Stream Port*) | TLS 1.2 mais service **propriétaire `Server: Streamd`** : une requête RTSP → `HTTP/1.0 400` ; un tunnel RTSP-over-HTTP → `302` vers l'IHM web `443`. **Inexploitable** par GStreamer/ffmpeg (« Parse error »). |
+| **8800** (*Video Service Port*) | Binaire propriétaire, pas même du TLS. |
+| **`SRTP = On`** (*Advance Settings → SRTP Settings*) | La caméra **rejette tout `SETUP` non-SRTP** → `400`. Aucun client tiers ne lit le flux. Le SRTP TP-Link est réservé aux **NVR VIGI**. **→ SRTP doit rester `Off`.** |
+| **Authentification** | Réglée sur **`Digest MD5/SHA-256`** (onglet *RTSP → Digest Authentication Algorithm*). Le `401` propose les deux Digest **+ `Basic`**. **`rtspsrc` (= 4iSafeCross) s'authentifie en Digest — vérifié.** ⚠️ ffmpeg/`ffplay`/VLC **échouent** (bug de gestion des défis Digest multi-algorithmes) — sans impact sur l'app ; pour un test manuel, utiliser `gst-launch-1.0` / `gst-play-1.0` ou l'app VIGI. ⚠️ `Basic` reste accepté par la caméra, sans option pour le désactiver. |
 
 ```ini
 [RTSP]
@@ -498,21 +500,34 @@ PORT   = 554
 
 | Mesure | État |
 |---|---|
-| **Digest Auth** | L'app (`rtspsrc`) négocie et utilise **Digest** (vérifié). ⚠️ Basic reste accepté par la caméra ; si le menu *Digest Authentication Algorithm* propose **SHA-256**, le choisir (plus fort que MD5). |
+| **Digest MD5/SHA-256** | `rtspsrc` négocie et utilise le Digest (vérifié). ⚠️ Basic reste accepté par la caméra. |
 | **Segment caméras dédié et isolé** | Appliqué par **`scripts/setup-camera-net.sh`** : `192.168.0.0/24` sur bridge `br-cameras` (ou une interface unique vers un switch PoE), **IP statique, sans passerelle, sans DNS, `never-default`, IPv6 off**. Contrôlé par `harden-run.sh` (étape « Segment caméras »). |
+| **Durcissement caméra** | **SNMP** (SNMPv1/2 = protocole interdit §1.1.4.3), **RTMP**, **DDNS**, **ONVIF** (+ WS-Discovery) → **désactivés**. Mot de passe **unique par caméra** (coffre 4itec). **802.1x** (EAP-TLS) si le switch PoE est managé + RADIUS, sinon non applicable (compensé par l'isolation physique). |
 | **Équipements dédiés** | Caméras = appliances à fonction unique. `harden-run.sh` liste les hôtes du `/24` et signale tout OUI non-TP-Link. **À attester à la recette** : une caméra ne joint aucune IP publique. |
-| **Bascule prête** | Le code gère `SCHEME = rtsps` (+ `TLS_CA`) si des caméras à RTSP chiffré sont installées un jour — seul `config.ini` change. Inexploitable avec les VIGI actuelles. |
+| **Bascule prête** | Le code gère `SCHEME = rtsps` (+ `TLS_CA`) si des caméras à RTSP/TLS sont installées un jour (Axis, Bosch, Hanwha, Mobotix…) — seul `config.ini` change. |
 
-À faire :
+**Checklist de durcissement caméra (à cocher par unité, à joindre à la recette) :**
 
-1. **`SRTP = Off`** sur chaque caméra (*Advance Settings → SRTP Settings*).
+- [ ] `SRTP = Off` (*Advance Settings*)
+- [ ] *Digest Authentication Algorithm* = `MD5/SHA256` — onglet **RTSP** *et* onglet **HTTP(S)**
+- [ ] **SNMP désactivé** (ou SNMPv3 uniquement)
+- [ ] **RTMP désactivé**
+- [ ] **DDNS désactivé**
+- [ ] **ONVIF désactivé** (« Open Network Video Interface » = Off)
+- [ ] `802.1x` (`Automatically switch to static IP` = On) — configuré si switch managé
+- [ ] IP **statique**, **sans passerelle**, sans DNS (segment isolé)
+- [ ] Mot de passe **unique**, compte admin renommé si le firmware le permet
+- [ ] Firmware caméra à jour ; heure synchronisée (traçabilité RGPD des captures)
+
+Étapes de déploiement :
+
+1. Appliquer la checklist ci-dessus sur **chaque caméra**.
 2. `scripts/setup-camera-net.sh` sur le Jetson (voir en-tête du script pour la topologie).
 3. Renseigner `RTSP_LOGIN` / `RTSP_PASSWORD` dans `.env`.
-4. **Formaliser la dérogation `CS-1143-01`** (flux caméras) avec le référent : impossibilité matérielle + tableau ci-dessus.
-5. Vérifier auprès de TP-Link un firmware VIGI ajoutant un vrai RTSP/TLS pour ces modèles.
+4. **Formaliser la dérogation `CS-1143-01`** (flux caméras) avec le référent : impossibilité matérielle + tableau + checklist ci-dessus.
 
 > Contrôle à la recette : `tcpdump -i <if-cam> -A port 554` — l'URL/SDP en clair,
-> **pas** d'identifiants Basic, et aucun autre hôte que les caméras sur le `/24`.
+> **pas** d'identifiants (Digest actif), et aucun autre hôte que les caméras sur le `/24`.
 
 **Après installation (obligatoire) :**
 
