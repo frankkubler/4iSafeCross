@@ -370,10 +370,11 @@ Déploiement automatisé de l'image Docker depuis le registry GitLab privé
 | Runtime | `--runtime nvidia` |
 | Redémarrage | `--restart unless-stopped` |
 | Réseau | `--network host` |
-| Volume données | `/data/4isafecross:/app/data` |
+| Volumes état | `/data/4isafecross/{config,db,detections,dataset,logs}` → `/app/…` |
+| Volumes licence | `./licenses:/app/licenses`, `/etc/machine-id:/etc/machine-id:ro` |
 | Périphériques | `--privileged`, `-v /dev:/dev` |
 | Timezone | `-e TZ=Europe/Paris` |
-| Port | `5000` |
+| Port IHM | `5050` en clair sur `127.0.0.1` (exposé en HTTPS par Caddy) — non publié, réseau `host` |
 
 **Usage :**
 
@@ -384,6 +385,13 @@ bash scripts/deploy-jetson.sh latest
 # Déployer un tag spécifique
 bash scripts/deploy-jetson.sh v1.2.0
 ```
+
+> ⚠️ **La référence de production est `docker-compose-arm64.yml`**, pas ce script : son
+> `docker run` diverge du fichier compose (montage de `/dev` en entier, pas de `ipc: host`
+> ni de montages `enctune`/`argus_socket`). `deploy-jetson.sh` sert au déploiement rapide
+> en mise au point. Ne pas mélanger les deux méthodes sur un même boîtier — un conteneur
+> créé par `docker run` n'est pas géré par `docker compose`.
+> Voir [install-prod-jetson-docker.md](install-prod-jetson-docker.md).
 
 ---
 
@@ -683,13 +691,21 @@ Après le flash **JetPack 7.2** (voir
 3. switch-display.sh        → installer check-dummy-display.service
 4. install_vnc_jetson.sh    → VNC + UFW (VNC 5999 + IHM 443) + Fail2ban
 5. setup-camera-net.sh      → sous-réseau caméras dédié isolé (192.168.0.0/24)
-6. .env                     → créer et remplir depuis .env.example (dont RTSP_LOGIN/PASSWORD)
-7. 4isafecross.service      → installer et activer
-8. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
-9. 4isafecross.logrotate    → installer dans /etc/logrotate.d/
-10. harden-run.sh           → à la LIVRAISON : retrait des outils de mise au point
+6. Docker + runtime NVIDIA  → gel des paquets firmware Seeed, plugin Compose v2,
+                              contrôle `docker info | grep -i runtimes`
+7. .env                     → créer et remplir depuis .env.example (dont RTSP_LOGIN/PASSWORD)
+8. Image applicative        → pull (registry GitLab) ou docker load, amorçage de
+                              /data/4isafecross, licence, `docker compose up -d`
+   (alternative « sources / binaire » : 4isafecross.service — EXCLUSIF du conteneur,
+    les deux servent l'IHM sur 127.0.0.1:5050)
+9. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
+10. 4isafecross.logrotate   → installer dans /etc/logrotate.d/
+11. harden-run.sh           → à la LIVRAISON : retrait des outils de mise au point
                               + contrôle isolation caméras ; sortie au dossier de recette
 ```
+
+> Étapes 6 à 8 en détail (dépendances, registry GitLab, docker-compose, licence,
+> checklist de recette) : [install-prod-jetson-docker.md](install-prod-jetson-docker.md).
 
 > Mises à jour de sécurité L4T/OS en exploitation (hors ligne) + rollback :
 > [maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md).

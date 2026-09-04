@@ -3,6 +3,14 @@
 `pygobject` (binding Python vers GLib/GStreamer) est une extension C qui doit être compilée
 contre les headers système. Les paquets ci-dessous sont **obligatoires** avant `uv sync`.
 
+> **Périmètre — à lire avant d'installer quoi que ce soit.**
+> Ces paquets ne sont nécessaires que pour exécuter l'application **depuis les sources**
+> (poste de développement, diagnostic sur cible). En **production, l'application tourne en
+> conteneur** : GStreamer, PyGObject, CUDA et TensorRT sont fournis par l'image, et l'hôte
+> n'a besoin que de Docker et du runtime NVIDIA.
+> 👉 Procédure de déploiement sur machine de production :
+> [install-prod-jetson-docker.md](install-prod-jetson-docker.md).
+
 ---
 
 ## Dépendances communes (toutes plateformes Linux)

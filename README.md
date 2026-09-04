@@ -92,6 +92,7 @@ La documentation technique du projet est organisée dans le dossier [`docs/`](do
 | [Flash JetPack 7.2 — reServer Industrial J4012](docs/deployment/flash-jetson-reserver-j4012-jetpack72.md) | Procédure complète de flash du Jetson Orin NX avec **JetPack 7.2 (L4T r39.2, Ubuntu 24.04)** : mode Force Recovery, flash, config initiale, tableau d'homologation `CS-1141-01` |
 | [Mise à jour L4T hors ligne + rollback](docs/deployment/maj-l4t-hors-ligne.md) | Canal de mise à jour de sécurité de l'OS/BSP pour le boîtier autonome (support amovible), veille bulletins NVIDIA/Ubuntu, rollback A/B, registre des MAJ — `CS-1141-02`, `CS-123-03` |
 | [Scripts et services de déploiement](docs/deployment/scripts-deploiement.md) | Services systemd (4isafecross, PoE GPIO, dummy display), scripts Bash (deploy, autosuspend, VNC), IHM HTTPS Caddy, logrotate — procédures d'installation complètes |
+| [Installation sur machine de production (Docker / GitLab)](docs/deployment/install-prod-jetson-docker.md) | Procédure complète après flash : dépendances hôte (Docker + runtime NVIDIA), récupération de l'image depuis le registry GitLab (connecté ou hors ligne), `docker compose`, amorçage de `/data/4isafecross`, licence, dépannage et checklist de recette |
 | [Dépendances système — GStreamer et PyGObject](docs/deployment/install-system-deps.md) | Installation des paquets GStreamer natifs et PyGObject sur Jetson (L4T), x86 et ARM |
 
 ### Fonctionnalités
@@ -317,6 +318,9 @@ Le Jetson doit être flashé avec **JetPack 7.2** (L4T r39.2, rootfs Ubuntu 24.0
 > Le flash s'effectue depuis un **PC hôte Ubuntu 22.04** (hôte SDK Manager / `l4t_initrd_flash`) — à confirmer selon le BSP r39.2. Flasher **exactement la même image** (même empreinte `sha256`) sur chaque boîtier d'une même référence (exigence `§1.1.4.1` du référentiel Stellantis).
 >
 > Mises à jour de sécurité de l'OS/BSP en exploitation (boîtier autonome, hors ligne) : 👉 [Mise à jour L4T hors ligne + rollback](docs/deployment/maj-l4t-hors-ligne.md).
+
+Une fois le boîtier flashé, l'installation sur machine de production (dépendances hôte, récupération de l'image depuis le registry GitLab, `docker compose`, licence, checklist de recette) est décrite ici :
+👉 [Installation sur machine de production — Docker / registry GitLab](docs/deployment/install-prod-jetson-docker.md)
 
 Le serveur d'inférence doit être installé dans un docker [inf_jetson_rf-detr](https://github.com/4itec-org/inf_jetson_rf-detr)
 
