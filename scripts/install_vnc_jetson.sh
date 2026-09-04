@@ -58,12 +58,19 @@ echo " Tailscale    : $([ "$USE_TAILSCALE" = true ] && echo 'ACTIVÉ (autorisati
 echo "============================================"
 echo ""
 
-echo "[1/5] Installation des paquets..."
+echo "[1/6] Installation des paquets..."
 apt update -q
-apt install -y dbus-x11 tigervnc-standalone-server xfce4 xfce4-goodies xfce4-terminal xterm ufw fail2ban
+# Session XFCE RESSERRÉE : on installe les composants nécessaires à `startxfce4`
+# et RIEN de plus. Les métapaquets `xfce4` et surtout `xfce4-goodies` tirent des
+# dizaines d'applications annexes (greffons, éditeurs, utilitaires) inutiles à une
+# session de maintenance — autant de paquets à suivre et à corriger (CS-123-03).
+# `xterm` est conservé volontairement : terminal de secours si `startxfce4` échoue.
+apt install -y dbus-x11 tigervnc-standalone-server \
+    xfce4-session xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-terminal xterm \
+    ufw fail2ban
 echo "    OK"
 
-echo "[2/5] Configuration de la session XFCE pour VNC..."
+echo "[2/6] Configuration de la session XFCE pour VNC..."
 mkdir -p "$USER_HOME/.vnc"
 chown "$CURRENT_USER:$CURRENT_USER" "$USER_HOME/.vnc"
 
@@ -101,7 +108,7 @@ if [ -d "$USER_HOME/.vnc/config.d" ]; then
 fi
 echo "    OK"
 
-echo "[3/5] Création du service systemd TigerVNC..."
+echo "[3/6] Création du service systemd TigerVNC..."
 # -SecurityTypes X509Vnc,RA2ne : la session est CHIFFRÉE (TLS/AES). VncAuth
 #   (challenge DES, écran + clavier en clair) et None sont refusés.
 #   X509Vnc : certificat auto-généré dans ~/.vnc/x509_{cert,key}.pem au 1er

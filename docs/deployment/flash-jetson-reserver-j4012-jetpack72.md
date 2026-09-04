@@ -161,7 +161,16 @@ Flash is successful
 1. Connecter un écran via le port **HDMI** du reServer.
 2. Le board redémarre automatiquement après le flash.
 3. Suivre l'assistant de configuration Ubuntu 24.04 (langue, utilisateur, réseau…).
-4. Après la configuration, le système est opérationnel sous **JetPack 7.2**.
+4. **Poser l'adresse du port de maintenance** (`eth1` → `192.168.3.122/24`) : c'est elle
+   qui permet de débrancher l'écran dès l'installation du VNC et de poursuivre le
+   déploiement depuis le PC de maintenance.
+   ```bash
+   sudo nmcli con mod "Wired connection 1" ipv4.method manual \
+        ipv4.addresses 192.168.3.122/24
+   sudo nmcli con up "Wired connection 1"
+   ip -4 addr show eth1
+   ```
+5. Après la configuration, le système est opérationnel sous **JetPack 7.2**.
 
 ---
 
@@ -194,12 +203,27 @@ dans le dossier de recette, pour chaque boîtier.
 
 ## Après le flash
 
-1. Dépendances système GStreamer : [install-system-deps.md](install-system-deps.md).
-2. Accès maintenance (VNC chiffré) + IHM HTTPS : [scripts-deploiement.md](scripts-deploiement.md).
-3. Déploiement de l'image applicative : `scripts/deploy-jetson.sh` (mise au point)
-   ou chargement hors ligne (`docker load`) en RUN — voir
-   [scripts-deploiement.md](scripts-deploiement.md).
-4. **Canal de mise à jour L4T hors ligne + rollback** :
+Les **deux premières étapes seulement** demandent d'être devant le boîtier (écran HDMI +
+clavier). Ensuite, tout se pilote depuis le PC de maintenance.
+
+1. **Geler les paquets firmware — AVANT la première commande apt du boîtier.** La carte
+   porteuse Seeed n'est pas reconnue par le payload updater NVIDIA : sans ce gel, le
+   premier `apt install` casse l'état dpkg.
+   [install-system-deps.md](install-system-deps.md) § « Carte porteuse Seeed ».
+   ```bash
+   sudo apt-mark hold nvidia-l4t-bootloader nvidia-l4t-bsp
+   ```
+2. **Accès de maintenance à distance** : `scripts/install_vnc_jetson.sh` (TigerVNC chiffré
+   sur `5999`, UFW, Fail2ban) — [scripts-deploiement.md](scripts-deploiement.md)
+   § « `install_vnc_jetson.sh` ». À partir d'ici, l'écran peut être débranché.
+3. **Suite du déploiement, à distance** : scripts matériels (PoE, autosuspend, affichage,
+   réseau caméras), Docker + runtime NVIDIA, image applicative depuis le registry GitLab,
+   licence, Caddy — [install-prod-jetson-docker.md](install-prod-jetson-docker.md), et
+   l'ordre complet dans [scripts-deploiement.md](scripts-deploiement.md)
+   § « Ordre d'installation recommandé ».
+4. Dépendances GStreamer/PyGObject sur l'hôte : **uniquement** pour exécuter l'application
+   depuis les sources — [install-system-deps.md](install-system-deps.md).
+5. **Canal de mise à jour L4T hors ligne + rollback** :
    [maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md) (`CS-1141-02`, `CS-123-03`).
 
 ---

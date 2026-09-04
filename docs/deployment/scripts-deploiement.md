@@ -204,6 +204,48 @@ TigerVNC (`vncserver@99`) démarre sa **propre** session XFCE indépendamment de
 GDM3 (`install_vnc_jetson.sh`). **L'autologon GDM3 n'est donc pas nécessaire** au
 fonctionnement du VNC de maintenance.
 
+### Pourquoi une session VNC dédiée, et pas la recopie de l'écran `:0` ?
+
+Question récurrente à chaque nouveau boîtier : « GDM3 est déjà installé, pourquoi
+ajouter XFCE ? »
+
+`tigervnc-standalone-server` lance un **second serveur X complet** (`Xvnc`, display
+`:99`), sans aucun rapport avec l'affichage physique `:0` que gère GDM3. Ce display
+démarre **vide** : son contenu est uniquement ce que lance `~/.vnc/xstartup`. GDM3 est un
+*display manager* — il ouvre une session sur `:0`, il ne fournit rien à `:99`. Il faut
+donc un environnement de bureau ou un gestionnaire de fenêtres **dans la session VNC**,
+et XFCE n'est qu'un choix parmi d'autres :
+
+| Option | Ce que ça donne | Verdict |
+|---|---|---|
+| **XFCE resserré** (retenu) | Bureau complet dans `:99`, rendu logiciel, aucun besoin de GPU | ✅ |
+| **GNOME** (`exec gnome-session` dans `xstartup`) | Rien à installer en plus, GNOME étant déjà là avec GDM3 | ⚠️ GNOME Shell sous `Xvnc` = rendu logiciel `llvmpipe` sans accélération, lourd sur Orin et session Wayland-first sur 24.04 → fragile |
+| **WM minimal** (`openbox`, `fluxbox`) + terminal | Le strict nécessaire pour la maintenance | ✅ encore plus léger si la session n'a besoin ni de navigateur ni de bureau |
+| **Recopie de `:0`** (`x0vncserver`, `x11vnc`) | Aucun bureau supplémentaire : on voit la vraie session GNOME | ❌ voir ci-dessous |
+
+La recopie de `:0` est la seule option qui réutiliserait réellement GDM3. Elle est
+**incompatible avec l'interdiction d'autologon** (`CS-113-05`, ci-dessous) : sans
+autologon, après un redémarrage il n'existe aucune session utilisateur sur `:0` — il n'y a
+que le greeter GDM. Un `x0vncserver` lancé sous l'utilisateur d'exploitation n'a alors rien
+à recopier, et **l'accès de maintenance à distance est perdu après chaque reboot**. Le mode
+standalone démarre au contraire avec `multi-user.target`, indépendamment de toute session
+ouverte.
+
+**Paquets installés** — `install_vnc_jetson.sh` installe les composants nécessaires à
+`startxfce4` et rien de plus (`xfce4-session`, `xfwm4`, `xfce4-panel`, `xfdesktop4`,
+`xfce4-settings`, `xfce4-terminal`, plus `xterm` comme terminal de secours). Les
+métapaquets `xfce4` et `xfce4-goodies` sont **volontairement écartés** : ils tirent des
+dizaines d'applications annexes inutiles à une session de maintenance, donc à suivre et à
+corriger pour rien (`CS-123-03`).
+
+Contrôle après installation — certains métapaquets de bureau tirent leur propre display
+manager et peuvent supplanter GDM3 :
+
+```sh
+cat /etc/X11/default-display-manager      # doit rester /usr/sbin/gdm3
+systemctl is-enabled gdm3 lightdm 2>/dev/null
+```
+
 **Par défaut : ne pas activer l'autologon** (`CS-113-05`, `CS-113-01`).
 `/etc/gdm3/custom.conf` :
 
@@ -686,25 +728,54 @@ Après le flash **JetPack 7.2** (voir
 [flash-jetson-reserver-j4012-jetpack72.md](flash-jetson-reserver-j4012-jetpack72.md)) :
 
 ```
-1. disable-autosuspend.sh   → désactiver USB autosuspend + reboot
-2. set_poe_gpio.sh          → installer set-poe-gpio.service
-3. switch-display.sh        → installer check-dummy-display.service
-4. install_vnc_jetson.sh    → VNC + UFW (VNC 5999 + IHM 443) + Fail2ban
-5. setup-camera-net.sh      → sous-réseau caméras dédié isolé (192.168.0.0/24)
-6. Docker + runtime NVIDIA  → gel des paquets firmware Seeed, plugin Compose v2,
-                              contrôle `docker info | grep -i runtimes`
-7. .env                     → créer et remplir depuis .env.example (dont RTSP_LOGIN/PASSWORD)
-8. Image applicative        → pull (registry GitLab) ou docker load, amorçage de
+--- sur site, écran HDMI + clavier branchés -------------------------------------
+1. Gel des paquets firmware → apt-mark hold + pin (carte Seeed) — AVANT tout apt
+2. install_vnc_jetson.sh    → VNC chiffré 5999 + UFW (5999 + 443) + Fail2ban
+
+--- à partir d'ici, tout se pilote depuis le PC de maintenance -------------------
+3. disable-autosuspend.sh   → désactiver USB autosuspend + reboot
+4. set_poe_gpio.sh          → installer set-poe-gpio.service (alimentation des caméras)
+5. switch-display.sh        → installer check-dummy-display.service (headless)
+6. setup-camera-net.sh      → sous-réseau caméras dédié isolé (192.168.0.0/24)
+7. Docker + runtime NVIDIA  → plugin Compose v2, contrôle `docker info | grep -i runtimes`
+8. .env                     → créer et remplir depuis .env.example (dont RTSP_LOGIN/PASSWORD)
+9. Image applicative        → pull (registry GitLab) ou docker load, amorçage de
                               /data/4isafecross, licence, `docker compose up -d`
    (alternative « sources / binaire » : 4isafecross.service — EXCLUSIF du conteneur,
     les deux servent l'IHM sur 127.0.0.1:5050)
-9. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
-10. 4isafecross.logrotate   → installer dans /etc/logrotate.d/
-11. harden-run.sh           → à la LIVRAISON : retrait des outils de mise au point
+10. caddy-4isafecross.service + config/Caddyfile → reverse-proxy TLS de l'IHM
+11. 4isafecross.logrotate   → installer dans /etc/logrotate.d/
+12. harden-run.sh           → à la LIVRAISON : retrait des outils de mise au point
                               + contrôle isolation caméras ; sortie au dossier de recette
 ```
 
-> Étapes 6 à 8 en détail (dépendances, registry GitLab, docker-compose, licence,
+**Pourquoi l'accès distant en n° 2** : seules les deux premières étapes exigent d'être
+physiquement devant le boîtier. Une fois TigerVNC en place, le reste du déploiement
+(scripts matériels, Docker, image applicative, Caddy) se fait depuis le PC de maintenance,
+écran et clavier débranchés — y compris les redémarrages, `vncserver@99` étant lancé par
+`multi-user.target` sans session ouverte.
+
+Prérequis pour que le n° 2 suffise :
+
+- **IP de maintenance posée** sur `eth1` (`192.168.3.122/24`) — à faire dans l'assistant
+  Ubuntu juste après le flash, ou en `nmcli` avant de lancer le script ;
+- **source de paquets accessible** (clé 4G de mise au point ou dépôt local) : le script
+  fait `apt update && apt install`.
+
+> ⚠️ **Le gel firmware (n° 1) doit précéder le n° 2.** `install_vnc_jetson.sh` déclenche un
+> `apt update && apt install` qui reconfigurerait `nvidia-l4t-bootloader` sur la carte
+> Seeed et casserait l'état dpkg dès la première commande apt du boîtier — voir
+> [install-system-deps.md](install-system-deps.md) § « Carte porteuse Seeed ».
+
+> ⚠️ **Anti-lockout SSH.** Le script applique `ufw default deny incoming` et n'ouvre le
+> port 22 que depuis l'IP du client **s'il est lancé par SSH** (variable `SSH_CLIENT`).
+> Lancé depuis la console locale (clavier + HDMI), SSH sera **bloqué** après l'activation
+> d'UFW : n'ouvrir alors que le VNC, ou ajouter la règle avant de débrancher l'écran :
+> ```sh
+> sudo ufw allow from 192.168.3.0/24 to any port 22 proto tcp
+> ```
+
+> Étapes 7 à 9 en détail (dépendances, registry GitLab, docker-compose, licence,
 > checklist de recette) : [install-prod-jetson-docker.md](install-prod-jetson-docker.md).
 
 > Mises à jour de sécurité L4T/OS en exploitation (hors ligne) + rollback :

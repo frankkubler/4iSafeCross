@@ -2,7 +2,9 @@
 
 > **Périmètre** : ce qu'il faut faire sur un boîtier **après le flash JetPack 7.2**
 > ([flash-jetson-reserver-j4012-jetpack72.md](flash-jetson-reserver-j4012-jetpack72.md))
-> et **avant le passage en état RUN** (`scripts/harden-run.sh`).
+> et **avant le passage en état RUN** (`scripts/harden-run.sh`). Tout ce document
+> s'exécute **à distance**, depuis le PC de maintenance : le gel des paquets firmware et
+> l'installation de TigerVNC sont les deux seules étapes qui se font devant le boîtier.
 > Cible : *reServer Industrial J4012* (Orin NX 16 Go), L4T r39.2, Ubuntu 24.04 arm64.
 >
 > L'application tourne **en conteneur** en production. L'image est construite par la CI
@@ -15,12 +17,14 @@
 
 | Étape | Document |
 |---|---|
-| 1. Flash JetPack 7.2 | [flash-jetson-reserver-j4012-jetpack72.md](flash-jetson-reserver-j4012-jetpack72.md) |
-| 2. Matériel / OS (PoE, autosuspend, affichage, VNC, réseau caméras) | [scripts-deploiement.md](scripts-deploiement.md) § « Ordre d'installation recommandé » (étapes 1 à 5) |
-| **3. Dépendances + serveurs d'inférence + déploiement du conteneur** | **ce document** |
-| 4. IHM HTTPS (Caddy) + UFW | [scripts-deploiement.md](scripts-deploiement.md) § « IHM en HTTPS (Caddy) » |
-| 5. Passage en RUN + attestation de recette | `scripts/harden-run.sh`, `CYBER_AUDIT.md` |
-| 6. Mises à jour ultérieures / rollback | [maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md) |
+| 1. Flash JetPack 7.2 + IP de maintenance | [flash-jetson-reserver-j4012-jetpack72.md](flash-jetson-reserver-j4012-jetpack72.md) |
+| 2. Gel des paquets firmware (carte Seeed) — **avant tout apt** | [install-system-deps.md](install-system-deps.md) § « Carte porteuse Seeed » |
+| 3. Accès de maintenance (TigerVNC + UFW) — *dernière étape sur site* | [scripts-deploiement.md](scripts-deploiement.md) § « `install_vnc_jetson.sh` » |
+| 4. Matériel / OS (autosuspend, PoE, affichage, réseau caméras) | [scripts-deploiement.md](scripts-deploiement.md) § « Ordre d'installation recommandé » (étapes 3 à 6) |
+| **5. Dépendances + serveurs d'inférence + déploiement du conteneur** | **ce document** |
+| 6. IHM HTTPS (Caddy) + UFW | [scripts-deploiement.md](scripts-deploiement.md) § « IHM en HTTPS (Caddy) » |
+| 7. Passage en RUN + attestation de recette | `scripts/harden-run.sh`, `CYBER_AUDIT.md` |
+| 8. Mises à jour ultérieures / rollback | [maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md) |
 
 ---
 
