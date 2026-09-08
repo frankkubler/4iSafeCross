@@ -627,10 +627,10 @@ L'interface web sera accessible sur [http://localhost:5050](http://localhost:505
 
 ```sh
 # Déployer depuis le registry GitLab (demande le mot de passe GitLab)
-bash scripts/deploy-jetson.sh latest
+bash scripts/deploy-jetson.sh latest-arm64
 
 # Déployer un tag spécifique
-bash scripts/deploy-jetson.sh v1.2.0
+bash scripts/deploy-jetson.sh v3.0.0-arm64
 ```
 
 ### Build local (développement)

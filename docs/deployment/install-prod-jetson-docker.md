@@ -141,6 +141,10 @@ sudo chmod 750 /opt/4isafecross
 # depuis le PC de maintenance :
 #   scp docker-compose-arm64.yml user-4itec@192.168.3.122:/tmp/
 sudo cp /tmp/docker-compose-arm64.yml /opt/4isafecross/
+
+# Le fichier du dépôt pointe `latest-arm64` : le figer sur le tag de version livré
+sudo sed -i 's|:latest-arm64|:v3.0.0-arm64|' /opt/4isafecross/docker-compose-arm64.yml
+grep -n 'image:' /opt/4isafecross/docker-compose-arm64.yml
 ```
 
 > Le dépôt Git **n'a pas à être cloné** sur un boîtier de production : seuls le fichier
@@ -156,11 +160,11 @@ sudo cp /tmp/docker-compose-arm64.yml /opt/4isafecross/
 | Contexte | Tag |
 |---|---|
 | Tag Git (livraison) | `<tag>-arm64` **et** `latest-arm64` |
-| Branche `master` | `latest-arm64` |
+| Branche `main` | `latest-arm64` |
 | Autre branche | `<slug-de-branche>-arm64` |
 | Toute exécution | `<sha-court>-arm64` |
 
-**En production, on déploie un tag de version figé** (`v1.2.0-arm64`), jamais `latest-arm64` :
+**En production, on déploie un tag de version figé** (`v3.0.0-arm64`), jamais `latest-arm64` :
 `latest` rend le parc non reproductible et casse l'exigence d'identité de version
 (`CS-1141-01`). `latest-arm64` reste acceptable en mise au point.
 
@@ -179,11 +183,11 @@ echo "$GL_TOKEN" | sudo docker login registry.gitlab.4itec.ddns.net \
     -u <nom-du-deploy-token> --password-stdin
 unset GL_TOKEN
 
-sudo docker pull registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v1.2.0-arm64
+sudo docker pull registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64
 
 # Relever et consigner le digest — c'est LUI qui identifie la version déployée
 sudo docker image inspect --format '{{index .RepoDigests 0}}' \
-    registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v1.2.0-arm64
+    registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64
 ```
 
 > **Après le déploiement, se déconnecter du registry** :
@@ -204,14 +208,14 @@ L'image est transférée par support amovible, comme les paquets système
 
 ```bash
 # Sur la machine relais 4itec (connectée)
-docker pull registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v1.2.0-arm64
-docker save registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v1.2.0-arm64 \
-  -o 4isafecross_v1.2.0-arm64.tar
-sha256sum 4isafecross_v1.2.0-arm64.tar > 4isafecross_v1.2.0-arm64.tar.sha256
+docker pull registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64
+docker save registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64 \
+  -o 4isafecross_v3.0.0-arm64.tar
+sha256sum 4isafecross_v3.0.0-arm64.tar > 4isafecross_v3.0.0-arm64.tar.sha256
 
 # Sur le boîtier
-sha256sum -c /media/<support>/4isafecross_v1.2.0-arm64.tar.sha256   # doit être OK
-sudo docker load -i /media/<support>/4isafecross_v1.2.0-arm64.tar
+sha256sum -c /media/<support>/4isafecross_v3.0.0-arm64.tar.sha256   # doit être OK
+sudo docker load -i /media/<support>/4isafecross_v3.0.0-arm64.tar
 sudo docker images | grep 4isafecross
 ```
 
@@ -226,7 +230,7 @@ couche applicative ([maj-l4t-hors-ligne.md](maj-l4t-hors-ligne.md) §6.1).
 le contenu de l'image** : sans amorçage, `config/` est vide et l'application ne démarre pas.
 
 ```bash
-IMAGE=registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v1.2.0-arm64
+IMAGE=registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64
 
 sudo mkdir -p /data/4isafecross/{config,db,detections,dataset,logs}
 
@@ -387,11 +391,24 @@ sudo docker save "$(sudo docker inspect --format '{{.Config.Image}}' 4isafecross
   -o /media/<support>/backup/4isafecross_<tag_courant>-arm64.tar
 
 # 2. Charger/récupérer la nouvelle image (§3.2 ou §3.3), puis pointer le nouveau tag
-sudo sed -i 's|:v1\.2\.0-arm64|:v1.3.0-arm64|' docker-compose-arm64.yml
+sudo sed -i 's|:v3\.0\.0-arm64|:<nouveau-tag>-arm64|' docker-compose-arm64.yml
+grep -n 'image:' docker-compose-arm64.yml      # vérifier le tag effectivement référencé
 
 # 3. Recréer le conteneur — config/, db/, detections/, logs/ sont préservés (bind-mounts)
 sudo docker compose -f docker-compose-arm64.yml up -d
 ```
+
+> **La version affichée dans l'IHM suit l'image automatiquement** : elle provient de la
+> variable d'environnement `APP_VERSION`, injectée au build par la CI avec le tag Git
+> (`ARG APP_VERSION` dans le `Dockerfile`) et non de `config/config.ini` — ce dernier est
+> un bind-mount du site, figé au premier déploiement, qui resterait sur l'ancienne valeur.
+> Aucune édition manuelle n'est donc nécessaire après une mise à jour d'image.
+>
+> Relever la version réellement déployée, sans passer par l'IHM :
+> ```bash
+> sudo docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' 4isafecross
+> sudo docker exec 4isafecross printenv APP_VERSION
+> ```
 
 Rollback : remettre l'ancien tag dans le fichier compose et relancer `up -d`.
 Consigner l'opération au registre des mises à jour

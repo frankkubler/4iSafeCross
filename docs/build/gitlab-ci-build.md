@@ -68,15 +68,35 @@ Aucune variable manuelle n'est requise — GitLab injecte automatiquement les cr
 
 ## Image produite
 
+Tous les tags portent le suffixe d'architecture — il n'existe pas d'index multi-arch :
+
 ```
-registry.gitlab.4itec.ddns.net/frank-k/4isafecross:<sha>
-registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest
+registry.gitlab.4itec.ddns.net/frank-k/4isafecross:<sha-court>-arm64   # toute exécution
+registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest-arm64        # main et tags Git
+registry.gitlab.4itec.ddns.net/frank-k/4isafecross:<tag-git>-arm64     # tags Git seulement
 ```
+
+(idem en `-amd64`.) Un tag Git est donc **la seule façon d'obtenir une image de version
+figée** : sans lui, le registre ne contient que des SHA, `latest-*` et des tags de branche.
 
 L'image contient :
 - Les binaires Cython `.so` (code source supprimé)
 - Le runtime Python 3.12 (Ubuntu 24.04) + dépendances GStreamer/NVIDIA
 - `run.py` comme point d'entrée (non compilé, importe `app` depuis le `.so`)
+
+### Nettoyage automatique du registre
+
+Une politique d'expiration tourne quotidiennement (`keep_n: 10`, `older_than: 90d`,
+`name_regex: .*`). Les tags de version et `latest*` en sont **exclus** via
+`name_regex_keep` :
+
+```
+([vV]\d+\.\d+\.\d+.*|latest.*)
+```
+
+Les tags SHA et les tags de branche restent, eux, nettoyables. Ne pas retirer cette
+exclusion : une image de production doit rester récupérable au-delà de 90 jours
+(rollback, preuve d'identité de version `CS-1141-01`).
 
 ## Déploiement sur le Jetson
 
@@ -85,7 +105,7 @@ L'image contient :
 docker login registry.gitlab.4itec.ddns.net -u frank-k
 
 # Télécharger l'image
-docker pull registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest
+docker pull registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64
 
 # Lancer le conteneur
 docker run -d \
@@ -95,14 +115,14 @@ docker run -d \
   --privileged \
   -p 5000:5000 \
   -v /data/4isafecross:/app/data \
-  registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest
+  registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64
 ```
 
 Ou via le script automatisé :
 
 ```bash
-bash scripts/deploy-jetson.sh latest
-bash scripts/deploy-jetson.sh v1.2.0
+bash scripts/deploy-jetson.sh latest-arm64
+bash scripts/deploy-jetson.sh v3.0.0-arm64
 ```
 
 ## Dépannage

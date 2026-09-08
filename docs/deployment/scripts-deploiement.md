@@ -442,10 +442,10 @@ Déploiement automatisé de l'image Docker depuis le registry GitLab privé
 
 ```sh
 # Déployer le tag latest
-bash scripts/deploy-jetson.sh latest
+bash scripts/deploy-jetson.sh latest-arm64
 
 # Déployer un tag spécifique
-bash scripts/deploy-jetson.sh v1.2.0
+bash scripts/deploy-jetson.sh v3.0.0-arm64
 ```
 
 > ⚠️ **La référence de production est `docker-compose-arm64.yml`**, pas ce script : son
