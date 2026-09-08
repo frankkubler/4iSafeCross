@@ -111,12 +111,17 @@ Service **persistant** qui maintient à `1` le GPIO **`gpiochip2` / ligne `15`**
 RJ45 PoE fournissent du courant aux caméras IP. Le cinquième port (`LAN0`) n'est
 pas PoE.
 
-> ⚠️ **`--mode=signal` est obligatoire.** Sans lui, `gpioset` positionne la valeur
-> puis rend la main ; le kernel relâche alors la ligne et **le PSE n'alimente plus
-> aucun port** — c'est le comportement non défini documenté dans `gpioset --help`
-> (« the state of a GPIO line reverts to default when the last process referencing
-> the file descriptor exits »). Le process doit rester vivant, d'où l'absence de
-> `Type=oneshot` et la présence de `Restart=always`.
+> ⚠️ **`--mode=signal` rend l'état déterministe.** Sans lui, `gpioset` positionne la
+> valeur puis rend la main et le kernel relâche la ligne — état que libgpiod qualifie
+> de **non défini** (`gpioset --help` : « the state of a GPIO line reverts to default
+> when the last process referencing the file descriptor exits »). En pratique, le
+> pilote `pca953x` laisse la sortie haute après libération, et c'est ainsi que
+> l'ancien service `oneshot` (`gpioset gpiochip2 15=1` sans mode) fonctionne encore
+> sur les boîtiers en JetPack 6.2. Mais rien ne garantit cet effet de bord d'un kernel
+> à l'autre : le process reste donc vivant et tient la ligne, d'où l'absence de
+> `Type=oneshot` et la présence de `Restart=always`. Ce n'est pas un correctif de
+> panne — un boîtier qui n'alimente pas avec la ligne tenue a un autre problème
+> (voir le diagnostic ci-dessous).
 
 **Installation :**
 
@@ -134,8 +139,9 @@ gpioinfo gpiochip2 | grep PSE_PWR_EN           # "gpioset" comme consumer, [used
 sudo grep -i PSE_PWR_EN /sys/kernel/debug/gpio # out hi
 ```
 
-Si `gpioinfo` affiche `unused`, la ligne n'est tenue par personne : le PoE est
-alors éteint, quel qu'ait été l'état précédent.
+Si `gpioinfo` affiche `unused`, la ligne n'est tenue par personne : son niveau
+dépend alors d'un effet de bord du pilote, pas d'une commande — vérifier
+`/sys/kernel/debug/gpio` ou `i2cget -y -f 1 0x21 0x03` (bit 7).
 
 **Diagnostic** (constats relevés sur JetPack 7.2, `4isafecross-2`) :
 
@@ -149,6 +155,24 @@ alors éteint, quel qu'ait été l'état précédent.
 
 Les erreurs `pcieport … AER: Uncorrectable (Non-Fatal)` visibles au branchement
 d'un câble sont un bruit de fond de plateforme sans incidence sur le PoE.
+
+**Test de la chaîne d'alimentation** : `PSE_PG` (ligne 0) doit suivre l'enable —
+`0` quand `PSE_PWR_EN` est tenu bas, `1` quand il est haut :
+
+```sh
+sudo systemctl stop set-poe-gpio.service
+sudo gpioset --mode=time --sec=8 gpiochip2 15=0 & sleep 4; gpioget gpiochip2 0; wait   # → 0
+sudo systemctl start set-poe-gpio.service; sleep 4; gpioget gpiochip2 0                  # → 1
+```
+
+Le contrôleur des ports PoE **n'est pas sur I²C** (aucune adresse au-delà de
+l'expander `0x21` et de l'INA3221 `0x40` sur `i2c-1`) : il fonctionne en mode
+autonome, sans pilote, sous JetPack 6.2 comme 7.2. Si tous les points ci-dessus sont
+conformes et qu'aucun PD ne s'allume (caméra validée sur injecteur), **le défaut est
+matériel**, en aval du convertisseur 48 V — cas rencontré sur `4isafecross-2` en
+septembre 2026, avec un état logiciel strictement identique à un boîtier JP 6.2
+fonctionnel. Preuve définitive : échanger les modules Orin NX entre deux boîtiers, le
+défaut suit la carte porteuse. Contournement : injecteurs ou switch PoE externe.
 
 ---
 

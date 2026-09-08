@@ -3,10 +3,10 @@ Description=Activation PoE PSE reServer (GPIO PSE_PWR_EN)
 After=multi-user.target
 
 [Service]
-# --mode=signal est OBLIGATOIRE : sans lui gpioset rend la main, le kernel
-# relache la ligne et le PSE n'alimente plus aucun port (comportement non
-# defini documente dans "gpioset --help"). Le process doit rester vivant,
-# donc pas de Type=oneshot.
+# --mode=signal : le process reste vivant et tient la ligne. Sans lui gpioset
+# rend la main et le kernel relache la ligne ; en pratique le pilote pca953x
+# la laisse haute (c'est ainsi que l'ancien oneshot fonctionne en JP 6.2),
+# mais libgpiod qualifie cet etat de non defini. On ne s'y fie pas.
 ExecStart=/usr/bin/gpioset --mode=signal gpiochip2 15=1
 Restart=always
 RestartSec=5

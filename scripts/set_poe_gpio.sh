@@ -6,8 +6,9 @@
 # Ce script sert au test manuel : il ne rend pas la main, et Ctrl+C coupe
 # l'alimentation des cameras.
 #
-# --mode=signal est obligatoire : sans lui gpioset se termine, le kernel
-# relache la ligne et le PSE n'alimente plus aucun port.
+# --mode=signal : le process tient la ligne. Sans lui gpioset se termine et
+# la ligne est relachee ; le pilote pca953x la laisse haute en pratique, mais
+# libgpiod qualifie cet etat de non defini, on ne s'y fie pas.
 set -euo pipefail
 
 exec gpioset --mode=signal gpiochip2 15=1
