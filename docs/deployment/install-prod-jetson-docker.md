@@ -443,6 +443,91 @@ boîtier (le conteneur créé par `docker run` n'est pas géré par `docker comp
 | Zones de sécurité perdues après une MAJ | Bind-mounts absents (conteneur lancé sans `-v /data/...`) | Relancer via le fichier compose ; restaurer `config/` depuis la sauvegarde |
 | `nvidia` absent de `docker info` | `nvidia-container-toolkit` non configuré | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` |
 | `apt` bloqué (`2 not fully installed`) | `postinst` de `nvidia-l4t-bootloader` (carte Seeed) | [install-system-deps.md](install-system-deps.md) § « Carte porteuse Seeed » |
+| `createContainer hook #2: exit status 2` + `panic: slice bounds out of range` dans `cudacompat` | Hook CDI `cudacompat` du container-toolkit : il parse l'en-tête ELF de `/usr/local/cuda/compat` de l'image et panique | Voir § 12.1 ci-dessous — image ≥ `v3.0.1-arm64`, ou désactivation du hook |
+
+
+### 12.1 Panique du hook `cudacompat` au démarrage du conteneur
+
+```
+Error response from daemon: failed to create task for container: ...
+error running createContainer hook #2: exit status 2, stderr: panic: runtime error:
+slice bounds out of range [:73] with capacity 71
+  .../nvidia-cdi-hook/cudacompat.GetCUDACompatElfHeaderFromReader
+```
+
+**Cause.** L'image applicative dérive de `nvcr.io/nvidia/cuda:13.2.1-runtime-ubuntu24.04`,
+qui embarque un répertoire de *forward compatibility* CUDA. **Sur arm64 il s'appelle
+`/usr/local/cuda/compat_orin`**, et non `compat` comme sur sbsa/x86 — c'est le piège de
+cette panne. Le container-toolkit le détecte et lance le hook `cudacompat`, qui lit
+l'en-tête ELF de la bibliothèque pour comparer sa version à celle du driver hôte. Ce
+parsing échoue et le hook **panique sans être rattrapé** : la création du conteneur est
+refusée, l'application n'est jamais lancée.
+
+Ces bibliothèques ne servent à rien ici : le driver CUDA est injecté depuis le BSP L4T de
+l'hôte (`/etc/nvidia-container-runtime/host-files-for-container.d/drivers.csv`), et cette
+image n'embarque aucun framework d'inférence. L'hôte, lui, n'a pas de répertoire de
+compat — le fichier fautif vient donc bien de l'image.
+
+**Correctif retenu.** Les images `v3.0.1-arm64` et suivantes suppriment le répertoire à la
+construction — rien à faire sur le boîtier, il suffit de déployer cette version.
+
+**Contournement sur une image antérieure** (`v3.0.0-arm64`) : refabriquer localement
+l'image sans le répertoire fautif. Le build est natif sur le boîtier, donc quasi
+instantané (une seule couche de suppression).
+
+```bash
+cd /opt/4isafecross
+
+# Le build ne doit PAS passer par le runtime nvidia, sinon il déclenche le même hook
+docker info | grep -i 'Default Runtime'      # doit indiquer « runc »
+
+# Dockerfile sur stdin, sans contexte de build : /opt/4isafecross (avec .env et
+# licenses/) n'est pas envoyé au daemon.
+printf 'FROM registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64\nRUN rm -rf /usr/local/cuda/compat*\n' \
+  | sudo docker build -t 4isafecross:v3.0.0-nocompat -
+
+sudo sed -i 's|image: .*4isafecross:.*|image: 4isafecross:v3.0.0-nocompat|' docker-compose-arm64.yml
+sudo docker compose -f docker-compose-arm64.yml up -d
+```
+
+Si `Default Runtime` vaut `nvidia`, le `RUN` échouerait de la même façon : passer alors
+par un conteneur explicitement en `runc`, puis figer le résultat.
+
+```bash
+sudo docker run --runtime runc --name fixcompat --entrypoint rm \
+  registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64 -rf /usr/local/cuda/compat_orin
+sudo docker commit --change 'ENTRYPOINT []' \
+  --change 'CMD ["/app/.venv/bin/python","run.py"]' \
+  fixcompat 4isafecross:v3.0.0-nocompat
+sudo docker rm fixcompat
+```
+
+> ⚠️ **Deux contournements qui ne marchent PAS** (vérifiés sur toolkit 1.19.1 /
+> JetPack 7.2, à ne pas retenter) :
+>
+> - `nvidia-ctk config --in-place --set features.disable-cuda-compat-lib-hook=true`
+>   puis redémarrage de Docker : la clé est bien écrite dans
+>   `/etc/nvidia-container-runtime/config.toml`, le hook s'exécute quand même. Avec
+>   `mode = "auto"` sur Jetson, la spécification CDI est construite à la volée par le
+>   runtime et il n'existe aucun `/etc/cdi/nvidia.yaml` à régénérer (seul un
+>   `nvidia-pva.yaml` est présent).
+> - Masquer le répertoire par un `tmpfs` dans le fichier compose : sans effet. Le hook
+>   n'ouvre pas le chemin dans le namespace de montage du conteneur, mais le rootfs par
+>   son chemin sur l'hôte (`root.path` de l'état OCI) — le montage ne le masque donc pas.
+>
+> - Supprimer `/usr/local/cuda/compat` **sans le glob** : sans effet, ce chemin n'existe
+>   pas sur arm64. Vérifier le nom réel avant tout, il varie selon l'architecture :
+>   `docker run --rm --runtime runc --entrypoint ls <image> -la /usr/local/cuda/`
+>
+> Le répertoire doit réellement disparaître **de l'image**, ce que fait la `v3.0.1`.
+
+Pour confirmer le diagnostic, l'image démarre normalement **sans** le runtime NVIDIA —
+le hook n'est alors pas appelé :
+
+```bash
+sudo docker run --rm --entrypoint ls \
+  registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64 -la /usr/local/cuda/
+```
 
 ---
 

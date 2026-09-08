@@ -268,6 +268,20 @@ CMD ["/app/.venv/bin/python", "run.py"]
 FROM nvcr.io/nvidia/cuda:13.2.1-runtime-ubuntu24.04 AS final-arm64
 
 
+# L'image CUDA de base embarque un répertoire de forward compatibility CUDA — sur
+# arm64 il s'appelle `compat_orin` (et non `compat` comme sur sbsa/x86). Sur Jetson,
+# le driver CUDA vient du BSP L4T monté par le runtime nvidia depuis drivers.csv :
+# ces bibliothèques sont inutilisables, et cette image n'embarque de toute façon
+# aucun framework d'inférence. Pire, leur simple présence déclenche le hook CDI
+# `nvidia-cdi-hook cudacompat`, qui panique en lisant leur en-tête ELF et interdit
+# toute création de conteneur :
+#   createContainer hook #2: exit status 2
+#   panic: runtime error: slice bounds out of range [:73] with capacity 71
+#   .../cudacompat.GetCUDACompatElfHeaderFromReader
+# Le glob couvre `compat` et `compat_orin` : le hook n'a alors plus de cible.
+RUN rm -rf /usr/local/cuda/compat*
+
+
 WORKDIR /app
 
 
