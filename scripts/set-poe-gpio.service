@@ -1,10 +1,15 @@
 [Unit]
-Description=Set POE GPIO at boot
+Description=Activation PoE PSE reServer (GPIO PSE_PWR_EN)
 After=multi-user.target
 
 [Service]
-Type=oneshot
-ExecStart=/usr/local/bin/set_poe_gpio.sh
+# --mode=signal est OBLIGATOIRE : sans lui gpioset rend la main, le kernel
+# relache la ligne et le PSE n'alimente plus aucun port (comportement non
+# defini documente dans "gpioset --help"). Le process doit rester vivant,
+# donc pas de Type=oneshot.
+ExecStart=/usr/bin/gpioset --mode=signal gpiochip2 15=1
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

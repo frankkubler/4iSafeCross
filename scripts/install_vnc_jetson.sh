@@ -65,9 +65,11 @@ apt update -q
 # dizaines d'applications annexes (greffons, éditeurs, utilitaires) inutiles à une
 # session de maintenance — autant de paquets à suivre et à corriger (CS-123-03).
 # `xterm` est conservé volontairement : terminal de secours si `startxfce4` échoue.
+# python3-systemd : REQUIS par `backend = systemd` de la jail Fail2ban ci-dessous.
+# Sans lui, fail2ban ne sait pas lire le journal et la jail ne démarre pas.
 apt install -y dbus-x11 tigervnc-standalone-server \
     xfce4-session xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-terminal xterm \
-    ufw fail2ban
+    ufw fail2ban python3-systemd
 echo "    OK"
 
 echo "[2/6] Configuration de la session XFCE pour VNC..."
@@ -129,7 +131,7 @@ User=$CURRENT_USER
 WorkingDirectory=$USER_HOME
 KillMode=mixed
 TimeoutStopSec=10
-ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
+ExecStartPre=-/usr/bin/vncserver -kill :%i
 ExecStart=/usr/bin/vncserver -fg :%i -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes X509Vnc,RA2ne -xstartup $USER_HOME/.vnc/xstartup
 ExecStop=-/usr/bin/timeout 8 /usr/bin/vncserver -kill :%i
 ExecStopPost=-/usr/bin/pkill -KILL -f "Xtigervnc.*:%i|Xvnc.*:%i|vncserver.*:%i"
@@ -144,10 +146,15 @@ systemctl enable "vncserver@${VNC_DISPLAY}.service"
 echo "    OK"
 
 echo "[4/6] Configuration de Fail2ban (protection VNC)..."
+# Le tag <HOST> est OBLIGATOIRE dans failregex : c'est lui qui indique à Fail2ban
+# quelle adresse bannir. Sans <HOST>, Fail2ban REJETTE le filtre
+# (« No 'host' group in ... ») et la jail ne démarre pas — protection silencieusement
+# absente. Format journalisé par Xvnc :
+#   Connections: closed: 192.168.3.10::49246 (Authentication failure)
 cat > /etc/fail2ban/filter.d/tigervnc-auth.conf << 'F2B_FILTER'
 [Definition]
-# Xvnc / TigerVNC auth failures seen in journald when running under systemd
-failregex = ^.*(?:authentication failed|AuthProcessClient: authentication failed).*$
+failregex = ^.*Connections:\s+closed:\s+<HOST>::\d+\s+\(.*[Aa]uthentication\s+fail.*\)\s*$
+            ^.*[Aa]uthentication\s+fail\w*.*\bfrom\b\s+<HOST>.*$
 ignoreregex =
 F2B_FILTER
 
@@ -165,8 +172,22 @@ banaction = ufw
 F2B_JAIL
 
 systemctl enable fail2ban
-systemctl restart fail2ban
-echo "    OK"
+# Un échec de Fail2ban ne doit PAS interrompre le script (set -e) : la suite
+# configure le pare-feu UFW, qui est la protection prioritaire.
+if systemctl restart fail2ban; then
+    sleep 2
+    if fail2ban-client status tigervnc-auth >/dev/null 2>&1; then
+        echo "    OK (jail tigervnc-auth active)"
+    else
+        echo "    ⚠️  Fail2ban démarré mais la jail 'tigervnc-auth' est INACTIVE."
+        echo "        Diagnostiquer le filtre :"
+        echo "        sudo fail2ban-regex \"systemd-journal[_SYSTEMD_UNIT=vncserver@${VNC_DISPLAY}.service]\" \\"
+        echo "             /etc/fail2ban/filter.d/tigervnc-auth.conf"
+    fi
+else
+    echo "    ⚠️  Fail2ban n'a pas redémarré — installation poursuivie (UFW reste prioritaire)."
+    systemctl status fail2ban --no-pager -l 2>&1 | tail -15 || true
+fi
 
 echo "[5/6] Configuration du pare-feu..."
 ufw --force delete allow 3389/tcp 2>/dev/null || true

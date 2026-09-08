@@ -106,29 +106,49 @@ journalctl -u 4isafecross.service -f
 
 ### `set-poe-gpio.service`
 
-Service oneshot qui exécute [`set_poe_gpio.sh`](../../scripts/set_poe_gpio.sh) au
-boot pour activer l'alimentation PoE via GPIO.
+Service **persistant** qui maintient à `1` le GPIO **`gpiochip2` / ligne `15`**
+(`PSE_PWR_EN`) — nécessaire sur le reServer Industrial pour que les quatre ports
+RJ45 PoE fournissent du courant aux caméras IP. Le cinquième port (`LAN0`) n'est
+pas PoE.
 
-Le script positionne le GPIO **`gpiochip2` / ligne `15`** à `1` — nécessaire sur
-le reServer Industrial pour que les ports RJ45 PoE (eth1–eth4) fournissent du
-courant aux caméras IP.
-
-> ⚠️ Sans ce service, les caméras alimentées par PoE ne reçoivent pas de courant
-> après un redémarrage du boîtier.
+> ⚠️ **`--mode=signal` est obligatoire.** Sans lui, `gpioset` positionne la valeur
+> puis rend la main ; le kernel relâche alors la ligne et **le PSE n'alimente plus
+> aucun port** — c'est le comportement non défini documenté dans `gpioset --help`
+> (« the state of a GPIO line reverts to default when the last process referencing
+> the file descriptor exits »). Le process doit rester vivant, d'où l'absence de
+> `Type=oneshot` et la présence de `Restart=always`.
 
 **Installation :**
 
 ```sh
-# 1. Copier le script dans le répertoire système
-sudo cp scripts/set_poe_gpio.sh /usr/local/bin/set_poe_gpio.sh
-sudo chmod +x /usr/local/bin/set_poe_gpio.sh
-
-# 2. Installer et activer le service
 sudo cp scripts/set-poe-gpio.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable set-poe-gpio.service
-sudo systemctl start set-poe-gpio.service
+sudo systemctl enable --now set-poe-gpio.service
 ```
+
+**Vérification** (les trois doivent concorder) :
+
+```sh
+systemctl status set-poe-gpio.service          # active (running), PID gpioset vivant
+gpioinfo gpiochip2 | grep PSE_PWR_EN           # "gpioset" comme consumer, [used]
+sudo grep -i PSE_PWR_EN /sys/kernel/debug/gpio # out hi
+```
+
+Si `gpioinfo` affiche `unused`, la ligne n'est tenue par personne : le PoE est
+alors éteint, quel qu'ait été l'état précédent.
+
+**Diagnostic** (constats relevés sur JetPack 7.2, `4isafecross-2`) :
+
+| Point | Commande | Attendu |
+|---|---|---|
+| Version des outils | `gpioset --version` | libgpiod **1.6.3** sous JP 7.2 (Ubuntu 24.04) — la syntaxe positionnelle reste valide, contrairement à libgpiod 2.x |
+| Ligne PoE | `gpiofind PSE_PWR_EN` | `gpiochip2 15` |
+| Contrôleur PSE | `gpioget gpiochip2 0` (`PSE_PG`) | `1` — lecture non intrusive, c'est une entrée |
+| Registres de l'expander | `sudo i2cget -y -f 1 0x21 0x03` (PCA9535 à `0x21` sur `i2c-1`) | bit 7 = 1 (sortie haute) |
+| Ports PoE | — | les quatre `lan743x` (`enP7p3s0`, `enP7p4s0`, `enP7p5s0`, `enP1p1s0`) ; `ethtool -p` n'est pas supporté par ce pilote, mapper les connecteurs via `journalctl -k -f \| grep -i link` |
+
+Les erreurs `pcieport … AER: Uncorrectable (Non-Fatal)` visibles au branchement
+d'un câble sont un bruit de fond de plateforme sans incidence sur le PoE.
 
 ---
 
@@ -456,15 +476,20 @@ sudo reboot
 
 ### `set_poe_gpio.sh`
 
-Positionne le GPIO `gpiochip2 / ligne 15` à `1` via la commande `gpioset`.
-Alimente les ports PoE (eth1–eth4) du reServer Industrial pour les caméras IP.
+Maintient à `1` le GPIO `gpiochip2 / ligne 15` (`PSE_PWR_EN`) et alimente les
+quatre ports PoE du reServer Industrial pour les caméras IP.
 
-Géré automatiquement au boot via `set-poe-gpio.service`. Peut aussi être exécuté
-manuellement :
+En exploitation, cette fonction est assurée par `set-poe-gpio.service`, qui
+appelle `gpioset` directement. Ce script sert au **test manuel** :
 
 ```sh
-sudo bash scripts/set_poe_gpio.sh
+sudo bash scripts/set_poe_gpio.sh    # ne rend pas la main
 ```
+
+> ⚠️ Il reste au premier plan tant que le PoE doit être alimenté, et **`Ctrl+C`
+> coupe l'alimentation des caméras**. Arrêter d'abord `set-poe-gpio.service`
+> avant de l'utiliser : deux processus ne peuvent pas détenir la même ligne, le
+> second échouerait avec « Device or resource busy ».
 
 ---
 
@@ -495,7 +520,10 @@ graphique distant (VNC sur port `5999`, display `:99`).
 - Installe **UFW** (`deny incoming` / `allow outgoing`) et n'ouvre `5999/tcp` que
   depuis le sous-réseau de maintenance.
 - Installe et configure **Fail2ban** (jail `tigervnc-auth`, backend systemd,
-  action UFW).
+  action UFW), avec `python3-systemd` — requis par le backend `systemd`, sans lui la
+  jail ne démarre pas. Le script **vérifie que la jail est réellement active** après
+  démarrage et prévient sinon ; un échec de Fail2ban n'interrompt pas l'installation,
+  UFW restant la protection prioritaire.
 - Configure le clavier AZERTY (`setxkbmap fr`).
 - En exécution distante SSH : ajoute une règle anti-lockout pour le port `22`.
 - Nettoie les anciennes règles UFW (`3389`, `5999` global) avant d'appliquer les
@@ -594,8 +622,18 @@ vncviewer -SecurityTypes X509Vnc,RA2ne 127.0.0.1:5999   # → doit aboutir
 
 # 4. Vérifier UFW et Fail2ban
 sudo ufw status numbered
-sudo fail2ban-client status tigervnc-auth
+sudo fail2ban-client status tigervnc-auth      # doit lister la jail, pas « Sorry but... »
+
+# 5. Contrôler que le filtre reconnaît bien les échecs d'authentification réels
+#    (après quelques tentatives ratées volontaires)
+sudo fail2ban-regex "systemd-journal[_SYSTEMD_UNIT=vncserver@99.service]" \
+     /etc/fail2ban/filter.d/tigervnc-auth.conf
 ```
+
+> Le `failregex` du filtre **doit contenir le tag `<HOST>`** : c'est lui qui désigne
+> l'adresse à bannir. Sans ce tag, Fail2ban rejette le filtre (« No 'host' group ») et la
+> jail ne démarre pas — le service tourne, mais **aucune tentative n'est bloquée**. D'où
+> le contrôle n° 4 : ne jamais supposer la protection active sans l'avoir vérifiée.
 
 Côté client (Remmina / TigerVNC viewer) : **activer le chiffrement**
 (TLS/X509 ou RSA-AES) ; refuser toute connexion « VNC » non chiffrée.
