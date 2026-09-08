@@ -191,7 +191,13 @@ MOTION_GAUSSIAN_BLUR = config.getboolean('APP', 'MOTION_GAUSSIAN_BLUR', fallback
 MOTION_ASPECT_FILTER = config.getboolean('APP', 'MOTION_ASPECT_FILTER', fallback=False)
 MOTION_MIN_SINGLE_CONTOUR = config.getint('APP', 'MOTION_MIN_SINGLE_CONTOUR', fallback=1500)
 APP_NAME = config.get('APP', 'APP_NAME')
-APP_VERSION = config.get('APP', 'APP_VERSION')
+# La version identifie l'IMAGE, pas le site. Elle est injectée au build
+# (ARG APP_VERSION -> ENV, voir Dockerfile et .gitlab-ci.yml) et prime donc sur
+# config.ini : ce dernier est un bind-mount depuis /data/4isafecross/config, figé
+# au premier déploiement, qui resterait sur l'ancienne valeur après une mise à jour
+# d'image et afficherait une version fausse (CS-1141-01).
+# Le repli config.ini sert l'exécution depuis les sources (dev, service systemd).
+APP_VERSION = os.environ.get('APP_VERSION') or config.get('APP', 'APP_VERSION', fallback='dev')
 INF_THRESHOLD = config.getfloat('APP', 'INF_THRESHOLD')
 # Credentials RTSP : lus depuis les variables d'environnement en priorité.
 # Exporter avant de lancer l'application :

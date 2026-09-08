@@ -243,6 +243,13 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
 
+# Identité de version de l'image (CS-1141-01). Renseignée par la CI avec le tag Git ;
+# `dev` en build local. Prime sur config.ini, qui est un bind-mount du site et
+# resterait sur l'ancienne valeur après une mise à jour d'image.
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+
 
 EXPOSE 5050
 
@@ -333,6 +340,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
 # Nécessaire pour que le runtime nvidia monte les libs vidéo (nvv4l2, NVENC/NVDEC)
 ENV NVIDIA_DRIVER_CAPABILITIES=all
+
+# Identité de version de l'image (CS-1141-01) — voir l'étage final-amd64.
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+LABEL org.opencontainers.image.version="${APP_VERSION}"
 
 
 EXPOSE 5050
