@@ -1,6 +1,9 @@
 services:
   app:
-    image: registry.gitlab.4itec.ddns.net/frank-k/4isafecross:latest-amd64
+    # Tag deploye : SAFECROSS_TAG, ecrit dans .env par scripts/deploy-jetson.sh
+    # (docker compose lit .env tout seul). Defaut latest-amd64 = mise au point ;
+    # en production, un tag fige v<x.y.z>-amd64 (CS-1141-01).
+    image: registry.gitlab.4itec.ddns.net/frank-k/4isafecross:${SAFECROSS_TAG:-latest-amd64}
     container_name: 4isafecross
     restart: unless-stopped
     network_mode: host

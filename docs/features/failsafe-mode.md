@@ -176,6 +176,30 @@ la normale, `_delayed_off_relay` voyait `relay_on = False` et n'éteignait jamai
 🔒 Watchdog fail-safe démarré - Surveillance active
 ```
 
+### Caméra absente au démarrage
+```
+Ping RTSP échoué pour rtsp://***@192.168.0.60:554/stream1 (tentative 1)
+Ping RTSP OK pour rtsp://***@192.168.0.61:554/stream1 (tentative 1)
+Caméra 0 (192.168.0.60) absente au démarrage : conservée à l'index 0 (zones _cam0), reconnexion en boucle, relais de ses zones sous fail-safe.
+Caméras (index = position dans config.ini) : 0=192.168.0.60, 1=192.168.0.61
+⚠️  FAIL-SAFE caméra 0 : aucune image depuis 30s - relais [0, 1] forcés ON (zones de cette caméra)
+```
+
+**L'index d'une caméra est sa position dans `[RTSP] HOST` de `config.ini`**, et rien
+d'autre. C'est lui que portent les zones (`zone*_cam<i>`), les masques, les relais, la
+vue « Camera i+1 » de l'IHM, l'éditeur de zones et le fail-safe par caméra. Une caméra
+absente au démarrage **garde sa place** : son pipeline est relancé en boucle jusqu'au
+retour du flux, et d'ici là le watchdog force les relais de ses zones — elle n'est
+jamais hors surveillance. L'IHM affiche l'hôte à côté de « Camera N » pour que
+l'opérateur voie quelle caméra il regarde.
+
+> Avant ce correctif (v3.0.2 et antérieures), le démarrage ne conservait que les caméras
+> ayant répondu, **dans l'ordre où elles répondaient** : la première devenait l'index 0
+> et héritait des zones, relais et vue de la caméra configurée en premier — un démarrage
+> sur deux avec deux caméras de latence voisine, et systématiquement si la première était
+> éteinte. Une zone dessinée dans l'éditeur pendant un tel démarrage était enregistrée
+> sous le mauvais `_cam`. Tests : `test_camera_order.py`.
+
 ### Fonctionnement Normal
 ```
 [DEBUG] Heartbeat mis à jour - Application opérationnelle

@@ -439,20 +439,36 @@ en local sur le boîtier), soit un **tunnel SSH** :
 
 ### `deploy-jetson.sh`
 
-Déploiement automatisé de l'image Docker depuis le registry GitLab privé
-`registry.gitlab.4itec.ddns.net/frank-k/4isafecross`.
+Déploiement de l'image Docker depuis le registry GitLab privé
+`registry.gitlab.4itec.ddns.net/frank-k/4isafecross`, **en pilotant `docker compose`** :
+le conteneur créé est celui de `docker-compose-arm64.yml`, sans divergence d'options.
 
 **Fonctionnement :**
-1. Vérifie la présence de Docker et du runtime NVIDIA.
-2. Arrête et supprime l'ancien conteneur `4isafecross` s'il existe.
-3. Se connecte au registry GitLab (`docker login`).
-4. Télécharge la nouvelle image (`docker pull`).
-5. Lance le conteneur avec les options de production.
+1. Localise le fichier compose, complète le suffixe `-arm64` du tag s'il manque.
+2. Vérifie Docker, le runtime NVIDIA, la présence de `.env` et de `SAFECROSS_AUTH_*`
+   (CS-1144-01) ; écrit le tag déployé dans `.env` (`SAFECROSS_TAG`).
+3. Retire un éventuel conteneur `4isafecross` créé hors compose (ancien `docker run`).
+4. Se connecte au registry — deploy token **lu sur stdin** (jamais en argument ni en
+   variable d'environnement) — et `docker compose pull`. `OFFLINE=1` saute ces deux
+   étapes et vérifie que l'image a été chargée localement (`docker load`).
+5. Amorce `/data/4isafecross/{config,db}` depuis l'image au **premier** déploiement
+   seulement (un bind-mount vide masquerait le contenu de l'image).
+6. `docker compose up -d`, attente du healthcheck, relevé du **digest** (identité de
+   version, CS-1141-01), `docker logout` — y compris si une étape a échoué.
 
-**Options de lancement du conteneur :**
+**Usage :**
 
-| Option | Valeur |
-|---|---|
+```sh
+./scripts/deploy-jetson.sh v3.0.1-arm64             # version figée — mode nominal
+./scripts/deploy-jetson.sh                          # latest-arm64 (mise au point)
+OFFLINE=1 ./scripts/deploy-jetson.sh v3.0.1-arm64   # boîtier livré, sans registry
+```
+
+Les options du conteneur ne sont plus dans le script : elles sont **uniquement** dans
+[`docker-compose-arm64.yml`](../../docker-compose-arm64.yml), seule source de vérité.
+Voir [install-prod-jetson-docker.md](install-prod-jetson-docker.md) § 9 et § 11.
+
+---|---|
 | Runtime | `--runtime nvidia` |
 | Redémarrage | `--restart unless-stopped` |
 | Réseau | `--network host` |

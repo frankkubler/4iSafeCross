@@ -416,16 +416,25 @@ Consigner l'opération au registre des mises à jour
 
 ---
 
-## 11. Alternative scriptée — `scripts/deploy-jetson.sh`
+## 11. Déploiement scripté — `scripts/deploy-jetson.sh`
 
-[`deploy-jetson.sh`](../../scripts/deploy-jetson.sh) automatise login + pull + amorçage de
-`/data` + lancement, mais avec un **`docker run` dont les options divergent du fichier
-compose** : il monte `/dev` en entier au lieu de la liste `devices:`, et n'applique ni
-`ipc: host`, ni `runtime`/`deploy` GPU déclaratif, ni les montages `enctune`/`argus`.
+[`deploy-jetson.sh`](../../scripts/deploy-jetson.sh) **pilote `docker compose`** : il
+enchaîne exactement les gestes des § 3.2, 4, 5 et 9 — login registry (jeton lu sur stdin),
+`compose pull`, amorçage de `/data/4isafecross` au premier déploiement, contrôle de
+`.env`, `compose up -d`, attente du healthcheck, relevé du digest, `docker logout`.
+Le conteneur qu'il produit **est** celui du fichier compose : mêmes périphériques, mêmes
+montages, même rotation de logs. Il n'y a plus deux méthodes, il y en a une, scriptée.
 
-**La référence de production est le fichier compose** (§9). `deploy-jetson.sh` reste utile
-pour un déploiement rapide en mise au point ; ne pas mélanger les deux méthodes sur un même
-boîtier (le conteneur créé par `docker run` n'est pas géré par `docker compose`).
+```bash
+cd /opt/4isafecross
+./scripts/deploy-jetson.sh v3.0.1-arm64            # connecté (mise au point)
+OFFLINE=1 ./scripts/deploy-jetson.sh v3.0.1-arm64  # boîtier livré, image chargée par docker load (§ 3.3)
+```
+
+Le tag déployé est écrit dans `.env` (`SAFECROSS_TAG`), que `docker compose` lit
+automatiquement : les `compose ps` / `logs` / `up` ultérieurs visent la même image. Un
+conteneur `4isafecross` hérité d'un ancien `docker run` est retiré au passage, sinon il
+bloquerait `compose up` par collision de nom.
 
 ---
 
@@ -435,6 +444,7 @@ boîtier (le conteneur créé par `docker run` n'est pas géré par `docker comp
 |---|---|---|
 | `unauthorized: authentication required` au `pull` | Deploy token expiré, révoqué ou mauvaise portée | Regénérer un token `read_registry`, refaire `docker login` |
 | `no such host: registry.gitlab.4itec.ddns.net` | Boîtier hors ligne (état RUN normal) | Passer par `docker save`/`load` (§3.3) |
+| Détections et zones affichées sur la **mauvaise caméra** (la vue « Camera 1 » montre la .61 avec les zones de `cam0`), relais déclenchés à contretemps | Image antérieure au correctif d'ordre des caméras : l'index suivait l'ordre de réponse RTSP au démarrage, pas `config.ini` | Déployer une image récente ; vérifier le libellé `Camera N — <hôte>` de chaque vue, et le log `Caméras (index = position dans config.ini)`. Si une zone a été enregistrée sous le mauvais `_cam` pendant un tel démarrage, la redessiner ([failsafe-mode.md](../features/failsafe-mode.md), « Caméra absente au démarrage ») |
 | `error gathering device information … /dev/video0` | Nœud vidéo absent | Commenter la ligne dans `devices:` (§8) |
 | L'application s'arrête : `Licence invalide … destinée à la machine '…'` | Licence générée pour un autre `machine-id` | Regénérer la licence avec le `machine-id` du boîtier (§6) |
 | L'application s'arrête au démarrage sans erreur de licence | `SAFECROSS_AUTH_USER`/`PASSWORD` absents de `.env` | Compléter `.env` (§5) |

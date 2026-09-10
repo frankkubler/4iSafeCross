@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template
 
 from src.camera_manager import redact_rtsp_url
+from src.core.camera_order import rtsp_host
 from src.core.state import state
 from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, OBJECT_COLORS,
                              NUM_RELAYS,
@@ -47,6 +48,7 @@ def index():
             # URL rédigée : le template n'utilise que 'idx', et cette page est
             # servie sans authentification tant que SAFECROSS_AUTH_* n'est pas défini.
             'id': redact_rtsp_url(cam_id),
+            'host': rtsp_host(cam_id),  # affiché à côté de « Camera N » : l'opérateur voit quelle caméra il regarde
             'idx': idx,
             'white_pixels_threshold': threshold,
             'varThreshold': var_threshold,
@@ -70,7 +72,7 @@ def zone_editor(cid):
     """Page d'édition visuelle des zones pour une caméra."""
     if cid < 0 or cid >= len(state.cam_ids):
         return "Caméra inconnue", 404
-    cam_name = f"Camera {cid + 1}"
+    cam_name = f"Camera {cid + 1} — {rtsp_host(state.cam_ids[cid])}"
     return render_template(
         'zone_editor.html',
         cid=cid,
