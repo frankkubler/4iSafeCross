@@ -1,144 +1,202 @@
 #!/bin/bash
-# Script de deploiement automatique pour Jetson Orin NX
-# Usage: ./deploy.sh [tag]
-# Exemple: ./deploy.sh latest
-#          ./deploy.sh v1.0.0
+# Deploiement de 4iSafeCross sur la Jetson cible — PILOTE docker compose.
+#
+# La reference de production est docker-compose-arm64.yml : ce script ne lance
+# plus de « docker run » avec ses propres options (qui divergeaient du compose :
+# /dev entier, pas de ipc: host, pas d'argus/enctune, pas de rotation des logs).
+# Il enchaine ce qu'un operateur ferait a la main, sans rien oublier :
+#   login registry (jeton sur stdin) -> pull -> amorcage de /data -> controles
+#   .env -> docker compose up -d -> attente du healthcheck -> logout.
+#
+# Usage :
+#   ./scripts/deploy-jetson.sh v3.0.1-arm64     # version figee — mode nominal
+#   TAG=v3.0.1-arm64 ./scripts/deploy-jetson.sh # equivalent
+#   ./scripts/deploy-jetson.sh                  # latest-arm64 (mise au point)
+# Le suffixe -arm64 est ajoute s'il manque (la CI publie <tag>-arm64).
+#
+# Mode hors ligne (boitier livre, sans acces Internet — cas nominal en RUN) :
+#   OFFLINE=1 ./scripts/deploy-jetson.sh v3.0.1-arm64
+# L'image doit avoir ete chargee depuis le support amovible :
+#   sudo docker load -i <support>/4isafecross_v3.0.1-arm64.tar
+# Aucun contact avec le registry n'est alors tente (install-prod § 3.3).
+#
+# Convention (install-prod-jetson-docker.md § 3.2) : le deploy token est lu sur
+# stdin — jamais en argument ni en variable d'environnement (historique shell,
+# /proc/<pid>/environ) — et la session registry est refermee en sortant, meme
+# en cas d'erreur : ~/.docker/config.json stocke le jeton en base64, pas chiffre,
+# et un boitier livre ne doit conserver aucun acces au registry (CS-127-01/02).
+# Le digest de l'image deployee est releve : c'est lui qui identifie la version
+# en production (CS-1141-01), pas le tag.
 
-set -e
+set -euo pipefail
 
-# Configuration
-REGISTRY="registry.gitlab.4itec.ddns.net"
+REGISTRY="${PACKAGE_REGISTRY_HOST:-registry.gitlab.4itec.ddns.net}"
 IMAGE_NAME="frank-k/4isafecross"
 CONTAINER_NAME="4isafecross"
-TAG="${1:-latest}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose-arm64.yml}"
+DATA_DIR="/data/4isafecross"
+TAG="${1:-${TAG:-latest-arm64}}"
+OFFLINE="${OFFLINE:-0}"
 
-# Permet la surcharge depuis l'environnement (ex: .bashrc)
-REGISTRY="${PACKAGE_REGISTRY_HOST:-${REGISTRY}}"
-REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
-REGISTRY_TOKEN="${REGISTRY_TOKEN:-}"
+# Le script fonctionne depuis scripts/ ou pose a cote du compose.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR=""
+for d in "${SCRIPT_DIR}/.." "${SCRIPT_DIR}" "${PWD}"; do
+    if [ -f "${d}/${COMPOSE_FILE}" ]; then PROJECT_DIR="$(cd "${d}" && pwd)"; break; fi
+done
+if [ -z "${PROJECT_DIR}" ]; then
+    echo "[X] ${COMPOSE_FILE} introuvable (cherche dans ${SCRIPT_DIR}/.., ${SCRIPT_DIR}, ${PWD})."
+    exit 1
+fi
+cd "${PROJECT_DIR}"
+
+# La CI publie <tag>-arm64 / <tag>-amd64 : completer si l'operateur a tape « v3.0.1 ».
+case "${TAG}" in
+    *-arm64|*-amd64) ;;
+    *) TAG="${TAG}-arm64"; echo "[i] Suffixe d'architecture ajoute : ${TAG}" ;;
+esac
+
+# Le compte joint-il le daemon ? Les identifiants du registry sont stockes par
+# utilisateur (~/.docker vs /root/.docker) : melanger « sudo docker login » et
+# « docker compose pull » ferait echouer le pull sur un refus d'authentification.
+if docker info >/dev/null 2>&1; then DOCKER="docker"; else DOCKER="sudo docker"; echo "[i] Acces au daemon via sudo."; fi
 
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
 
-echo "==================================="
+echo "==========================================="
 echo "Deploiement 4iSafeCross sur Jetson"
-echo "==================================="
-echo "Image: ${FULL_IMAGE}"
+echo "==========================================="
+echo "Image   : ${FULL_IMAGE}"
+echo "Compose : ${PROJECT_DIR}/${COMPOSE_FILE}"
 echo ""
 
-# Verifier si Docker est installe
-if ! command -v docker &> /dev/null; then
-    echo "❌ Docker n'est pas installe"
+case "${TAG}" in
+    latest-*)
+        echo "[!] « ${TAG} » est un tag mouvant : il ne dit pas quelle version tourne."
+        echo "    En production, deployer un tag de version fige (v3.0.1-arm64) — CS-1141-01."
+        echo "    Le digest releve en fin de script identifie ce qui tourne reellement."
+        echo ""
+        ;;
+esac
+
+if ! ${DOCKER} info 2>/dev/null | grep -q nvidia; then
+    echo "[!] Runtime NVIDIA non detecte : le conteneur demarrera sans GPU."
+    echo "    sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker"
+fi
+
+# ─── .env : obligatoire (compose : env_file) et porteur de l'authentification IHM ───
+if [ ! -f .env ]; then
+    echo "[X] ${PROJECT_DIR}/.env introuvable."
+    echo "    Le creer depuis .env.example et renseigner au minimum"
+    echo "    SAFECROSS_AUTH_USER et SAFECROSS_AUTH_PASSWORD (CS-1144-01)."
+    exit 1
+fi
+if ! grep -qE '^SAFECROSS_AUTH_USER=.+' .env || ! grep -qE '^SAFECROSS_AUTH_PASSWORD=.+' .env; then
+    echo "[X] SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD non renseignes dans .env."
+    echo "    L'application refuse de demarrer sans authentification (CS-1144-01)."
     exit 1
 fi
 
-# Verifier le runtime NVIDIA
-if ! docker info | grep -q "nvidia"; then
-    echo "⚠️  Warning: NVIDIA runtime non detecte"
-    echo "Installer avec: sudo apt install nvidia-docker2"
-fi
-
-# Arreter et supprimer l'ancien conteneur si existe
-if docker ps -a | grep -q ${CONTAINER_NAME}; then
-    echo "🛑 Arret de l'ancien conteneur..."
-    docker stop ${CONTAINER_NAME} || true
-    docker rm ${CONTAINER_NAME} || true
-fi
-
-# Telecharger la nouvelle image
-echo "📥 Telechargement de l'image..."
-if [ -n "${REGISTRY_USERNAME}" ] && [ -n "${REGISTRY_TOKEN}" ]; then
-    echo "🔐 Connexion au registry avec les variables d'environnement..."
-    echo "${REGISTRY_TOKEN}" | docker login ${REGISTRY} -u "${REGISTRY_USERNAME}" --password-stdin
+# Le tag deploye est ecrit dans .env, que docker compose lit tout seul : toute
+# commande compose ulterieure (run, logs, up) vise la meme image. Sans cela, un
+# « docker compose run » lance a la main retomberait sur le defaut du fichier
+# compose — une autre image, eventuellement perimee et jamais re-tiree.
+write_env() { if [ -w .env ]; then sed -i "$1" .env; else sudo sed -i "$1" .env; fi; }
+if grep -q '^SAFECROSS_TAG=' .env; then
+    write_env "s|^SAFECROSS_TAG=.*|SAFECROSS_TAG=${TAG}|"
 else
-    echo "🔐 Connexion interactive au registry (variables REGISTRY_USERNAME/REGISTRY_TOKEN non definies)..."
-    docker login ${REGISTRY}
+    if [ -w .env ]; then echo "SAFECROSS_TAG=${TAG}" >> .env; else echo "SAFECROSS_TAG=${TAG}" | sudo tee -a .env >/dev/null; fi
 fi
-docker pull ${FULL_IMAGE}
+export SAFECROSS_TAG="${TAG}"
+echo "[i] .env : SAFECROSS_TAG=${TAG}"
 
-# Amorcage de l'etat persistant (premier deploiement uniquement).
-# config/ et db/ sont montes depuis l'hote pour survivre aux mises a jour
-# d'image. Un bind mount sur un repertoire hote vide masquerait le contenu de
-# l'image : on copie donc la config par defaut avant le premier demarrage.
-DATA_DIR="/data/4isafecross"
-echo "📂 Verification de l'etat persistant dans ${DATA_DIR}..."
-sudo mkdir -p "${DATA_DIR}/config" "${DATA_DIR}/db" \
-              "${DATA_DIR}/detections" "${DATA_DIR}/dataset" \
-              "${DATA_DIR}/logs"
+# ─── Conteneur herite d'un ancien « docker run » ───────────────────────────
+# Un conteneur du meme nom cree hors compose bloquerait « compose up » (nom
+# deja pris) : on le retire, compose recree le sien avec les bonnes options.
+if ${DOCKER} inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+    if [ -z "$(${DOCKER} inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "${CONTAINER_NAME}")" ]; then
+        echo "[i] Conteneur « ${CONTAINER_NAME} » cree par docker run (hors compose) : suppression."
+        ${DOCKER} rm -f "${CONTAINER_NAME}" >/dev/null
+    fi
+fi
 
+# ─── Image ─────────────────────────────────────────────────────────────────
+LOGGED_IN=0
+registry_logout() {
+    if [ "${LOGGED_IN}" = "1" ]; then
+        ${DOCKER} logout "${REGISTRY}" >/dev/null 2>&1 || true
+        echo "[i] Deconnecte du registry (aucun jeton conserve sur la machine)."
+    fi
+}
+trap registry_logout EXIT
+
+if [ "${OFFLINE}" = "1" ]; then
+    echo "[i] Mode hors ligne : aucune interaction avec le registry."
+    if ! ${DOCKER} image inspect "${FULL_IMAGE}" >/dev/null 2>&1; then
+        echo "[X] Image absente localement : ${FULL_IMAGE}"
+        echo "    sha256sum -c <support>/4isafecross_${TAG}.tar.sha256"
+        echo "    sudo docker load -i <support>/4isafecross_${TAG}.tar"
+        exit 1
+    fi
+else
+    if [ -z "${REGISTRY_USERNAME:-}" ]; then
+        read -rp "Nom du deploy token (portee read_registry) : " REGISTRY_USERNAME
+    fi
+    read -rsp "Deploy token : " GL_TOKEN; echo
+    printf '%s' "${GL_TOKEN}" | ${DOCKER} login "${REGISTRY}" -u "${REGISTRY_USERNAME}" --password-stdin
+    unset GL_TOKEN
+    LOGGED_IN=1
+    echo "[i] Telechargement de l'image..."
+    ${DOCKER} compose -f "${COMPOSE_FILE}" pull
+fi
+
+# ─── Etat persistant ──────────────────────────────────────────────────────
+# config/ et db/ sont des bind-mounts : un repertoire hote vide masquerait le
+# contenu de l'image et l'application ne demarrerait pas. Amorcage au premier
+# deploiement seulement — JAMAIS de reecriture ensuite, ce serait effacer la
+# geometrie des zones du site et l'historique des relais.
+sudo mkdir -p "${DATA_DIR}/config" "${DATA_DIR}/db" "${DATA_DIR}/detections" "${DATA_DIR}/dataset" "${DATA_DIR}/logs"
 if [ -z "$(ls -A "${DATA_DIR}/config" 2>/dev/null)" ]; then
-    echo "   Premier deploiement : copie de la configuration par defaut..."
-    docker run --rm --entrypoint tar "${FULL_IMAGE}" -C /app -c config db \
+    echo "[i] Premier deploiement : amorcage de config/ et db/ depuis l'image..."
+    # --runtime runc : « tar » n'a pas besoin du GPU, et cela evite le hook cudacompat
+    # sur une image ancienne qui contiendrait encore /usr/local/cuda/compat_orin.
+    ${DOCKER} run --rm --runtime runc --entrypoint tar "${FULL_IMAGE}" -C /app -c config db \
         | sudo tar -C "${DATA_DIR}" -x
-    echo "   ✅ Config amorcee dans ${DATA_DIR}/config"
-    echo "   ⚠️  Renseigner ${DATA_DIR}/config/config.ini (adresses RTSP) avant exploitation"
+    echo "[!] Renseigner ${DATA_DIR}/config/config.ini (adresses RTSP, zones) avant exploitation."
 else
-    echo "   ✅ Configuration existante conservee (non ecrasee)"
+    echo "[i] ${DATA_DIR}/config deja amorce — conserve tel quel."
+fi
+if [ -z "$(ls -A licenses 2>/dev/null)" ]; then
+    echo "[!] ${PROJECT_DIR}/licenses est vide : sans fichier de licence, l'application ne demarrera pas."
 fi
 
-# .env : credentials RTSP + authentification OBLIGATOIRE de l'IHM (CS-1144-01).
-# Sans SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD, le conteneur refuse de
-# demarrer (l'ecriture des consignes de securite doit etre protegee).
-ENV_FILE="$(pwd)/.env"
-if [ ! -f "${ENV_FILE}" ]; then
-    echo "❌ ${ENV_FILE} introuvable."
-    echo "   Le creer depuis .env.example et renseigner au minimum"
-    echo "   SAFECROSS_AUTH_USER et SAFECROSS_AUTH_PASSWORD."
-    exit 1
-fi
-if ! grep -qE '^SAFECROSS_AUTH_USER=.+' "${ENV_FILE}" \
-   || ! grep -qE '^SAFECROSS_AUTH_PASSWORD=.+' "${ENV_FILE}"; then
-    echo "❌ SAFECROSS_AUTH_USER / SAFECROSS_AUTH_PASSWORD non renseignes dans ${ENV_FILE}."
-    echo "   L'IHM ne demarre pas sans authentification (CS-1144-01)."
-    exit 1
-fi
+# ─── Deploiement ──────────────────────────────────────────────────────────
+echo "[i] docker compose up -d..."
+${DOCKER} compose -f "${COMPOSE_FILE}" up -d
 
-# Lancer le nouveau conteneur
-echo "🚀 Lancement du conteneur..."
-docker run -d \
-  --name ${CONTAINER_NAME} \
-  --runtime nvidia \
-  --restart unless-stopped \
-  --privileged \
-  --env-file "${ENV_FILE}" \
-  -v "${DATA_DIR}/config":/app/config \
-  -v "${DATA_DIR}/db":/app/db \
-  -v "${DATA_DIR}/detections":/app/detections \
-  -v "${DATA_DIR}/dataset":/app/dataset \
-  -v "${DATA_DIR}/logs":/app/logs \
-  -v "$(pwd)/licenses":/app/licenses \
-  -v /etc/machine-id:/etc/machine-id:ro \
-  -v /dev:/dev \
-  --network host \
-  -e TZ=Europe/Paris \
-  ${FULL_IMAGE}
-
-# Attendre que le conteneur demarre
-echo "⏳ Demarrage..."
-sleep 5
-
-# Verifier le status
-if docker ps | grep -q ${CONTAINER_NAME}; then
-    echo "✅ Conteneur demarre avec succes!"
-    echo ""
-    echo "📊 Status:"
-    docker ps | grep ${CONTAINER_NAME}
-    echo ""
-    echo "📝 Voir les logs:"
-    echo "   docker logs -f ${CONTAINER_NAME}"
-    echo ""
-    echo "🔍 Tester l'API:"
-    echo "   curl http://localhost:5050/failsafe_status"
-else
-    echo "❌ Erreur: Le conteneur n'a pas demarre"
-    echo "Logs:"
-    docker logs ${CONTAINER_NAME}
-    exit 1
-fi
-
-# Nettoyer les anciennes images
-echo ""
-echo "🧹 Nettoyage des anciennes images..."
-docker image prune -f
+# ─── Verification ─────────────────────────────────────────────────────────
+echo "[i] Attente du healthcheck (jusqu'a 120 s)..."
+status="absent"
+for _ in $(seq 1 24); do
+    status=$(${DOCKER} inspect -f '{{.State.Health.Status}}' "${CONTAINER_NAME}" 2>/dev/null || echo "absent")
+    [ "${status}" = "healthy" ] && break
+    [ "${status}" = "absent" ] && break
+    sleep 5
+done
 
 echo ""
-echo "✅ Deploiement termine!"
+${DOCKER} compose -f "${COMPOSE_FILE}" ps
+echo ""
+echo "[i] Version deployee (a consigner) :"
+${DOCKER} image inspect --format '{{index .RepoDigests 0}}' "${FULL_IMAGE}" 2>/dev/null \
+    || echo "    digest indisponible (image chargee hors registry ?)"
+echo ""
+if [ "${status}" = "healthy" ]; then
+    echo "[OK] Service sain — IHM : https://<hote> via Caddy ; API locale : curl http://localhost:5050/health"
+    # Couches des anciennes images devenues orphelines apres le changement de tag.
+    ${DOCKER} image prune -f >/dev/null || true
+else
+    echo "[X] Service non sain (etat : ${status}). Journaux :"
+    ${DOCKER} compose -f "${COMPOSE_FILE}" logs --tail 60
+    exit 1
+fi

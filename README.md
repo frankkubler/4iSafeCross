@@ -626,12 +626,17 @@ L'interface web sera accessible sur [http://localhost:5050](http://localhost:505
 ### Sur le Jetson (production)
 
 ```sh
-# Déployer depuis le registry GitLab (demande le mot de passe GitLab)
-bash scripts/deploy-jetson.sh latest-arm64
-
-# Déployer un tag spécifique
-bash scripts/deploy-jetson.sh v3.0.0-arm64
+# Le script pilote docker compose (docker-compose-arm64.yml) : login registry
+# (deploy token lu sur stdin), pull, amorçage de /data au premier déploiement,
+# contrôle de .env, up -d, healthcheck, logout.
+./scripts/deploy-jetson.sh v3.0.1-arm64             # version figée — production
+./scripts/deploy-jetson.sh                          # latest-arm64 — mise au point
+OFFLINE=1 ./scripts/deploy-jetson.sh v3.0.1-arm64   # boîtier sans Internet, image chargée par docker load
 ```
+
+Le fichier compose reste l'unique source de vérité des options du conteneur ; le tag
+déployé est écrit dans `.env` (`SAFECROSS_TAG`) pour que tout `docker compose` ultérieur
+vise la même image.
 
 ### Build local (développement)
 
@@ -666,7 +671,7 @@ le démarrage, la configuration matérielle et la maintenance du boîtier Jetson
 | [`set-poe-gpio.service`](scripts/set-poe-gpio.service) | Active l'alimentation PoE (GPIO) au boot |
 | [`check-dummy-display.service`](scripts/check-dummy-display.service) | Bascule écran réel / virtuel selon présence HDMI |
 | [`4isafecross.sh`](scripts/4isafecross.sh) | Lance l'app manuellement (waitress-serve + uv) |
-| [`deploy-jetson.sh`](scripts/deploy-jetson.sh) | Déploie l'image Docker depuis le registry GitLab |
+| [`deploy-jetson.sh`](scripts/deploy-jetson.sh) | Déploie l'image depuis le registry GitLab en pilotant `docker compose` (login, pull, amorçage, up, healthcheck, logout) |
 | [`disable-autosuspend.sh`](scripts/disable-autosuspend.sh) | Désactive USB autosuspend (Yoctopuce) — 1 fois post-flash |
 | [`set_poe_gpio.sh`](scripts/set_poe_gpio.sh) | GPIO PoE sur gpiochip2/ligne 15 |
 | [`switch-display.sh`](scripts/switch-display.sh) | Détection HDMI + activation dummy Xorg |
