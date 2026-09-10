@@ -178,10 +178,10 @@ la normale, `_delayed_off_relay` voyait `relay_on = False` et n'éteignait jamai
 
 ### Caméra absente au démarrage
 ```
-Ping RTSP échoué pour rtsp://***@192.168.0.60:554/stream1 (tentative 1)
-Ping RTSP OK pour rtsp://***@192.168.0.61:554/stream1 (tentative 1)
-Caméra 0 (192.168.0.60) absente au démarrage : conservée à l'index 0 (zones _cam0), reconnexion en boucle, relais de ses zones sous fail-safe.
-Caméras (index = position dans config.ini) : 0=192.168.0.60, 1=192.168.0.61
+Ping RTSP échoué pour rtsp://***@172.16.10.169:554/stream1 (tentative 1)
+Ping RTSP OK pour rtsp://***@172.16.11.91:554/stream1 (tentative 1)
+Caméra 0 (172.16.10.169) absente au démarrage : conservée à l'index 0 (zones _cam0), reconnexion en boucle, relais de ses zones sous fail-safe.
+Caméras (index = position dans config.ini) : 0=172.16.10.169, 1=172.16.11.91
 ⚠️  FAIL-SAFE caméra 0 : aucune image depuis 30s - relais [0, 1] forcés ON (zones de cette caméra)
 ```
 

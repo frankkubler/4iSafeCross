@@ -20,11 +20,12 @@ Le boîtier fonctionne **autonome, sans connexion Internet** en exploitation.
 | Connectivité | Clé **4G** provisoire (téléchargement d'image, réglages) — retirée à la livraison | Aucune |
 | Accès distant | SSH + VNC local ; **RustDesk** et/ou **Tailscale** provisoires | **VNC local uniquement** (câble RJ45 point-à-point sur le port maintenance) |
 | IHM de supervision | HTTPS via Caddy sur le port maintenance (`https://192.168.3.122`) ; ou tunnel SSH sur la 4G | HTTPS via Caddy sur le port maintenance uniquement |
-| Caméras | sous-réseau partagé `192.168.0.0/24` sur `eth2`/`eth3`/`eth4` (bridge `br0` ou switch PoE) | Idem |
+| Caméras | un /24 dédié et isolé par caméra (`172.16.10.0/24`, `172.16.11.0/24`) sur `eth2`/`eth3`/`eth4`, une adresse Jetson par sous-réseau | Idem |
 
-> **Plan d'adressage (nouvelles installations)** : maintenance sur **`eth1`**
-> (`192.168.3.122/24`), caméras sur **`eth2`/`eth3`/`eth4`** (sous-réseau partagé
-> `192.168.0.0/24`, Jetson en `192.168.0.100`). Le **site HAM** est **en service à
+> **Plan d'adressage standard (2026-09-10)** : maintenance sur **`eth1`**
+> (`192.168.3.122/24`), caméras sur **`eth2`/`eth3`/`eth4`**, **un /24 dédié par
+> caméra** (`172.16.10.169`, `172.16.11.91` ; Jetson `172.16.10.1` et
+> `172.16.11.1`, sans passerelle). Le **site HAM** est **en service à
 > ce jour sur le plan précédent** (caméras `eth1` / `192.168.2.x`, maintenance
 > `eth2`) et **sera migré ultérieurement** — détail dans le `README.md`. Voir aussi
 > `docs/compliance/cartographie-flux-stellantis.md`.
@@ -171,8 +172,21 @@ autonome, sans pilote, sous JetPack 6.2 comme 7.2. Si tous les points ci-dessus 
 conformes et qu'aucun PD ne s'allume (caméra validée sur injecteur), **le défaut est
 matériel**, en aval du convertisseur 48 V — cas rencontré sur `4isafecross-2` en
 septembre 2026, avec un état logiciel strictement identique à un boîtier JP 6.2
-fonctionnel. Preuve définitive : échanger les modules Orin NX entre deux boîtiers, le
-défaut suit la carte porteuse. Contournement : injecteurs ou switch PoE externe.
+fonctionnel.
+
+Signature observée sur ce boîtier : **dépendance à la température**. À froid, aucun
+port n'alimente ; après quelques heures de fonctionnement, la caméra s'allume et
+s'éteint en boucle (le PSE coupe à chaque appel de courant du démarrage, puis
+réessaie), jusqu'à « accrocher » et rester stable. Un convertisseur 48 V qui tient à
+vide (`PSE_PG = 1`) mais s'effondre en charge tant qu'il est froid — condensateur
+ou soudure défaillants. Confirmation rapide : chauffer modérément la zone des RJ45
+(sèche-cheveux) machine froide, le PoE démarre en quelques minutes. Preuve
+définitive : échanger les modules Orin NX entre deux boîtiers, le défaut suit la
+carte porteuse. `nvpmodel` n'a pas d'effet sur ce défaut.
+
+Un tel boîtier **ne doit pas être déployé sur PoE intégré** (risque de ne jamais
+accrocher en ambiance froide, ou de décrocher la nuit) : injecteurs ou switch PoE
+externe obligatoires jusqu'à réparation ou échange.
 
 ---
 
@@ -591,9 +605,9 @@ sudo bash scripts/install_vnc_jetson.sh --subnet 192.168.3.0/24
 
 **Configuration réseau caméras (nouvelles installations) :**
 
-- `eth2` + `eth3` + `eth4` réunis en un pont `br0` (ou via un switch PoE externe).
-- IPv4 de `br0` (ou de l'interface caméra) : Manuel — `192.168.0.100/24`, sans passerelle ni route par défaut.
-- Caméras (1 à 3) : `192.168.0.60` (obligatoire), `192.168.0.61`, `192.168.0.62` (optionnelles) — cf. `config/config.ini` `[RTSP] HOST`.
+- Une interface Jetson par caméra (`eth2` → caméra 1, `eth3` → caméra 2), ou un pont/switch portant toutes les adresses — `scripts/setup-camera-net.sh`.
+- IPv4 : Manuel, **une adresse par sous-réseau** (`172.16.10.1/24`, `172.16.11.1/24`), sans passerelle ni route par défaut.
+- Caméras (1 à 3), chacune dans son /24 : `172.16.10.169` (index 0), `172.16.11.91` (index 1) — l'ordre de `config/config.ini` `[RTSP] HOST` fixe l'index (zones `_cam<i>`).
 
 **Transport des flux caméras (`CS-1143-01`) — testé sur cible :**
 
@@ -619,7 +633,7 @@ PORT   = 554
 | Mesure | État |
 |---|---|
 | **Digest MD5/SHA-256** | `rtspsrc` négocie et utilise le Digest (vérifié). ⚠️ Basic reste accepté par la caméra. |
-| **Segment caméras dédié et isolé** | Appliqué par **`scripts/setup-camera-net.sh`** : `192.168.0.0/24` sur bridge `br-cameras` (ou une interface unique vers un switch PoE), **IP statique, sans passerelle, sans DNS, `never-default`, IPv6 off**. Contrôlé par `harden-run.sh` (étape « Segment caméras »). |
+| **Segment caméras dédié et isolé** | Appliqué par **`scripts/setup-camera-net.sh`** : un /24 dédié par caméra (`172.16.10.1/24`, `172.16.11.1/24` côté Jetson), une interface par caméra ou pont `br-cameras` multi-adresses, **IP statique, sans passerelle, sans DNS, `never-default`, IPv6 off**. Contrôlé par `harden-run.sh` (étape « Segment caméras »). |
 | **Durcissement caméra** | **SNMP** (SNMPv1/2 = protocole interdit §1.1.4.3), **RTMP**, **DDNS**, **ONVIF** (+ WS-Discovery) → **désactivés**. Mot de passe **unique par caméra** (coffre 4itec). **802.1x** (EAP-TLS) si le switch PoE est managé + RADIUS, sinon non applicable (compensé par l'isolation physique). |
 | **Équipements dédiés** | Caméras = appliances à fonction unique. `harden-run.sh` liste les hôtes du `/24` et signale tout OUI non-TP-Link. **À attester à la recette** : une caméra ne joint aucune IP publique. |
 | **Bascule prête** | Le code gère `SCHEME = rtsps` (+ `TLS_CA`) si des caméras à RTSP/TLS sont installées un jour (Axis, Bosch, Hanwha, Mobotix…) — seul `config.ini` change. |
@@ -814,7 +828,7 @@ Après le flash **JetPack 7.2** (voir
 3. disable-autosuspend.sh   → désactiver USB autosuspend + reboot
 4. set_poe_gpio.sh          → installer set-poe-gpio.service (alimentation des caméras)
 5. switch-display.sh        → installer check-dummy-display.service (headless)
-6. setup-camera-net.sh      → sous-réseau caméras dédié isolé (192.168.0.0/24)
+6. setup-camera-net.sh      → sous-réseaux caméras dédiés isolés (172.16.10.0/24, 172.16.11.0/24)
 7. Docker + runtime NVIDIA  → plugin Compose v2, contrôle `docker info | grep -i runtimes`
 8. .env                     → créer et remplir depuis .env.example (dont RTSP_LOGIN/PASSWORD)
 9. Image applicative        → pull (registry GitLab) ou docker load, amorçage de

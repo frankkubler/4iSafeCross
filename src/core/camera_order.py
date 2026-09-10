@@ -37,7 +37,7 @@ def order_cameras(configured, results):
 def rtsp_host(cam_id):
     """Hôte d'une URL RTSP, pour libeller les vues sans exposer les identifiants.
 
-    ``rtsp://login:pwd@192.168.0.60:554/stream1`` → ``192.168.0.60``.
+    ``rtsp://login:pwd@172.16.10.169:554/stream1`` → ``172.16.10.169``.
     Un identifiant non-URL (index V4L2 entier) est renvoyé tel quel.
     """
     if not isinstance(cam_id, str):

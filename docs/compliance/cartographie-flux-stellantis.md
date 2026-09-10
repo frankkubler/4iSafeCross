@@ -12,7 +12,8 @@
 
 - **Équipement** : appliance de vision 4iSafeCross — Nvidia Jetson Orin NX (reServer Industrial J4012)
 - **Modèle de déploiement** : autonome, **sans Internet** en exploitation (RUN) ; clé 4G **provisoire** en mise au point sur site (déclarée au Plant IT Leader)
-- **Plan d'adressage** : **nouvelles installations** — maintenance sur **`eth1`** (`192.168.3.122/24`), caméras sur **`eth2`/`eth3`/`eth4`** réunis en un sous-réseau partagé `192.168.0.0/24` (bridge `br0` ou switch PoE ; Jetson en `192.168.0.100`), **1 à 3 caméras** : `192.168.0.60` (obligatoire), `192.168.0.61`, `192.168.0.62` (optionnelles). Le **site HAM** est **en service à ce jour sur le plan précédent** — caméras `eth1` / `192.168.2.x`, maintenance `eth2` — et **sera migré vers le nouveau plan ultérieurement** (détail dans le `README.md`) ; les sous-réseaux `192.168.3.0/24` (maintenance) et les règles UFW sont identiques dans les deux plans, seuls les ports RJ45 et le sous-réseau caméras diffèrent.
+- **Plan d'adressage** : **nouvelles installations** — maintenance sur **`eth1`** (`192.168.3.122/24`), caméras sur **`eth2`/`eth3`/`eth4`** chacune dans **son propre /24 dédié** (`172.16.10.0/24`, `172.16.11.0/24` ; une interface par caméra ou pont/switch ; Jetson `172.16.10.1` et `172.16.11.1`), **1 à 3 caméras** : `172.16.10.169` (index 0), `172.16.11.91` (index 1). Le **site HAM** est **en service à ce jour sur le plan précédent** — caméras `eth1` / `192.168.2.x`, maintenance `eth2` — et **sera migré vers le nouveau plan ultérieurement** (détail dans le `README.md`) ; les sous-réseaux `192.168.3.0/24` (maintenance) et les règles UFW sont identiques dans les deux plans, seuls les ports RJ45 et le sous-réseau caméras diffèrent.
+- **Mise à jour** : 2026-09-10 — plan d'adressage caméras (un /24 dédié par caméra, `172.16.10.x` / `172.16.11.x`) ; posture et flux inchangés, à faire revalider avec la révision suivante.
 - **Date** : 2026-09-01 · **Révision** : 17 (suit `CYBER_AUDIT.md` — rév. 17 : OO-01 caméras en clair, dérogation `CS-1143-01` ; tests VIGI sur cible **exhaustifs** (554/322/8554/8443/8800/SRTP) ; auth Digest MD5/SHA-256 (`rtspsrc` vérifié) ; segment caméras isolé outillé `scripts/setup-camera-net.sh` + checklist de durcissement caméra)
 - **État** : rédigé côté fournisseur — **à valider par le référent technique Stellantis** (bloc de validation en fin de document)
 
@@ -27,7 +28,7 @@
 | **Conduit IT↔OT (RUN)** | Câble RJ45 **point-à-point** `eth1` (`eth2` sur HAM) + pare-feu hôte UFW | `192.168.3.0/24` | Accès physique requis. `default deny incoming`, ports ouverts au seul `192.168.3.0/24` |
 | **Conduit IT↔OT (mise au point)** | Clé **4G** USB — temporaire | CGNAT opérateur | Retirée à la livraison, retrait attesté à la recette |
 | **Zone 2 — OT Supervision** | Services d'accès du boîtier : Caddy (443), TigerVNC (5999), SSH (22) ; IHM Flask | `192.168.3.122` (`eth1` ; `eth2` sur HAM) | Pare-feu hôte + fail2ban |
-| **Zone 3 — OT Process / Terrain** | Sous-réseau caméras (`eth2`/`eth3`/`eth4`, bridge `br0` ou switch) ; module relais Yoctopuce (USB) | `192.168.0.0/24` — Jetson `192.168.0.100` ; caméras `192.168.0.60` (oblig.), `.61`, `.62` (opt.) — HAM : `192.168.2.x` sur `eth1` | Sous-réseau caméras **dédié et isolé** |
+| **Zone 3 — OT Process / Terrain** | Sous-réseau caméras (`eth2`/`eth3`/`eth4`, bridge `br0` ou switch) ; module relais Yoctopuce (USB) | un /24 dédié par caméra : `172.16.10.0/24` (Jetson `.1`, caméra `.169`), `172.16.11.0/24` (Jetson `.1`, caméra `.91`) — HAM : `192.168.2.x` sur `eth1` | Sous-réseau caméras **dédié et isolé** |
 | **Intra-hôte (loopback)** | Flux `127.0.0.1` sur le Jetson (Caddy→waitress, client d'inférence→serveurs YOLO/RF-DETR) | `127.0.0.1` | Comptés OT↔OT ; **ne traversent aucun média réseau** |
 
 ### Schéma
@@ -47,10 +48,10 @@
    (OT Supervision)              │  Caddy:443  ──►  waitress:5050  (OO-04, loopback)
                                  │  TigerVNC:5999   SSH:22   UFW default deny
    intra-hôte (127.0.0.1)        │  client inférence ─► YOLO:8004 / RF-DETR:8002 (OO-02/03)
-              OO-01 RTSP 554 │ (br0 = eth2+eth3+eth4, 192.168.0.0/24)   OO-05 USB │
+              OO-01 RTSP 554 │ (eth2/eth3/eth4, 172.16.10.0/24 + .11.0/24)   OO-05 USB │
    ZONE 3                  ┌──────┴───────────────────┐        ┌──────────────┴────┐
    (OT Process)            │ Caméras IP               │        │ Module relais     │
-                           │ 192.168.0.60 (+.61/.62)  │        │ Yoctopuce (USB)   │
+                           │ 172.16.10.169 / .11.91   │        │ Yoctopuce (USB)   │
                            │ (HAM : .2.156/.157 eth1) │        └───────────────────┘
                            └──────────────────────────┘
 ```
@@ -75,7 +76,7 @@
 
 | N° | Source (Zone) | Destination (Zone) | Protocole / service | Port · sens | Chiffrement | Authentification | Phase |
 |---|---|---|---|---|---|---|---|
-| OO-01 | Boîtier 4iSafeCross — Z2/Z3 (`192.168.0.100`, bridge `br0` = `eth2`+`eth3`+`eth4`) | 1 à 3 caméras IP `192.168.0.60` (oblig.), `.61`, `.62` (opt.) — Z3 (`192.168.0.0/24`) — *HAM : `192.168.2.156/157` sur `eth1`* | RTSP + RTP/RTCP interleaved over TCP | 554/TCP · requête + flux retour même session | **Non** — VIGI S485/S455 : aucun RTSP chiffré standard (testé : 554 clair, 8443 = `Streamd` propriétaire, SRTP = NVR VIGI only) — dérogation `CS-1143-01` | **Oui** — `RTSP_LOGIN` / `RTSP_PASSWORD`, auth **Digest MD5/SHA-256** négociée par `rtspsrc` (vérifié ; ⚠️ Basic aussi accepté par la caméra, non désactivable) | RUN (permanent) |
+| OO-01 | Boîtier 4iSafeCross — Z2/Z3 (`172.16.10.1` / `172.16.11.1`, `eth2`/`eth3`/`eth4`) | 1 à 3 caméras IP `172.16.10.169`, `172.16.11.91` (une par /24) — Z3 (`172.16.10.0/24`, `172.16.11.0/24`) — *HAM : `192.168.2.156/157` sur `eth1`* | RTSP + RTP/RTCP interleaved over TCP | 554/TCP · requête + flux retour même session | **Non** — VIGI S485/S455 : aucun RTSP chiffré standard (testé : 554 clair, 8443 = `Streamd` propriétaire, SRTP = NVR VIGI only) — dérogation `CS-1143-01` | **Oui** — `RTSP_LOGIN` / `RTSP_PASSWORD`, auth **Digest MD5/SHA-256** négociée par `rtspsrc` (vérifié ; ⚠️ Basic aussi accepté par la caméra, non désactivable) | RUN (permanent) |
 | OO-02 | Client d'inférence 4iSafeCross — intra-hôte | Serveur YOLO `inf_jetson_yolo` — intra-hôte | HTTP | 8004/TCP `127.0.0.1` · requête→réponse | **Non** — boucle locale, ne traverse aucun média | Non | RUN |
 | OO-03 | Client d'inférence 4iSafeCross — intra-hôte | Serveur RF-DETR `inf_jetson_rf-detr` — intra-hôte | HTTP | 8002/TCP `127.0.0.1` · requête→réponse | **Non** — boucle locale | Non | RUN |
 | OO-04 | Reverse-proxy Caddy — intra-hôte | `waitress` / IHM Flask — intra-hôte | HTTP | 5050/TCP `127.0.0.1` · requête→réponse | **Non** — terminaison TLS en amont (Caddy, IO-01) | **Oui** — HTTP Basic appliqué par l'application | RUN |
@@ -96,7 +97,7 @@
 | IO-07 | `docker pull` de l'image applicative, paquets L4T | Sortant via clé 4G | `CS-145-01/02/03` — **fenêtre 4G à déclarer au PIL** ; en RUN, déploiement par support local |
 | IO-08 | Constitution du support de mise à jour L4T de sécurité (hors ligne) | Machine relais 4itec en Zone IT ; le boîtier ne se connecte jamais | `CS-1141-02` / `CS-123-03` — procédure `docs/deployment/maj-l4t-hors-ligne.md` ; cadence trimestrielle |
 | IO-09 | — | Port `eth0` non câblé ; désactivation logique demandée (annexe §1.1.2) | **Résolu par l'architecture** — à attester sur cible |
-| OO-01 | Réception des flux vidéo H.264 des caméras (1 à 3) | Sous-réseau caméras **dédié** `192.168.0.0/24` (`br0` = `eth2`/`eth3`/`eth4`, ou switch PoE), isolé du reste ; aucune route par défaut | `CS-1143-01` — **dérogation requise** : les caméras TP-Link VIGI S485/S455 n'ont aucun RTSP chiffré standard — testé : 554 clair, 322/8554 fermés, 8443 = service propriétaire Streamd, 8800 = binaire, SRTP = NVR VIGI only (impossibilité matérielle). Compensations : auth **Digest MD5/SHA-256** négociée par `rtspsrc` (Basic aussi accepté par la caméra) ; segment dédié isolé (`scripts/setup-camera-net.sh`) ; **durcissement caméra** (SNMP/RTMP/DDNS/ONVIF off, 802.1x si switch managé) ; équipements dédiés. `camera_manager` gère `SCHEME = rtsps` si des caméras compatibles sont installées |
+| OO-01 | Réception des flux vidéo H.264 des caméras (1 à 3) | Sous-réseaux caméras **dédiés** `172.16.10.0/24` et `172.16.11.0/24` (`eth2`/`eth3`/`eth4`, une interface par caméra ou pont/switch PoE), isolés du reste ; aucune route par défaut | `CS-1143-01` — **dérogation requise** : les caméras TP-Link VIGI S485/S455 n'ont aucun RTSP chiffré standard — testé : 554 clair, 322/8554 fermés, 8443 = service propriétaire Streamd, 8800 = binaire, SRTP = NVR VIGI only (impossibilité matérielle). Compensations : auth **Digest MD5/SHA-256** négociée par `rtspsrc` (Basic aussi accepté par la caméra) ; segment dédié isolé (`scripts/setup-camera-net.sh`) ; **durcissement caméra** (SNMP/RTMP/DDNS/ONVIF off, 802.1x si switch managé) ; équipements dédiés. `camera_manager` gère `SCHEME = rtsps` si des caméras compatibles sont installées |
 | OO-02 | `POST` frame → détections (pipeline d'inférence YOLO) | `127.0.0.1` — non joignable hors hôte | Acceptable (intra-hôte). Retirer `network_mode: host` (`CS-1143-03`) pour cloisonner les conteneurs |
 | OO-03 | `POST` frame → détections (pipeline RF-DETR) | `127.0.0.1` — non joignable hors hôte | Idem OO-02. **Incohérence de n° de port** entre `config/config.ini`, `README.md`, `docs/security/analyse-risques-cyber.md` — à fixer |
 | OO-04 | Terminaison TLS (Caddy) → application (waitress) | `run.py` lie `waitress` à `127.0.0.1` seul ; aucune règle n'ouvre 5050 | `CS-143-02` — **conforme** ; l'authentification applicative s'applique aussi à ce segment |
@@ -111,7 +112,7 @@
 - **Aucun flux entrant depuis Internet.** Aucun flux vers Internet en RUN.
 - **Chiffrement des transports** : OO-01 (caméras) **en clair** — VIGI S485/S455, aucun RTSP chiffré standard (testé exhaustivement) → dérogation `CS-1143-01` + Digest MD5/SHA-256 (Basic aussi accepté) + sous-réseau caméras dédié isolé + durcissement caméra ; les flux `127.0.0.1` (OO-02/03/04) ne traversent aucun média réseau ; tous les flux IT↔OT (IHM, VNC, SSH) sont chiffrés.
 - **Conduit de maintenance point-à-point** (`eth1` ; `eth2` sur HAM) : accès physique requis ; pare-feu hôte `default deny` ; seuls 443 et 5999 (et 22 borné) ouverts, au seul `192.168.3.0/24`.
-- **Caméras** : `eth2`/`eth3`/`eth4` en un seul sous-réseau `192.168.0.0/24` sans passerelle ; les caméras n'ont aucun accès sortant.
+- **Caméras** : `eth2`/`eth3`/`eth4`, un /24 dédié par caméra (`172.16.10.0/24`, `172.16.11.0/24`) sans passerelle ; les caméras n'ont aucun accès sortant.
 
 ---
 

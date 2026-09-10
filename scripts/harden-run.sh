@@ -96,49 +96,53 @@ done
 
 # ── 5. Segment caméras (mesure compensatoire CS-1143-01) ──
 step 5 "Segment caméras — isolation"
-# Sous-réseau caméras : dérivé de config.ini [RTSP] HOST (1re IP → /24), sinon défaut.
-CAM_NET="192.168.0.0/24"
+# Sous-réseaux caméras : UN par IP de config.ini [RTSP] HOST (plan standard :
+# chaque caméra dans son propre /24 — 172.16.10.x, 172.16.11.x). Tous sont
+# contrôlés, pas seulement celui de la première caméra.
+CAM_NETS=()
 if [ -n "$CFG" ]; then
-    CAM_IP1="$(grep -E '^\s*HOST\s*=' "$CFG" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
-    [ -n "$CAM_IP1" ] && CAM_NET="$(echo "$CAM_IP1" | cut -d. -f1-3).0/24"
+    while read -r ip; do
+        [ -n "$ip" ] && CAM_NETS+=("$(echo "$ip" | cut -d. -f1-3).0/24")
+    done < <(grep -E '^\s*HOST\s*=' "$CFG" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' || true)
 fi
-CAM_PREFIX="$(echo "$CAM_NET" | cut -d/ -f1 | cut -d. -f1-3)"
-echo "  Sous-réseau caméras : $CAM_NET"
-
-# a) pas de route par défaut via une interface du segment caméras
-CAM_DEFROUTE="$(ip route show default 2>/dev/null | grep -E "src ${CAM_PREFIX}\.|dev (br-cameras|cameras)" || true)"
-if [ -n "$CAM_DEFROUTE" ]; then
-    warn "Route par défaut liée au segment caméras : $CAM_DEFROUTE — le segment doit être SANS passerelle"
-else
-    note "Aucune route par défaut via le segment caméras"
-fi
-
-# b) qui répond sur le /24 ? (doit être uniquement des caméras TP-Link)
-for i in $(seq 1 254); do ping -c1 -W1 "${CAM_PREFIX}.${i}" >/dev/null 2>&1 & done
-wait
-FOUND=0; NONCAM=0
-NEIGH="$(ip neigh show 2>/dev/null | grep -E "^${CAM_PREFIX//./\\.}\.[0-9]+ .* lladdr " || true)"
-while read -r line; do
-    [ -z "$line" ] && continue
-    ip="${line%% *}"
-    mac="$(echo "$line" | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)"
-    [ -z "$mac" ] && continue
-    FOUND=$((FOUND+1))
-    OUI="$(echo "$mac" | tr 'a-f' 'A-F' | cut -d: -f1-3)"
-    case "$OUI" in
-        EC:75:0C|E4:C3:2A|00:31:92|A4:2B:B0|30:DE:4B|B0:4E:26|D8:07:B6|1C:61:B4|50:C7:BF|CC:68:B6)
-            note "  $ip  $mac  (TP-Link)" ;;
-        *)
-            warn "  $ip  $mac  — OUI $OUI NON TP-Link : équipement étranger sur le segment caméras ?"
-            NONCAM=$((NONCAM+1)) ;;
-    esac
-done <<< "$NEIGH"
-[ "$FOUND" -eq 0 ] && warn "Aucune caméra détectée sur $CAM_NET (câblage / alimentation ?)"
-[ "$NONCAM" -eq 0 ] && [ "$FOUND" -gt 0 ] && note "Segment caméras : $FOUND caméra(s), uniquement TP-Link"
-
+[ "${#CAM_NETS[@]}" -eq 0 ] && CAM_NETS=("172.16.10.0/24" "172.16.11.0/24")
+mapfile -t CAM_NETS < <(printf '%s\n' "${CAM_NETS[@]}" | awk '!seen[$0]++')
+echo "  Sous-réseau(x) caméras : ${CAM_NETS[*]}"
+for CAM_NET in "${CAM_NETS[@]}"; do
+    CAM_PREFIX="$(echo "$CAM_NET" | cut -d/ -f1 | cut -d. -f1-3)"
+    # a) pas de route par défaut via une interface du segment caméras
+    CAM_DEFROUTE="$(ip route show default 2>/dev/null | grep -E "src ${CAM_PREFIX}\.|dev (br-cameras|cameras)" || true)"
+    if [ -n "$CAM_DEFROUTE" ]; then
+        warn "Route par défaut liée au segment caméras $CAM_NET : $CAM_DEFROUTE — le segment doit être SANS passerelle"
+    else
+        note "Aucune route par défaut via le segment caméras $CAM_NET"
+    fi
+    # b) qui répond sur ce /24 ? (doit être uniquement des caméras TP-Link)
+    for i in $(seq 1 254); do ping -c1 -W1 "${CAM_PREFIX}.${i}" >/dev/null 2>&1 & done
+    wait
+    FOUND=0; NONCAM=0
+    NEIGH="$(ip neigh show 2>/dev/null | grep -E "^${CAM_PREFIX//./\\.}\.[0-9]+ .* lladdr " || true)"
+    while read -r line; do
+        [ -z "$line" ] && continue
+        ip="${line%% *}"
+        mac="$(echo "$line" | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)"
+        [ -z "$mac" ] && continue
+        FOUND=$((FOUND+1))
+        OUI="$(echo "$mac" | tr 'a-f' 'A-F' | cut -d: -f1-3)"
+        case "$OUI" in
+            EC:75:0C|E4:C3:2A|00:31:92|A4:2B:B0|30:DE:4B|B0:4E:26|D8:07:B6|1C:61:B4|50:C7:BF|CC:68:B6)
+                note "  $ip  $mac  (TP-Link)" ;;
+            *)
+                warn "  $ip  $mac  — OUI $OUI NON TP-Link : équipement étranger sur le segment caméras ?"
+                NONCAM=$((NONCAM+1)) ;;
+        esac
+    done <<< "$NEIGH"
+    [ "$FOUND" -eq 0 ] && warn "Aucune caméra détectée sur $CAM_NET (câblage / alimentation ?)"
+    [ "$NONCAM" -eq 0 ] && [ "$FOUND" -gt 0 ] && note "Segment $CAM_NET : $FOUND caméra(s), uniquement TP-Link"
+done
 # c) attestation : une caméra ne doit PAS joindre Internet (contrôle manuel possible
 #    depuis la caméra ou via un mirror de port). Rappel :
-note "À attester à la recette : une caméra ne peut joindre aucune IP publique (segment sans route)"
+note "À attester à la recette : une caméra ne peut joindre aucune IP publique (segments sans route)"
 
 # ── 6. UFW / fail2ban ─────────────────────────────────────
 step 6 "Pare-feu"

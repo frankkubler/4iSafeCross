@@ -6,8 +6,8 @@ import pytest
 from src.core import bootstrap
 from src.core.camera_order import order_cameras, rtsp_host
 
-A = "rtsp://u:p@192.168.0.60:554/stream1"   # HOST[0] → zones _cam0
-B = "rtsp://u:p@192.168.0.61:554/stream1"   # HOST[1] → zones _cam1
+A = "rtsp://u:p@172.16.10.169:554/stream1"  # HOST[0] → zones _cam0
+B = "rtsp://u:p@172.16.11.91:554/stream1"   # HOST[1] → zones _cam1
 
 
 def test_l_ordre_de_reponse_ne_change_pas_l_index():
@@ -19,9 +19,9 @@ def test_l_ordre_de_reponse_ne_change_pas_l_index():
 
 def test_une_camera_absente_conserve_sa_place_et_celle_des_autres():
     toutes, disponibles = order_cameras([A, B], {A: False, B: True})
-    assert toutes == [A, B]               # la .60 reste à l'index 0 : zones _cam0, fail-safe
+    assert toutes == [A, B]               # la .10.169 reste à l'index 0 : zones _cam0, fail-safe
     assert disponibles == [B]
-    assert toutes.index(B) == 1           # la .61 n'hérite pas de l'index 0
+    assert toutes.index(B) == 1           # la .11.91 n'hérite pas de l'index 0
 
 
 def test_aucune_camera_disponible():
@@ -32,7 +32,7 @@ def test_aucune_camera_disponible():
 @pytest.fixture
 def boot(monkeypatch):
     """Démarrage à sec : hôtes fixés, test RTSP simulé, aucune attente réelle."""
-    monkeypatch.setattr(bootstrap, "RTSP_HOST", ["192.168.0.60", "192.168.0.61"])
+    monkeypatch.setattr(bootstrap, "RTSP_HOST", ["172.16.10.169", "172.16.11.91"])
     monkeypatch.setattr(bootstrap, "RTSP_SCHEME", "rtsp")
     monkeypatch.setattr(bootstrap, "RTSP_LOGIN", "u")
     monkeypatch.setattr(bootstrap, "RTSP_PASSWORD", "p")
@@ -53,7 +53,7 @@ def boot(monkeypatch):
 
 
 def test_demarrage_inversion_de_l_ordre_de_reponse(boot):
-    # Reproduit le défaut : la .61 répond avant la .60 → le dict arrive dans cet ordre.
+    # Reproduit le défaut : la .11.91 répond avant la .10.169 → le dict arrive dans cet ordre.
     boot([{B: True, A: True}])
     assert bootstrap._wait_for_rtsp_streams() == [A, B]
 
@@ -61,7 +61,7 @@ def test_demarrage_inversion_de_l_ordre_de_reponse(boot):
 def test_demarrage_camera_absente_conservee_a_son_index(boot):
     boot([{B: True, A: False}])
     cams = bootstrap._wait_for_rtsp_streams()
-    assert cams == [A, B]                 # la .60 absente est conservée à l'index 0
+    assert cams == [A, B]                 # la .10.169 absente est conservée à l'index 0
 
 
 def test_demarrage_attend_qu_au_moins_une_camera_reponde(boot):
@@ -71,5 +71,5 @@ def test_demarrage_attend_qu_au_moins_une_camera_reponde(boot):
 
 
 def test_rtsp_host_masque_les_identifiants():
-    assert rtsp_host(A) == "192.168.0.60"
+    assert rtsp_host(A) == "172.16.10.169"
     assert rtsp_host(0) == "0"            # index V4L2, renvoyé tel quel

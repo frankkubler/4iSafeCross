@@ -691,18 +691,17 @@ le démarrage, la configuration matérielle et la maintenance du boîtier Jetson
 +-----------+---------------------+--------------------------------------------------+
 |  eth0     | DHCP (inactif)      | Non raccordé en cible                             |
 |  eth1     | 192.168.3.122/24    | Maintenance : VNC 5999 + IHM HTTPS 443 (RJ45 P-à-P)|
-|  eth2     | \                   |                                                  |
-|  eth3     |  > 192.168.0.100/24 | Caméras IP — sous-réseau partagé (bridge / switch) |
-|  eth4     | /                   |                                                  |
+|  eth2     | 172.16.10.1/24    | Caméra 1 (172.16.10.169) — segment dédié isolé   |
+|  eth3     | 172.16.11.1/24    | Caméra 2 (172.16.11.91)  — segment dédié isolé   |
+|  eth4     | —                   | Libre (3e caméra éventuelle, son propre /24)     |
 +-----------+---------------------+--------------------------------------------------+
 ```
 
 - **eth0** : non raccordé en exploitation (modèle autonome). À désactiver logiquement en cible.
 - **eth1** : port **maintenance** — câble RJ45 point-à-point vers le PC de maintenance. VNC chiffré port 5999 **et** IHM de supervision en **HTTPS port 443** (reverse-proxy Caddy devant `waitress`, lui-même lié à `127.0.0.1:5050` uniquement). Adresse `192.168.3.122/24`, UFW n'ouvre 443/5999 (et 22 borné) qu'au sous-réseau `192.168.3.0/24`. Identifiants du compte de maintenance : uniques par boîtier, coffre-fort 4itec — jamais dans le dépôt.
-- **eth2 / eth3 / eth4** : ports **caméras**, réunis en **un seul sous-réseau `192.168.0.0/24`** (bridge `br0` côté Jetson, ou switch PoE). Le Jetson y porte une IP unique (`192.168.0.100`). Une caméra peut être branchée sur n'importe lequel des trois ports. **1 à 3 caméras** :
-  - Caméra 0 : `192.168.0.60` (obligatoire)
-  - Caméra 1 : `192.168.0.61` (optionnelle)
-  - Caméra 2 : `192.168.0.62` (optionnelle)
+- **eth2 / eth3 / eth4** : ports **caméras**. Plan standard (2026-09-10) : **chaque caméra dans son propre /24**, segment L2 dédié et isolé, le Jetson portant **une adresse par sous-réseau** (`scripts/setup-camera-net.sh`, une interface par caméra ou un pont multi-adresses). **1 à 3 caméras**, dans l'ordre de `HOST` — cet ordre fixe l'index (zones `_cam0`/`_cam1`, vues « Camera 1 »/« Camera 2 ») :
+  - Caméra 1 (index 0) : `172.16.10.169` — Jetson `172.16.10.1/24`
+  - Caméra 2 (index 1) : `172.16.11.91` — Jetson `172.16.11.1/24`
   - Ajuster la liste au nombre réel de caméras dans [`config/config.ini`](config/config.ini), section `[RTSP]`, clé `HOST`.
   - **Transport** : `[RTSP] SCHEME = rtsp`. Les caméras TP-Link VIGI S485/S455 n'exposent pas de RTSPS/SRTP → transport RTP en clair sur le segment caméras dédié et isolé, avec auth **Digest MD5/SHA-256** négociée par `rtspsrc` (vérifié ; ⚠️ Basic aussi accepté par la caméra, non désactivable) ; dérogation `CS-1143-01`. Le code gère `SCHEME = rtsps` (+ `TLS_CA`) si des caméras compatibles TLS sont installées — voir [`docs/deployment/scripts-deploiement.md`](docs/deployment/scripts-deploiement.md) § « Transport des flux caméras ».
 
@@ -758,10 +757,9 @@ Schéma simplifié pour repérer physiquement les ports RJ45 à l'arrière de la
 - L'ordre des ports va de gauche à droite : eth0, eth1, eth2, eth3, eth4.
 - **eth0** : non raccordé en exploitation (modèle autonome).
 - **eth1** est réservé pour la **maintenance** (adresse IP `192.168.3.122`, masque `255.255.255.0`) : VNC chiffré port 5999 et IHM de supervision en HTTPS port 443. Le pare-feu UFW n'ouvre 443/tcp et 5999/tcp qu'au sous-réseau `192.168.3.0/24` ; le port 5050 (`waitress` en clair) n'est jamais exposé. Identifiants du compte de maintenance : uniques par boîtier, stockés dans le coffre-fort 4itec (Vaultwarden), accessibles aux personnes habilitées. Ne jamais les inscrire ici.
-- **eth2 / eth3 / eth4** : ports **caméras** sur un sous-réseau partagé `192.168.0.0/24` (bridge `br0` ou switch PoE ; le Jetson porte `192.168.0.100`). **1 à 3 caméras** :
-> - Caméra 0 : `192.168.0.60` (obligatoire)
-> - Caméra 1 : `192.168.0.61` (optionnelle)
-> - Caméra 2 : `192.168.0.62` (optionnelle)
+- **eth2 / eth3 / eth4** : ports **caméras**, chaque caméra dans son propre /24 dédié et isolé, le Jetson portant une adresse par sous-réseau. **1 à 3 caméras**, l'ordre de `HOST` fixant l'index :
+> - Caméra 1 (index 0) : `172.16.10.169` — Jetson `172.16.10.1/24`
+> - Caméra 2 (index 1) : `172.16.11.91` — Jetson `172.16.11.1/24`
 > À ajuster dans [`config/config.ini`](config/config.ini), section `[RTSP]`, clé `HOST`.
 
 ## Gestion de la rotation des logs (logrotate)
