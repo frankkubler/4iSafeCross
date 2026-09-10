@@ -138,6 +138,14 @@
         }
 
         /* ── Légende postures (horizontale, sous le header) ── */
+        /* Bandeau « module relais injoignable » (alimenté par /relays_status) */
+        .relays-banner {
+            display: flex; align-items: center; gap: .75rem;
+            margin: 0; padding: .6rem 1.25rem;
+            background: #b91c1c; color: #fff; font-weight: 600;
+            border-bottom: 3px solid #7f1d1d;
+        }
+        .relays-banner small { font-weight: normal; opacity: .9; }
         .legend-bar {
             display: flex;
             flex-wrap: wrap;
@@ -784,6 +792,29 @@
             {% endfor %}
         }
         document.addEventListener('DOMContentLoaded', startCamStatusPolling);
+
+        // État du module relais : constat du watchdog, sans accès USB côté serveur.
+        function updateRelaysBanner() {
+            fetch('/relays_status')
+                .then(r => r.json())
+                .then(data => {
+                    const banner = document.getElementById('relays-banner');
+                    const detail = document.getElementById('relays-banner-detail');
+                    if (!banner) return;
+                    const ok = data.initialized && data.online;
+                    banner.hidden = ok;
+                    if (!ok) {
+                        detail.textContent = data.initialized
+                            ? (data.last_error || 'module muet') + (data.failed_commands ? ` — ${data.failed_commands} commande(s) perdue(s)` : '')
+                            : 'module relais non initialisé au démarrage (carte absente ?)';
+                    }
+                })
+                .catch(() => { /* serveur injoignable : les autres indicateurs le montrent */ });
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            updateRelaysBanner();
+            setInterval(updateRelaysBanner, 5000);
+        });
     </script>
 </head>
 <body>
@@ -826,6 +857,12 @@
         btn.style.background = telegramAlertEnabled ? '#d97706' : '#475569';
     });
     </script>
+
+    <!-- ── Bandeau sûreté : module relais injoignable (masqué tant que tout va bien) ── -->
+    <div id="relays-banner" class="relays-banner" role="alert" hidden>
+        <span>⚠️ MODULE RELAIS INJOIGNABLE — aucune alerte ne peut être signalée physiquement</span>
+        <small id="relays-banner-detail"></small>
+    </div>
 
     <!-- ── Légende postures (dynamique depuis stature_colors) ── -->
     <div class="legend-bar">

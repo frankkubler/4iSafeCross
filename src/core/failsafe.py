@@ -16,11 +16,11 @@ Tout forçage passe par AlerteManager (force_relays_on / release_forced_relays)
 pour que son état interne (relay_on, relay_on_time) reste cohérent avec l'état
 physique : c'est ce qui permet l'extinction différée normale au retour du flux.
 """
-import asyncio
 import logging
 import threading
 import time
 
+from src.core import async_bridge
 from src.core.state import state
 from utils.constants import STARTUP_GRACE_PERIOD
 
@@ -56,7 +56,36 @@ def relays_for_camera(cid):
 
 def _schedule(coro):
     """Exécute une coroutine d'AlerteManager depuis un thread (boucle asyncio principale)."""
-    return asyncio.run_coroutine_threadsafe(coro, state.main_loop)
+    return async_bridge.schedule(coro, state.main_loop)
+
+
+def check_relay_module():
+    """Surveille le module relais et resynchronise les relais à son retour.
+
+    Retourne la liste des actions ('relays_lost' | 'relays_back'). Sans effet si
+    le pilote n'expose pas check_health (doubles de test, pilote factice).
+    Après une ré-énumération USB la carte redémarre relais OFF : la
+    resynchronisation réapplique l'état voulu par l'AlerteManager.
+    """
+    check = getattr(state.relays, 'check_health', None)
+    if check is None:
+        return []
+    online = bool(check())
+    was = state.relays_online
+    if not online and was:
+        state.relays_online = False
+        logger.error(
+            "⚠️  MODULE RELAIS INJOIGNABLE : aucune alerte ne peut être émise physiquement (%s)",
+            getattr(state.relays, 'last_error', 'cause inconnue'),
+        )
+        return [('relays_lost', None)]
+    if online and not was:
+        state.relays_online = True
+        logger.warning("✅ Module relais de nouveau joignable — resynchronisation de l'état des relais")
+        resync = getattr(state.alert_manager, 'resync_relays', None)
+        failures = resync(reason="retour du module relais") if resync else 0
+        return [('relays_back', failures)]
+    return []
 
 
 def check_failsafe(now):
@@ -65,7 +94,7 @@ def check_failsafe(now):
     Retourne la liste des actions effectuées, sous forme de tuples
     ('global_on' | 'global_release' | 'camera_on' | 'camera_release', détail).
     """
-    actions = []
+    actions = check_relay_module()
     with state.heartbeat_lock:
         since_global = now - state.last_heartbeat
         was_healthy = state.application_healthy

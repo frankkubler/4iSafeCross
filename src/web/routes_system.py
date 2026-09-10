@@ -46,6 +46,8 @@ def health():
         )
 
     relays_ready = state.relays is not None and state.relays.is_initialized
+    # Constaté par le watchdog (YoctoMultiRelay.check_health) : le module répond.
+    relays_online = relays_ready and state.relays_online
     booted = state.manager is not None and bool(state.cam_ids)
 
     reasons = []
@@ -53,6 +55,8 @@ def health():
         reasons.append('démarrage inachevé : aucune caméra initialisée')
     if not relays_ready:
         reasons.append('module relais non initialisé : aucune alerte ne peut être émise')
+    elif not relays_online:
+        reasons.append('module relais injoignable : aucune alerte ne peut être émise physiquement')
     if booted and cameras_online == 0:
         reasons.append('aucune caméra en ligne : plus aucune détection possible')
 
@@ -62,12 +66,31 @@ def health():
         'cameras_online': cameras_online,
         'cameras_total': cameras_total,
         'relays_initialized': relays_ready,
+        'relays_online': relays_online,
     }
     if reasons:
         payload['reasons'] = reasons
         logger.warning("Sonde /health en échec : %s", ' ; '.join(reasons))
         return jsonify(payload), 503
     return jsonify(payload)
+
+
+@system_bp.route('/relays_status')
+def relays_status():
+    """État du module relais SANS accès USB : lu depuis le dernier constat du watchdog.
+
+    Interrogé par le tableau de bord toutes les 5 s pour afficher le bandeau
+    « module relais injoignable ». Contrairement à /failsafe_status, aucune
+    commande n'est envoyée au module : la page ne charge pas le bus USB.
+    """
+    relays = state.relays
+    initialized = relays is not None and relays.is_initialized
+    return jsonify({
+        'initialized': initialized,
+        'online': initialized and state.relays_online,
+        'last_error': getattr(relays, 'last_error', None),
+        'failed_commands': getattr(relays, 'failed_commands', 0),
+    })
 
 
 @system_bp.route('/failsafe_status')
@@ -102,6 +125,8 @@ def failsafe_status():
         'cameras': cameras,
         'relay_states': relay_states,
         'relays_initialized': state.relays.is_initialized,
+        'relays_online': state.relays.is_initialized and state.relays_online,
+        'relays_last_error': getattr(state.relays, 'last_error', None),
         'message': (
             'Système opérationnel' if not active
             else '⚠️  MODE FAIL-SAFE ACTIF - Alertes maintenues ON'

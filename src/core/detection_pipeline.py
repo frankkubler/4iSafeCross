@@ -12,7 +12,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 
-from src.core import failsafe, geometry
+from src.core import async_bridge, failsafe, geometry
 from src.core.state import state
 
 logger = logging.getLogger(__name__)
@@ -166,9 +166,9 @@ def detection_callback_factory(cid, main_loop=None):
             elif not detected and previous_detection[zone_name]:
                 previous_detection[zone_name] = False
                 logger.info(f"Plus de détection sur la caméra {cid} dans la zone {zone_name}")
-                asyncio.run_coroutine_threadsafe(
+                async_bridge.schedule(
                     state.alert_manager.on_no_more_detection(current_timestamp, zone_names=[zone_name]),
-                    loop
+                    loop, what=f"on_no_more_detection(cam {cid}, {zone_name})",
                 )
 
         # Filtre IoU : exclure les personnes dont la bbox chevauche significativement
@@ -229,8 +229,8 @@ def detection_callback_factory(cid, main_loop=None):
                             _pts = np.array(_poly, dtype=np.int32)
                             cv2.fillPoly(frame, [_pts], (0, 0, 0))
             logger.debug(f"Détections caméra {cid} (après filtrage stature/zone) : {detections_person_with_zone}, {current_day}")
-            asyncio.run_coroutine_threadsafe(
+            async_bridge.schedule(
                 state.alert_manager.on_detection(current_timestamp, frame, detections_person_with_zone, cid),
-                loop
+                loop, what=f"on_detection(cam {cid})",
             )
     return detection_callback

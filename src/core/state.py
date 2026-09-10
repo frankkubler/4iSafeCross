@@ -62,6 +62,10 @@ class AppState:
         # fail-safe même si les autres caméras fonctionnent.
         self.last_heartbeat_by_cam = {}
         self.camera_failsafe = {}     # index caméra → bool (relais maintenus ON)
+        # Module relais joignable (constaté par le watchdog via YoctoMultiRelay.check_health).
+        # False = aucune alerte ne peut être émise physiquement : /health passe en 503
+        # et le tableau de bord affiche un bandeau.
+        self.relays_online = True
 
 
 state = AppState()

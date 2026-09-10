@@ -85,9 +85,19 @@ Permet de surveiller l'état du système fail-safe en temps réel.
     "relay_2": "YRelay.STATE_B"
   },
   "relays_initialized": true,
+  "relays_online": true,
+  "relays_last_error": null,
   "message": "Système opérationnel"
 }
 ```
+
+`relays_online` est le constat du watchdog (module joignable) ; `relays_last_error`
+la dernière erreur du pilote. Pour un affichage fréquent, préférer
+**`/relays_status`** : mêmes informations (`initialized`, `online`, `last_error`,
+`failed_commands`) **sans aucun accès USB**, alors que `/failsafe_status` lit
+l'état physique de chaque relais sur le module. Le tableau de bord l'interroge
+toutes les 5 s pour le bandeau « MODULE RELAIS INJOIGNABLE ». `/health` passe en
+503 dès que `relays_online` est faux.
 
 **En cas de dysfonctionnement :**
 ```json
@@ -168,6 +178,57 @@ la normale, `_delayed_off_relay` voyait `relay_on = False` et n'éteignait jamai
 3. Watchdog active le fail-safe après 30s
 4. **Relais forcés à ON**
 
+### Scénario 6 : Module relais injoignable (carte Yoctopuce muette ou ré-énumérée)
+
+**Constat terrain (2026-09-10, reServer J4012, deux caméras)** : la carte
+Yocto-MaxiPowerRelay répondait au démarrage, puis a cessé de répondre sans aucun
+événement USB ; la bibliothèque yapi l'a alors réinitialisée en boucle (`dmesg` :
+`USB disconnect` toutes les 2 s). Dans le conteneur, chaque `action_on` levait une
+`YAPI_Exception` qui **tuait la coroutine `on_detection` sans aucune trace** : le
+tableau de bord affichait « Alerte déclenchée », les relais ne bougeaient pas, et
+`/health` répondait 200. Un système de sécurité muet est le pire des états.
+
+**Comportement depuis le correctif :**
+
+1. **Aucune commande n'échoue en silence.** `YoctoMultiRelay.set_relay` retourne
+   `False` et journalise en ERROR `⚠️  MODULE RELAIS INJOIGNABLE — …` (rappel
+   toutes les 30 s tant que la panne dure, pas à chaque détection). Les
+   coroutines planifiées depuis les threads passent par `src/core/async_bridge.py`,
+   qui journalise toute exception non rattrapée avec sa pile.
+2. **État interne côté sûr.** Activation refusée : `relay_on` reste `False`, la zone
+   reste active, la commande est retentée à la détection suivante. Extinction
+   refusée : le relais est supposé toujours ON et une nouvelle extinction différée
+   est programmée (11 s). Aucun événement `relay_events` n'est enregistré pour une
+   commande non confirmée.
+3. **Surveillance par le watchdog.** À chaque période (5 s), `check_health()`
+   appelle `YAPI.UpdateDeviceList()` — indispensable pour voir revenir un module
+   ré-énuméré par le noyau — puis `isOnline()` sur chaque relais. Sur transition :
+   ERROR `MODULE RELAIS INJOIGNABLE`, `state.relays_online = False`, `/health` → 503
+   (`module relais injoignable : aucune alerte ne peut être émise physiquement`),
+   bandeau rouge sur le tableau de bord (`/relays_status`, sans accès USB).
+4. **Resynchronisation au retour.** Après une ré-énumération la carte redémarre
+   avec ses relais à l'état de mise sous tension (OFF) alors que l'application
+   peut croire une alerte ON. Au retour du module, `AlerteManager.resync_relays()`
+   réapplique l'état voulu de chaque relais géré (`🔄 Resynchronisation des relais…`).
+5. **Carte absente au démarrage** : `check_health()` réenregistre le hub et
+   énumère les relais à chaque période jusqu'à les trouver.
+6. **Sérialisation.** Tous les appels à la bibliothèque (boucle asyncio, watchdog,
+   threads waitress) sont sous un même verrou : la sûreté multi-thread de la
+   version Python de la bibliothèque Yoctopuce n'est pas documentée.
+
+**Prérequis côté conteneur** : monter `/dev/bus/usb:/dev/bus/usb` (fait dans les
+fichiers compose). Docker peuple `/dev` au démarrage du conteneur et ne le met
+plus à jour : après une ré-énumération le nouveau nœud `/dev/bus/usb/001/NNN`
+n'existe pas dans le conteneur et la carte est **définitivement** perdue jusqu'au
+redémarrage, `privileged: true` ou pas. Vérification :
+`ls /dev/bus/usb/001/` sur l'hôte et `docker exec 4isafecross ls /dev/bus/usb/001/`
+doivent lister le même numéro que `lsusb | grep 24e0`.
+
+**Limite connue** : la cause de la première perte de communication (sans événement
+USB, avec deux caméras actives) n'est pas établie ; le correctif rend la panne
+visible et récupérable, il ne la prévient pas. Piste d'architecture : VirtualHub
+Yoctopuce sur l'hôte et application connectée en TCP local.
+
 ## 🔍 Logs et Diagnostic
 
 ### Au Démarrage
@@ -217,6 +278,22 @@ l'opérateur voie quelle caméra il regarde.
 ```
 ✅ Application de nouveau opérationnelle (heartbeat reçu)
 ```
+
+### Module relais injoignable, puis de retour
+```
+⚠️  MODULE RELAIS INJOIGNABLE — commande relais 0 -> état 1 perdue : Device not connected (1 commande(s) perdue(s) depuis la dernière réussite)
+⚠️  Relais 0 : activation pour la zone zone1_cam1 IMPOSSIBLE — module relais injoignable, l'alerte n'est PAS signalée physiquement
+⚠️  MODULE RELAIS INJOIGNABLE : aucune alerte ne peut être émise physiquement (commande relais 0 -> état 1 perdue : Device not connected)
+…
+✅ Module relais de nouveau joignable après 47 commande(s) perdue(s)
+✅ Module relais de nouveau joignable — resynchronisation de l'état des relais
+🔄 Resynchronisation des relais après retour du module (retour du module relais) : ON attendus [0, 1], OFF attendus [2, 3, 4]
+✅ Relais 0 : commandes de nouveau acceptées par le module
+```
+Symptôme associé côté hôte : `dmesg -T | grep "usb 1-2.3"` montre des
+`USB disconnect` / `new full-speed USB device` toutes les 2 s tant que
+l'application tourne. Si le conteneur ne voit pas le numéro de périphérique
+courant (voir Scénario 6), vérifier le montage `/dev/bus/usb`.
 
 ## 🛠️ Configuration
 
