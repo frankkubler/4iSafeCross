@@ -25,6 +25,7 @@ from src.camera_manager import CameraManager, redact_rtsp_url
 from src.collect_dataset import DatasetCollectionThread
 from src.core import caches, failsafe
 from src.core.detection_pipeline import detection_callback_factory, get_frame_func_factory
+from src.core.camera_order import order_cameras, rtsp_host
 from src.core.state import state
 from src.inference import InferenceServerThread
 from src.relay_pilot import YoctoMultiRelay
@@ -162,7 +163,16 @@ def _log_zone_inventory():
 
 
 def _wait_for_rtsp_streams():
-    """Attente active jusqu'à ce qu'au moins une caméra réponde au ping RTSP."""
+    """Attend qu'au moins une caméra réponde au ping RTSP, puis retourne TOUTES
+    les caméras configurées, dans l'ordre de config.ini.
+
+    L'index d'une caméra est sa position dans ``[RTSP] HOST`` : c'est lui que
+    portent les zones (``_cam<i>``), les relais, la vue de l'IHM et le fail-safe
+    par caméra (voir src/core/camera_order.py). Une caméra absente au démarrage
+    garde donc sa place : CameraManager relance son pipeline en boucle et la
+    rattrapera sans redémarrage, et d'ici là le watchdog force les relais de ses
+    zones (fail-safe par caméra) au lieu de la laisser hors surveillance.
+    """
     cam_ids = []
     for host in RTSP_HOST:
         cam_ids.append(
@@ -179,7 +189,9 @@ def _wait_for_rtsp_streams():
     while not available_cam_ids:
         attempt += 1
         results = CameraManager.test_rtsp_streams_parallel(cam_ids)
-        available_cam_ids = [cid for cid, ok in results.items() if ok]
+        # Ordre CONFIGURÉ, jamais celui du dictionnaire de résultats (ordre de
+        # fin des tests parallèles) : c'est lui qui fixe l'index des caméras.
+        cam_ids, available_cam_ids = order_cameras(cam_ids, results)
 
         # Logger l'état de chaque caméra pour cette tentative
         for cid in cam_ids:
@@ -189,6 +201,12 @@ def _wait_for_rtsp_streams():
                 logger.warning(f"Ping RTSP échoué pour {redact_rtsp_url(cid)} (tentative {attempt})")
 
         if available_cam_ids:
+            for idx, cid in enumerate(cam_ids):
+                if cid not in available_cam_ids:
+                    logger.warning(
+                        f"Caméra {idx} ({rtsp_host(cid)}) absente au démarrage : conservée à l'index {idx} "
+                        f"(zones _cam{idx}), reconnexion en boucle, relais de ses zones sous fail-safe."
+                    )
             if WAIT_BEFORE_TEST_RTSP > 0:
                 logger.info(
                     f"Au moins une caméra répond au ping RTSP ({redact_rtsp_url(available_cam_ids[0])}). Attente de {WAIT_BEFORE_TEST_RTSP}s avant démarrage des flux RTSP..."
@@ -201,7 +219,7 @@ def _wait_for_rtsp_streams():
         )
         time.sleep(retry_delay)
 
-    return available_cam_ids
+    return cam_ids
 
 
 def _purge_dataset_files():
@@ -279,7 +297,10 @@ def create_application():
 
     # Vérification des flux RTSP avant d'instancier CameraManager
     state.cam_ids = _wait_for_rtsp_streams()
-    logger.info(f"Caméras RTSP disponibles : {[redact_rtsp_url(c) for c in state.cam_ids]}")
+    logger.info(
+        "Caméras (index = position dans config.ini) : "
+        + ", ".join(f"{i}={rtsp_host(c)}" for i, c in enumerate(state.cam_ids))
+    )
     state.manager = CameraManager(
         state.cam_ids, frame_width=1920, frame_height=1080,
         rtsp_tls_ca=(RTSP_TLS_CA or None),

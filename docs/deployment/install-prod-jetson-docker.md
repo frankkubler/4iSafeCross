@@ -444,6 +444,7 @@ bloquerait `compose up` par collision de nom.
 |---|---|---|
 | `unauthorized: authentication required` au `pull` | Deploy token expiré, révoqué ou mauvaise portée | Regénérer un token `read_registry`, refaire `docker login` |
 | `no such host: registry.gitlab.4itec.ddns.net` | Boîtier hors ligne (état RUN normal) | Passer par `docker save`/`load` (§3.3) |
+| Détections et zones affichées sur la **mauvaise caméra** (la vue « Camera 1 » montre la .61 avec les zones de `cam0`), relais déclenchés à contretemps | Image antérieure au correctif d'ordre des caméras : l'index suivait l'ordre de réponse RTSP au démarrage, pas `config.ini` | Déployer une image récente ; vérifier le libellé `Camera N — <hôte>` de chaque vue, et le log `Caméras (index = position dans config.ini)`. Si une zone a été enregistrée sous le mauvais `_cam` pendant un tel démarrage, la redessiner ([failsafe-mode.md](../features/failsafe-mode.md), « Caméra absente au démarrage ») |
 | `error gathering device information … /dev/video0` | Nœud vidéo absent | Commenter la ligne dans `devices:` (§8) |
 | L'application s'arrête : `Licence invalide … destinée à la machine '…'` | Licence générée pour un autre `machine-id` | Regénérer la licence avec le `machine-id` du boîtier (§6) |
 | L'application s'arrête au démarrage sans erreur de licence | `SAFECROSS_AUTH_USER`/`PASSWORD` absents de `.env` | Compléter `.env` (§5) |
