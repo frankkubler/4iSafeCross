@@ -146,8 +146,8 @@ def detection_callback_factory(cid, main_loop=None):
         now = datetime.now()
         current_timestamp = now.timestamp()
 
-        # ===== HEARTBEAT FAIL-SAFE =====
-        failsafe.update_heartbeat()
+        # ===== HEARTBEAT FAIL-SAFE (global + par caméra) =====
+        failsafe.update_heartbeat(cid)
 
         # Correction asyncio event loop pour thread
         loop = main_loop

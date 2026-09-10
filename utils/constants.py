@@ -239,6 +239,11 @@ DATASET_HARD_NEG_ENABLED = config.getboolean('APP', 'DATASET_HARD_NEG_ENABLED', 
 
 # Nouvelle constante pour le temps d'attente avant test RTSP
 WAIT_BEFORE_TEST_RTSP = config.getint('APP', 'WAIT_BEFORE_TEST_RTSP', fallback=10)
+# Délai accordé à la première image d'un flux RTSP après la mise en PLAYING
+# (négociation + image clé). Voir CameraManager.DEFAULT_FIRST_FRAME_TIMEOUT_S.
+RTSP_FIRST_FRAME_TIMEOUT = config.getint('APP', 'RTSP_FIRST_FRAME_TIMEOUT', fallback=15)
+# Silence toléré, flux établi, avant de déclarer la perte du flux (1 = historique).
+RTSP_FRAME_LOSS_TIMEOUT = config.getint('APP', 'RTSP_FRAME_LOSS_TIMEOUT', fallback=1)
 
 # Période de grâce fail-safe au démarrage avant extinction initiale des relais
 STARTUP_GRACE_PERIOD = config.getint('APP', 'STARTUP_GRACE_PERIOD', fallback=15)

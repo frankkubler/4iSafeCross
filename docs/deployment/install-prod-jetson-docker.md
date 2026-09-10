@@ -443,6 +443,7 @@ boîtier (le conteneur créé par `docker run` n'est pas géré par `docker comp
 | Zones de sécurité perdues après une MAJ | Bind-mounts absents (conteneur lancé sans `-v /data/...`) | Relancer via le fichier compose ; restaurer `config/` depuis la sauvegarde |
 | `nvidia` absent de `docker info` | `nvidia-container-toolkit` non configuré | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` |
 | `apt` bloqué (`2 not fully installed`) | `postinst` de `nvidia-l4t-bootloader` (carte Seeed) | [install-system-deps.md](install-system-deps.md) § « Carte porteuse Seeed » |
+| `Aucune image reçue pour rtsp://… en 15s après la mise en PLAYING` en boucle, `/health` → `cameras_online: 0` | Le port 554 accepte la connexion TCP mais aucun flux RTSP n'est servi (caméra en initialisation, mauvais chemin de flux, autre équipement sur l'IP) | Sonde GStreamer hors application (§ 12.2) ; vérifier `STREAM` et les identifiants dans `/data/4isafecross/config/config.ini` |
 | `createContainer hook #2: exit status 2` + `panic: slice bounds out of range` dans `cudacompat` | Hook CDI `cudacompat` du container-toolkit : il parse l'en-tête ELF de `/usr/local/cuda/compat` de l'image et panique | Voir § 12.1 ci-dessous — image ≥ `v3.0.1-arm64`, ou désactivation du hook |
 
 
@@ -528,6 +529,39 @@ le hook n'est alors pas appelé :
 sudo docker run --rm --entrypoint ls \
   registry.gitlab.4itec.ddns.net/frank-k/4isafecross:v3.0.0-arm64 -la /usr/local/cuda/
 ```
+
+
+### 12.2 Le port RTSP répond mais aucune image n'arrive
+
+Symptôme : le conteneur est `healthy`, l'IHM répond, `/health` renvoie
+`cameras_online: 0` avec `cameras_total` > 0, et les logs bouclent sur
+`Aucune image reçue pour rtsp://… en 15s après la mise en PLAYING`.
+
+**Pourquoi l'application démarre quand même.** Le test de démarrage
+(`_wait_for_rtsp_streams`) et le test de reconnexion sont un simple `connect()` TCP sur le
+port 554 : ils prouvent qu'un équipement écoute, pas qu'un flux RTSP est servi ni décodable.
+Une caméra en cours d'initialisation, un NVR, ou tout matériel ayant récupéré l'IP passent
+ce test. Les deux hôtes sont alors retenus dans `state.cam_ids`, l'IHM démarre, et chaque
+thread caméra relance son pipeline en boucle — il rattrapera le flux **sans redémarrage** dès
+qu'il sera réellement servi.
+
+**Trancher en 20 s, sans toucher à l'application** — la sonde [scripts/rtsp_probe.py](../../scripts/rtsp_probe.py)
+lance exactement le pipeline de production (même URL, même chaîne GStreamer) et remonte ce
+que l'application ne loggue pas :
+
+```bash
+docker exec -i 4isafecross /app/.venv/bin/python - < scripts/rtsp_probe.py
+```
+
+| Sortie de la sonde | Cause | Suite |
+|---|---|---|
+| `BUS ERROR +12.5s : Could not read from resource … Could not receive message` puis `AUCUNE IMAGE` | TCP accepté, aucun dialogue RTSP derrière | Côté caméra/réseau : caméra pas encore en service, ou autre équipement sur l'IP |
+| `BUS ERROR` immédiat `401 Unauthorized` / `404 Not Found` | Identifiants, ou `STREAM` (chemin du flux) faux | Corriger `[RTSP]` dans `/data/4isafecross/config/config.ini`, puis `docker compose restart` |
+| `PREMIÈRE IMAGE après N s` avec N > `RTSP_FIRST_FRAME_TIMEOUT` | Caméra lente à négocier / GOP long | Augmenter `RTSP_FIRST_FRAME_TIMEOUT` dans `[APP]` (15 s par défaut) |
+| `PREMIÈRE IMAGE après N s`, N < seuil, débit > 0 | Le flux fonctionne | Le problème est ailleurs (inférence, zones) : `docker logs`, `/failsafe_status` |
+
+> Toute modification de `[RTSP]` (hôtes, identifiants, chemin de flux) exige un redémarrage
+> du conteneur : la liste des caméras est construite une seule fois au boot.
 
 ---
 

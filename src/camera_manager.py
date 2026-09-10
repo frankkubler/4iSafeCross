@@ -47,8 +47,17 @@ def redact_rtsp_url(value):
 
 
 class CameraManager:
+    # Délai accordé à la PREMIÈRE image après la mise en PLAYING : négociation RTSP
+    # (DESCRIBE/SETUP/PLAY) puis attente d'une image clé. Sur la plupart des caméras
+    # PoE cela dépasse 1 s. Avec 1 s, l'application détruisait le pipeline avant la
+    # première image et bouclait indéfiniment (1 s d'essai, 23 s d'attente).
+    DEFAULT_FIRST_FRAME_TIMEOUT_S = 15
+    # Une fois le flux établi : silence toléré avant de déclarer la perte du flux.
+    # 1 s = comportement historique (détection rapide d'une caméra qui tombe).
+    DEFAULT_FRAME_LOSS_TIMEOUT_S = 1
+
     def __init__(self, cam_ids, buffer_size=5, frame_width=None, frame_height=None,
-                 rtsp_tls_ca=None):
+                 rtsp_tls_ca=None, first_frame_timeout=None, frame_loss_timeout=None):
         """Initialise le gestionnaire de caméras RTSP.
 
         Args:
@@ -59,11 +68,23 @@ class CameraManager:
             rtsp_tls_ca: Chemin d'un PEM pour épingler le certificat des caméras
                 en ``rtsps://`` (None = accepter le certificat auto-signé, cas
                 d'un sous-réseau caméras dédié et isolé).
+            first_frame_timeout: Secondes accordées à la première image après la
+                mise en PLAYING (None = DEFAULT_FIRST_FRAME_TIMEOUT_S).
+            frame_loss_timeout: Secondes sans image, flux établi, avant de déclarer
+                la perte (None = DEFAULT_FRAME_LOSS_TIMEOUT_S).
         """
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.rtsp_tls_ca = rtsp_tls_ca
+        self.first_frame_timeout = (
+            self.DEFAULT_FIRST_FRAME_TIMEOUT_S if first_frame_timeout is None
+            else max(1, int(first_frame_timeout))
+        )
+        self.frame_loss_timeout = (
+            self.DEFAULT_FRAME_LOSS_TIMEOUT_S if frame_loss_timeout is None
+            else max(1, int(frame_loss_timeout))
+        )
         self.cams = {}
         filtered_cam_ids = []
         for cid in cam_ids:
@@ -247,13 +268,18 @@ class CameraManager:
             if not self.running or pipeline is None:
                 break
 
-            fail_count = 0
-            self.cams_status[cid] = 'online'
+            # 'online' n'est posé qu'à la première image : un hôte qui accepte la
+            # connexion TCP sans servir de RTSP ne doit pas compter comme caméra en
+            # ligne (/health, IHM).
+            got_first_frame = False
+            t_playing = time.monotonic()
+            last_frame_at = t_playing
             while self.running and not eos_or_error.is_set():
                 self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
                 if eos_or_error.is_set():
                     break
 
+                # 1 s de granularité : garde le bus GStreamer réactif (ERROR/EOS).
                 sample = appsink.emit('try-pull-sample', 1_000_000_000)
                 if sample:
                     buf = sample.get_buffer()
@@ -265,7 +291,13 @@ class CameraManager:
                         frame = np.frombuffer(mapinfo.data, dtype=np.uint8)
                         try:
                             frame = frame.reshape((height, width, 3))
-                            fail_count = 0
+                            if not got_first_frame:
+                                got_first_frame = True
+                                self.logger.info(
+                                    f"Première image reçue pour {safe_cid} "
+                                    f"{time.monotonic() - t_playing:.1f}s après la mise en PLAYING"
+                                )
+                            last_frame_at = time.monotonic()
                             self.cams_status[cid] = 'online'
                         except Exception as e:
                             self.logger.error(f"Erreur reshape frame: {e}, shape={frame.shape}, width={width}, height={height}")
@@ -280,9 +312,26 @@ class CameraManager:
                     if eos_or_error.is_set():
                         break
 
-                    fail_count += 1
-                    self.logger.warning(f"Aucune frame reçue via GStreamer pour {safe_cid} (compteur: {fail_count})")
-                    self.cams_status[cid] = 'offline'
+                    now = time.monotonic()
+                    if not got_first_frame:
+                        waited = now - t_playing
+                        if waited < self.first_frame_timeout:
+                            self.logger.debug(
+                                f"En attente de la première image pour {safe_cid} "
+                                f"({waited:.0f}s/{self.first_frame_timeout}s)"
+                            )
+                            continue
+                        self.logger.warning(
+                            f"Aucune image reçue pour {safe_cid} en {self.first_frame_timeout}s "
+                            f"après la mise en PLAYING (le port RTSP répond mais aucun flux n'est servi)"
+                        )
+                    else:
+                        silence = now - last_frame_at
+                        if silence < self.frame_loss_timeout:
+                            continue
+                        self.logger.warning(f"Flux perdu pour {safe_cid} : aucune image depuis {silence:.1f}s")
+
+                    self._mark_offline(cid)
                     while self.running:
                         self.logger.info(f"Attente de reconnexion au flux RTSP {safe_cid}...")
                         if self.test_rtsp_stream(cid):
@@ -291,11 +340,11 @@ class CameraManager:
                             break
                         time.sleep(2)
                     break
-            else:
-                self.cams_status[cid] = 'online'
             if bus is not None:
                 self._poll_bus_messages(bus, cid, eos_or_error, bus_state)
             pipeline.set_state(Gst.State.NULL)
+            # EOS, ERROR ou arrêt : la dernière image n'est plus représentative.
+            self._mark_offline(cid)
             if not self.running:
                 break
             if bus_state.get('auth_error'):
@@ -311,6 +360,22 @@ class CameraManager:
                 time.sleep(reconnect_delay)
         self.logger.info(f"Thread update caméra {safe_cid} terminé.")
         self.cams_status[cid] = 'offline'
+
+    def _mark_offline(self, cid):
+        """Déclare la caméra hors ligne et invalide sa dernière image.
+
+        Sans cette invalidation, le thread d'inférence continuait de traiter la
+        dernière image figée : MOG2 n'y voyait aucun mouvement, le callback de
+        détection était tout de même appelé et émettait le heartbeat fail-safe.
+        Une perte totale des caméras laissait donc l'application « saine » et
+        les relais éteints — l'inverse du comportement documenté
+        (docs/features/failsafe-mode.md, scénario 3). Avec frames[cid] = None,
+        le thread d'inférence n'appelle plus le callback, le heartbeat cesse et
+        le watchdog force les relais ON après HEARTBEAT_TIMEOUT.
+        """
+        self.cams_status[cid] = 'offline'
+        with self.locks[cid]:
+            self.frames[cid] = None
 
     def get_status(self, cid):
         return self.cams_status.get(cid, 'unknown')

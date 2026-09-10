@@ -52,8 +52,16 @@ class AppState:
 
         # Heartbeat fail-safe (voir src/core/failsafe.py)
         self.heartbeat_lock = threading.Lock()
-        self.last_heartbeat = time.time()
+        self.boot_time = time.time()
+        self.last_heartbeat = self.boot_time
         self.application_healthy = True
+        # Vrai dès le premier heartbeat : conditionne l'extinction initiale des relais.
+        self.heartbeat_received = False
+        # Heartbeat PAR CAMÉRA : index caméra → horodatage du dernier callback de
+        # détection. Une caméra silencieuse > HEARTBEAT_TIMEOUT passe ses relais en
+        # fail-safe même si les autres caméras fonctionnent.
+        self.last_heartbeat_by_cam = {}
+        self.camera_failsafe = {}     # index caméra → bool (relais maintenus ON)
 
 
 state = AppState()

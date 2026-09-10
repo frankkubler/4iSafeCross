@@ -238,6 +238,53 @@ class AlerteManager:
                     exc_info=True,
                 )
 
+    # ── Fail-safe (appelé par src/core/failsafe.py) ───────────────────────────
+    def force_relays_on(self, relay_nums, reason=""):
+        """Force ON les relais donnés en gardant l'état interne cohérent.
+
+        Appelé depuis le thread watchdog (synchrone). Pour les relais gérés par des
+        zones, relay_on/relay_on_time sont mis à jour : sans cela, l'extinction
+        différée ne les considérerait jamais (relay_on False) et ils resteraient ON
+        physiquement après le retour à la normale. Les relais hors zones sont
+        simplement allumés.
+        """
+        now = datetime.now()
+        for relay_num in relay_nums:
+            if relay_num in self.relay_on:
+                if not self.relay_on[relay_num]:
+                    self.relays.action_on(relay_num)
+                    self.logger.warning(f"🔧 Fail-safe : relais {relay_num} forcé ON ({reason})")
+                elif not self.relays.get_relay_state(relay_num):
+                    # État interne ON mais physique OFF : réaligner sans bruit excessif
+                    self.relays.action_on(relay_num)
+                    self.logger.warning(f"🔧 Fail-safe : relais {relay_num} réactivé ({reason})")
+                self.relay_on[relay_num] = True
+                self.relay_on_time[relay_num] = now
+                # Un timer d'extinction en cours contredirait le forçage : on l'annule.
+                # Appel depuis le thread watchdog → l'annulation doit être planifiée sur
+                # la boucle propriétaire de la tâche (Task.cancel n'est pas thread-safe).
+                timer = self.relay_timer_task.get(relay_num)
+                if timer and not timer.done():
+                    timer.get_loop().call_soon_threadsafe(timer.cancel)
+            else:
+                if not self.relays.get_relay_state(relay_num):
+                    self.relays.action_on(relay_num)
+                    self.logger.warning(f"🔧 Fail-safe : relais {relay_num} (hors zones) forcé ON ({reason})")
+
+    async def release_forced_relays(self, relay_nums, reason=""):
+        """Fin de fail-safe : relance l'extinction différée des relais sans zone active.
+
+        Respecte la temporisation de sécurité de _delayed_off_relay (11 s minimum
+        d'allumage). Si une personne est détectée entre-temps, on_detection annule
+        le timer comme en fonctionnement normal.
+        """
+        for relay_num in relay_nums:
+            if relay_num not in self.relay_on:
+                continue  # hors zones : géré par startup_relay_off uniquement
+            if self.relay_on.get(relay_num) and not self.relay_active_zones.get(relay_num):
+                self.logger.info(f"Fail-safe levé pour relais {relay_num} ({reason}) : extinction différée")
+                await self._cancel_and_restart_timer(relay_num)
+
     async def on_no_more_detection(self, timestamp: float, zone_names=None):
         """
         Optimisé : extinction indépendante par relais, factorisation, typage.

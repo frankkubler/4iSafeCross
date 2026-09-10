@@ -58,7 +58,7 @@ def health():
 
     payload = {
         'ok': not reasons,
-        'failsafe_active': not state.application_healthy,
+        'failsafe_active': (not state.application_healthy) or any(state.camera_failsafe.values()),
         'cameras_online': cameras_online,
         'cameras_total': cameras_total,
         'relays_initialized': relays_ready,
@@ -80,14 +80,33 @@ def failsafe_status():
     for i in range(len(state.relays.relays)):
         relay_states[f"relay_{i}"] = state.relays.get_relay_state(i)
 
+    # État par caméra : dernier heartbeat, fail-safe local et relais concernés
+    cameras = {}
+    now = time.time()
+    with state.heartbeat_lock:
+        for idx in range(len(state.cam_ids)):
+            last = state.last_heartbeat_by_cam.get(idx)
+            cameras[f"camera_{idx}"] = {
+                'failsafe': state.camera_failsafe.get(idx, False),
+                'last_heartbeat_seconds_ago': None if last is None else round(now - last, 2),
+                'relays': sorted(failsafe.relays_for_camera(idx)),
+            }
+    any_camera_failsafe = any(c['failsafe'] for c in cameras.values())
+    active = (not state.application_healthy) or any_camera_failsafe
+
     return jsonify({
         'application_healthy': state.application_healthy,
         'last_heartbeat_seconds_ago': round(time_since_heartbeat, 2),
         'heartbeat_timeout': failsafe.HEARTBEAT_TIMEOUT,
-        'failsafe_mode': 'ACTIVE' if not state.application_healthy else 'STANDBY',
+        'failsafe_mode': 'ACTIVE' if active else 'STANDBY',
+        'cameras': cameras,
         'relay_states': relay_states,
         'relays_initialized': state.relays.is_initialized,
-        'message': 'Système opérationnel' if state.application_healthy else '⚠️  MODE FAIL-SAFE ACTIF - Alertes maintenues ON'
+        'message': (
+            'Système opérationnel' if not active
+            else '⚠️  MODE FAIL-SAFE ACTIF - Alertes maintenues ON'
+            + ('' if not state.application_healthy else f" (caméra(s) : {[k for k, c in cameras.items() if c['failsafe']]})")
+        ),
     })
 
 

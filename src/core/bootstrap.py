@@ -33,6 +33,7 @@ from utils.constants import (MOTIONTHRESHOLD, RTSP_LOGIN,
                              RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM,
                              RTSP_SCHEME, RTSP_TLS_CA, LOG_LEVEL,
                              ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP,
+                             RTSP_FIRST_FRAME_TIMEOUT, RTSP_FRAME_LOSS_TIMEOUT,
                              DATASET_COLLECTION, DATASET_COLLECTION_INTERVAL,
                              DATASET_COLLECTION_START_HOUR, DATASET_COLLECTION_END_HOUR,
                              DATASET_COLLECTION_MAX_PER_CLASS, DATASET_OUTPUT_DIR, DATASET_FILES_KEEP_DAYS,
@@ -282,6 +283,8 @@ def create_application():
     state.manager = CameraManager(
         state.cam_ids, frame_width=1920, frame_height=1080,
         rtsp_tls_ca=(RTSP_TLS_CA or None),
+        first_frame_timeout=RTSP_FIRST_FRAME_TIMEOUT,
+        frame_loss_timeout=RTSP_FRAME_LOSS_TIMEOUT,
     )
 
     for i in range(len(state.cam_ids)):

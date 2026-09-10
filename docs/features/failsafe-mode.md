@@ -120,11 +120,47 @@ Permet de surveiller l'état du système fail-safe en temps réel.
 3. **Relais restent ON** (fail-safe activé)
 4. Alertes visuelles continuent de fonctionner
 
-### Scénario 3 : Perte de Connexion Caméra
-1. Connexion caméra perdue
-2. Détection s'arrête → Heartbeat s'arrête
+### Scénario 3 : Perte de Connexion Caméra (toutes les caméras)
+1. Connexion caméra perdue → `CameraManager._mark_offline()` invalide la dernière image (`frames[cid] = None`)
+2. Le thread d'inférence n'a plus d'image → le callback de détection n'est plus appelé → Heartbeat s'arrête
 3. Après 30s → Mode fail-safe activé
-4. **Relais restent ON** par sécurité
+4. **Relais forcés ON** par sécurité
+
+> ⚠️ **Avant v3.0.2, ce scénario ne fonctionnait pas.** La dernière image reçue restait en
+> mémoire ; le thread d'inférence continuait de la traiter (aucun mouvement → callback avec
+> détections vides → heartbeat émis). Une perte totale des caméras laissait l'application
+> « saine » et les relais **éteints**. L'invalidation de l'image à la perte corrige ce point.
+
+### Scénario 5 : Perte d'une caméra parmi plusieurs (fail-safe par caméra, v3.0.2)
+Le heartbeat est émis **par caméra** (`update_heartbeat(cid)`, `state.last_heartbeat_by_cam`).
+Le watchdog évalue chaque caméra indépendamment du niveau global :
+1. La caméra `k` ne fournit plus d'image → son callback n'est plus appelé → son heartbeat cesse
+2. Après 30s → `camera_failsafe[k] = True` ; **seuls les relais des zones de la caméra `k`**
+   sont forcés ON (`AlerteManager.force_relays_on`), les autres caméras continuent normalement
+3. Un relais partagé entre une zone de `k` et une zone d'une autre caméra est forcé ON (choix
+   prudent)
+4. Retour du flux → heartbeat de `k` repris → `release_forced_relays` : extinction différée
+   normale (11 s minimum, annulée si une personne est détectée)
+
+`/failsafe_status` expose `cameras.camera_<k>.{failsafe, last_heartbeat_seconds_ago, relays}` ;
+`/health` passe `failsafe_active` à `true` dès qu'une caméra est en fail-safe.
+
+> Avant v3.0.2, seul un heartbeat global existait : tant qu'une caméra fournissait des images,
+> la perte d'une autre n'activait rien — ses relais restaient éteints et ses zones sans
+> surveillance.
+
+### Démarrage sans caméra : extinction initiale conditionnée (v3.0.2)
+`startup_relay_off()` n'éteint les relais qu'après **au moins un heartbeat depuis le boot**
+(`state.heartbeat_received`). Sans image caméra, les relais restent ON ; au premier heartbeat,
+une nouvelle période de grâce `STARTUP_GRACE_PERIOD` s'écoule avant l'extinction initiale.
+
+> Avant v3.0.2, un démarrage sans caméra éteignait les relais à t≈15 s et le watchdog ne les
+> rallumait qu'à t≈30–35 s : 15 à 20 s d'alertes éteintes.
+
+### Cohérence état interne / état physique
+Tout forçage fail-safe passe par `AlerteManager.force_relays_on`, qui met à jour `relay_on` et
+`relay_on_time`. L'ancien watchdog appelait `relays.action_on()` directement : après retour à
+la normale, `_delayed_off_relay` voyait `relay_on = False` et n'éteignait jamais ces relais.
 
 ### Scénario 4 : Thread d'Inférence Bloqué
 1. Thread d'inférence se bloque
