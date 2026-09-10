@@ -58,6 +58,13 @@ services:
       # Journal d'audit JSON (CS-144-01 / CS-R2-03) — doit survivre aux MAJ d'image.
       - /data/4isafecross/logs:/app/logs
       - ./licenses:/app/licenses
+      # Carte relais Yoctopuce (USB). Docker peuple /dev au démarrage du conteneur
+      # et ne le met plus à jour : après une ré-énumération USB (nouveau numéro de
+      # périphérique) le nœud /dev/bus/usb/001/NNN n'existe pas dans le conteneur,
+      # la bibliothèque yapi ne peut plus ouvrir la carte et la réinitialise en
+      # boucle (dmesg : « USB disconnect » toutes les 2 s). Ce montage suit les
+      # ré-énumérations — privileged: true ne suffit PAS.
+      - /dev/bus/usb:/dev/bus/usb
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro
       - /etc/machine-id:/etc/machine-id:ro

@@ -26,6 +26,8 @@ class AlerteManager:
         self.last_detection_time_by_zone = {}  # {zone_name: timestamp}
         # Pour chaque relais, garder la liste des zones actives qui l'utilisent
         self.relay_active_zones = {}  # {relay_num: set(zone_names_actives)}
+        # Relais dont la dernière commande a été refusée par le module (journalisé une fois)
+        self._relays_failed = set()
         self.logger = logging.getLogger(__name__).getChild(__class__.__name__)
         # Dictionnaire pour suivre le dernier temps de détection par caméra
         self.camera_last_detection = {}
@@ -185,7 +187,12 @@ class AlerteManager:
                 self.relay_active_zones.setdefault(relay_num, set()).add(zone_name)
                 self.logger.debug(f"self.relay_on : {self.relay_on.get(relay_num)}")
                 if not self.relay_on.get(relay_num, False):
-                    self.relays.action_on(relay_num)
+                    if not self.relays.action_on(relay_num):
+                        # Module injoignable : relay_on reste False pour que la
+                        # prochaine détection retente, et l'échec est visible.
+                        self._report_relay_failure(relay_num, f"activation pour la zone {zone_name}")
+                        continue
+                    self._clear_relay_failure(relay_num)
                     self.logger.info(f"Activation du relais pour la zone {zone_name} (relais numéro {relay_num})")
                     self.relay_on[relay_num] = True
                 self.relay_on_time[relay_num] = now
@@ -252,12 +259,17 @@ class AlerteManager:
         for relay_num in relay_nums:
             if relay_num in self.relay_on:
                 if not self.relay_on[relay_num]:
-                    self.relays.action_on(relay_num)
+                    if not self.relays.action_on(relay_num):
+                        self._report_relay_failure(relay_num, f"forçage fail-safe ON ({reason})")
+                        continue  # relay_on reste False : retenté à la prochaine détection / resync
                     self.logger.warning(f"🔧 Fail-safe : relais {relay_num} forcé ON ({reason})")
                 elif not self.relays.get_relay_state(relay_num):
-                    # État interne ON mais physique OFF : réaligner sans bruit excessif
-                    self.relays.action_on(relay_num)
-                    self.logger.warning(f"🔧 Fail-safe : relais {relay_num} réactivé ({reason})")
+                    # État interne ON mais physique OFF (ou module muet) : réaligner sans bruit excessif
+                    if not self.relays.action_on(relay_num):
+                        self._report_relay_failure(relay_num, f"réactivation fail-safe ({reason})")
+                    else:
+                        self.logger.warning(f"🔧 Fail-safe : relais {relay_num} réactivé ({reason})")
+                self._clear_relay_failure(relay_num)
                 self.relay_on[relay_num] = True
                 self.relay_on_time[relay_num] = now
                 # Un timer d'extinction en cours contredirait le forçage : on l'annule.
@@ -268,8 +280,10 @@ class AlerteManager:
                     timer.get_loop().call_soon_threadsafe(timer.cancel)
             else:
                 if not self.relays.get_relay_state(relay_num):
-                    self.relays.action_on(relay_num)
-                    self.logger.warning(f"🔧 Fail-safe : relais {relay_num} (hors zones) forcé ON ({reason})")
+                    if self.relays.action_on(relay_num):
+                        self.logger.warning(f"🔧 Fail-safe : relais {relay_num} (hors zones) forcé ON ({reason})")
+                    else:
+                        self._report_relay_failure(relay_num, f"forçage fail-safe hors zones ({reason})")
 
     async def release_forced_relays(self, relay_nums, reason=""):
         """Fin de fail-safe : relance l'extinction différée des relais sans zone active.
@@ -337,7 +351,9 @@ class AlerteManager:
                     if not self.relay_active_zones[relay_num] and self.relay_on.get(relay_num, False):
                         time_off = datetime.now()
                         self.logger.info(f"Extinction du relais {relay_num} après temporisation 11s (aucune activation préalable)")
-                        self.relays.action_off(relay_num)
+                        if not self.relays.action_off(relay_num):
+                            self._schedule_off_retry(relay_num)
+                            return
                         self.relay_on[relay_num] = False
                         duration = 0
                         self.relay_on_time[relay_num] = None
@@ -358,7 +374,9 @@ class AlerteManager:
                 else:
                     time_off = datetime.now()
                     self.logger.info(f"Extinction du relais {relay_num} après 11s sans détection (toutes zones)")
-                    self.relays.action_off(relay_num)
+                    if not self.relays.action_off(relay_num):
+                        self._schedule_off_retry(relay_num)
+                        return
                     self.relay_on[relay_num] = False
                     duration = (time_off - time_on).total_seconds()
                     insert_relay_event(f"relay_{relay_num}", duration, time_on, time_off)
@@ -381,6 +399,67 @@ class AlerteManager:
             self.logger.info(f"Extinction annulée (détection relancée) pour relais {relay_num}")
             pass
 
+    def _schedule_off_retry(self, relay_num: int):
+        """Extinction refusée par le module : état physique inconnu, on reste côté sûr.
+
+        relay_on reste True (le relais est supposé encore ON) et une nouvelle
+        extinction différée est programmée : _delayed_off_relay revérifie les
+        zones actives avant de retenter, 11 s plus tard au plus tôt. Le pilote
+        journalise l'échec ; ici on ne fait que le rendre visible côté alertes.
+        """
+        self._report_relay_failure(relay_num, "extinction après fin de détection")
+        self.relay_on_time[relay_num] = datetime.now()  # garantit les 11 s avant la nouvelle tentative
+        self.relay_timer_task[relay_num] = asyncio.create_task(self._delayed_off_relay(relay_num))
+
+    # ── Suivi des échecs de commande (module relais injoignable) ─────────────
+
+    def _report_relay_failure(self, relay_num: int, action: str):
+        """Journalise en ERROR l'échec d'une commande, une fois par relais jusqu'au retour."""
+        if relay_num not in self._relays_failed:
+            self._relays_failed.add(relay_num)
+            self.logger.error(
+                f"⚠️  Relais {relay_num} : {action} IMPOSSIBLE — module relais injoignable, "
+                f"l'alerte n'est PAS signalée physiquement"
+            )
+        else:
+            self.logger.debug(f"Relais {relay_num} : {action} toujours impossible (module injoignable)")
+
+    def _clear_relay_failure(self, relay_num: int):
+        if relay_num in self._relays_failed:
+            self._relays_failed.discard(relay_num)
+            self.logger.warning(f"✅ Relais {relay_num} : commandes de nouveau acceptées par le module")
+
+    def resync_relays(self, reason=""):
+        """Réapplique l'état voulu de chaque relais géré sur le module.
+
+        Appelé par le watchdog quand le module redevient joignable : après une
+        ré-énumération USB la carte redémarre avec ses relais à l'état de mise
+        sous tension (OFF), alors que l'application peut croire une alerte ON.
+        Sans cette passe, une alerte en cours resterait muette jusqu'à la
+        prochaine transition. Synchrone (thread watchdog), comme force_relays_on.
+        Retourne le nombre de relais dont la commande a échoué.
+        """
+        failures = 0
+        wanted_on = sorted(n for n, on in self.relay_on.items() if on)
+        wanted_off = sorted(n for n, on in self.relay_on.items() if not on)
+        self.logger.warning(
+            f"🔄 Resynchronisation des relais après retour du module ({reason}) : "
+            f"ON attendus {wanted_on}, OFF attendus {wanted_off}"
+        )
+        for relay_num in wanted_on:
+            if self.relays.action_on(relay_num):
+                self._clear_relay_failure(relay_num)
+            else:
+                failures += 1
+                self._report_relay_failure(relay_num, "resynchronisation ON")
+        for relay_num in wanted_off:
+            if self.relays.action_off(relay_num):
+                self._clear_relay_failure(relay_num)
+            else:
+                failures += 1
+                self._report_relay_failure(relay_num, "resynchronisation OFF")
+        return failures
+
     def set_zones(self, zones_or_by_camera):
         """Met à jour les zones et reconstruit le lookup relais.
 
@@ -401,8 +480,10 @@ class AlerteManager:
         # Éteindre physiquement les relais qui étaient allumés avant la reconfiguration
         for relay_num, was_on in list(self.relay_on.items()):
             if was_on:
-                self.relays.action_off(relay_num)
-                self.logger.info(f"Extinction du relais {relay_num} suite à la reconfiguration des zones")
+                if self.relays.action_off(relay_num):
+                    self.logger.info(f"Extinction du relais {relay_num} suite à la reconfiguration des zones")
+                else:
+                    self._report_relay_failure(relay_num, "extinction lors de la reconfiguration des zones")
         # Annuler les timers d'extinction en cours
         for relay_num, timer in list(self.relay_timer_task.items()):
             if timer and not timer.done():

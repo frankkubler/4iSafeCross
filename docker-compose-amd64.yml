@@ -28,6 +28,9 @@ services:
 
     devices:
       - /dev/dri:/dev/dri
+      # Carte relais Yoctopuce : /dev/bus/usb (et non un nœud figé) pour suivre
+      # les ré-énumérations USB — voir docker-compose-arm64.yml.
+      - /dev/bus/usb:/dev/bus/usb
     group_add:
       - video
       - "992"

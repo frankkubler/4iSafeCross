@@ -4,6 +4,7 @@ Faux AlerteManager et faux relais ; vraie boucle asyncio dans un thread pour les
 relâchements (release_forced_relays est planifié via run_coroutine_threadsafe).
 """
 import asyncio
+import logging
 import threading
 import time
 from types import SimpleNamespace
@@ -22,6 +23,7 @@ class FakeAlertManager:
         self.mapping = mapping
         self.forced = []      # [(relais triés, raison)]
         self.released = []    # [(relais triés, raison)]
+        self.resynced = []    # raisons des resynchronisations demandées
 
     def _get_relay_nums_from_zone(self, name):
         return self.mapping[name]
@@ -32,10 +34,15 @@ class FakeAlertManager:
     async def release_forced_relays(self, relays, reason=""):
         self.released.append((sorted(relays), reason))
 
+    def resync_relays(self, reason=""):
+        self.resynced.append(reason)
+        return 0
+
 
 SAVED = ('cam_ids', 'zones_by_camera', 'alert_manager', 'relays', 'main_loop',
          'last_heartbeat', 'application_healthy', 'boot_time',
-         'last_heartbeat_by_cam', 'camera_failsafe', 'heartbeat_received')
+         'last_heartbeat_by_cam', 'camera_failsafe', 'heartbeat_received',
+         'relays_online')
 
 
 @pytest.fixture
@@ -56,6 +63,7 @@ def env():
     state.heartbeat_received = False
     state.last_heartbeat_by_cam = {0: T0, 1: T0}
     state.camera_failsafe = {}
+    state.relays_online = True
 
     def flush():
         """Attend l'exécution des coroutines déjà planifiées sur la boucle."""
@@ -169,3 +177,50 @@ def test_watchdog_ne_meurt_pas_sur_exception(env, monkeypatch):
     with pytest.raises(_StopWatchdog):
         failsafe.failsafe_watchdog()
     assert calls['n'] == 2  # la RuntimeError n'a pas tué la boucle
+
+
+# ── Module relais injoignable / de retour ────────────────────────────────────
+
+def _relays_with_health(flag):
+    """Pilote factice exposant check_health (le vrai : YoctoMultiRelay.check_health)."""
+    return SimpleNamespace(relays=[None, None, None], check_health=lambda: flag['online'],
+                           last_error='commande relais 0 perdue : Device not connected')
+
+
+def test_module_relais_perdu_puis_de_retour_resynchronise(env, caplog):
+    flag = {'online': True}
+    state.relays = _relays_with_health(flag)
+    assert failsafe.check_failsafe(T0 + 10) == []
+    assert state.relays_online is True
+
+    flag['online'] = False
+    with caplog.at_level(logging.ERROR, logger='src.core.failsafe'):
+        assert failsafe.check_failsafe(T0 + 15) == [('relays_lost', None)]
+    assert state.relays_online is False
+    assert any('MODULE RELAIS INJOIGNABLE' in r.getMessage() for r in caplog.records)
+    assert failsafe.check_failsafe(T0 + 20) == [], "panne persistante : pas de nouvelle action"
+    assert env.am.resynced == []
+
+    flag['online'] = True
+    assert failsafe.check_failsafe(T0 + 25) == [('relays_back', 0)]
+    assert state.relays_online is True
+    assert env.am.resynced == ['retour du module relais'], "état physique réappliqué au retour"
+
+
+def test_pilote_sans_check_health_est_ignore(env):
+    # Doubles de test et pilotes factices : pas de surveillance, pas d'erreur.
+    assert failsafe.check_relay_module() == []
+    assert state.relays_online is True
+
+
+def test_schedule_journalise_une_exception_de_coroutine(env, caplog):
+    async def boom():
+        raise RuntimeError("commande relais perdue")
+
+    with caplog.at_level(logging.ERROR, logger='src.core.async_bridge'):
+        fut = failsafe._schedule(boom())
+        with pytest.raises(RuntimeError):
+            fut.result(timeout=2)
+        env.flush()
+    msgs = [r.getMessage() for r in caplog.records if r.name == 'src.core.async_bridge']
+    assert len(msgs) == 1 and 'boom' in msgs[0] and 'commande relais perdue' in msgs[0]
