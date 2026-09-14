@@ -36,6 +36,8 @@ services:
       - "992"
 
     volumes:
+      # Événements udev pour le hot-plug USB de la carte relais (voir docker-compose-arm64.yml).
+      - /run/udev:/run/udev:ro
       # État mutable au runtime — doit survivre à une mise à jour d'image.
       # config/ est réécrit par l'éditeur de zones, db/ porte l'historique des
       # relais. Sans ces montages, un `docker compose pull && up` efface la

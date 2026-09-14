@@ -67,6 +67,14 @@ services:
       # les empêche pas : des « USB disconnect » répétés dans dmesg sont un problème
       # matériel (alimentation du port, câble), voir failsafe-mode.md scénario 6.
       - /dev/bus/usb:/dev/bus/usb
+      # libyapi (Yoctopuce) est lié à libusb-1.0 + libudev : libusb énumère l'USB au
+      # démarrage via sysfs, puis n'apprend les (dé)branchements QUE par les
+      # événements d'udevd et sa base /run/udev. Sans ce montage, la liste vue par
+      # yapi est figée au démarrage : UpdateDeviceList() ne revoit jamais une carte
+      # ré-énumérée (constat 2026-09-14 : carte présente par plages de 8–13 s, nœud
+      # visible, zéro reprise en 5 min). Lecture seule ; network_mode: host fournit
+      # déjà la socket netlink des événements.
+      - /run/udev:/run/udev:ro
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro
       - /etc/machine-id:/etc/machine-id:ro

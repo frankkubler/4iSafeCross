@@ -241,12 +241,39 @@ alimentation 5 V du port (carte derrière un hub), câble/connecteur, ou rail
 d'alimentation du boîtier (cf. défaut thermique du convertisseur 48 V documenté sur ce
 même boîtier). À confirmer par le test « conteneur arrêté, 2 min de `dmesg` ».
 
-**Limite connue** : le montage `/dev/bus/usb` permet de **retrouver** la carte après
-chaque ré-énumération et de resynchroniser les relais ; il ne prévient pas les
+**Suite du 14/09, montage `/dev/bus/usb` en place** : nœud identique côté hôte et
+conteneur (`014`/`014`), carte présente par plages de 8 à 13 s… et **aucune reprise en
+5 minutes** (rappels `INJOIGNABLE` à cadence exacte de 30 s, jamais de
+`de nouveau joignable`). Le montage est nécessaire mais pas suffisant. Cause identifiée :
+`libyapi` est lié dynamiquement à **libusb-1.0 et libudev**. Une libusb compilée avec
+udev énumère les périphériques au démarrage (sysfs), puis n'apprend les
+branchements/débranchements que par les **événements du démon udevd et sa base
+`/run/udev`**. Absents du conteneur, la liste vue par yapi est figée au démarrage :
+`UpdateDeviceList()` ne revoit jamais une carte ré-énumérée. C'est aussi l'explication du
+« sans aucun événement USB » du constat initial. Correctif : monter `/run/udev:/run/udev:ro`
+(fait dans les deux compose ; `network_mode: host` fournit déjà la socket netlink).
+**Validé sur le boîtier le 14/09 à 14:12** (image `c98af42` inchangée, seul le compose
+déployé a reçu les deux montages) : alerte `zone1_cam1` → `Relais 0 -> état True`
+confirmé ; perte de la carte à 14:12:51 ; `✅ Module relais de nouveau joignable` à 14:12:57
+(un tick de watchdog) ; `🔄 Resynchronisation : ON attendus [0], OFF attendus [1, 2, 3, 4]`
+→ l'alerte en cours, effacée par le redémarrage de la carte (relais OFF à la mise sous
+tension), est rétablie ; extinction normale 11 s après la fin de détection. La chaîne
+détection → relais → perte → reprise → resynchronisation fonctionne de bout en bout.
+
+**Observation à suivre** : sur quatre démarrages, aucune perte n'est survenue pendant les
+19 s où les 5 bobines étaient alimentées ; les pertes surviennent en phase de faible
+charge (0 ou 1 relais ON), 6 à 26 s après l'extinction groupée. Hypothèse : alimentation
+5 V du port instable à faible charge. Test : `STARTUP_GRACE_PERIOD = 300` dans le
+`config.ini` du boîtier (5 bobines ON pendant 5 min) et `dmesg` — aucune déconnexion
+attendue pendant la phase ON, reprise du flapping après l'extinction. Remettre 15 ensuite.
+
+**Limite connue** : ces montages permettent de **retrouver** la carte après chaque
+ré-énumération et de resynchroniser les relais ; ils ne préviennent pas les
 ré-énumérations elles-mêmes, et une carte qui redémarre toutes les quelques secondes
 (relais OFF à chaque reset) n'émet pas d'alerte fiable : le défaut matériel doit être
-traité. Piste d'architecture : VirtualHub Yoctopuce sur l'hôte et application connectée
-en TCP local.
+traité (tous les ports USB-A du J4012 passent par le hub interne `1-2` — isoler par un
+hub alimenté). Piste d'architecture : VirtualHub Yoctopuce sur l'hôte et application
+connectée en TCP local, ce qui sort entièrement l'USB du conteneur.
 
 ## 🔍 Logs et Diagnostic
 

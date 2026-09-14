@@ -58,6 +58,8 @@ class YoctoMultiRelay:
                 self._mark_failure(f"initialisation du hub Yoctopuce ({self.hub_url}) : {errmsg.value}")
                 return False
 
+            self._register_yapi_callbacks()
+
             relays = []
             relay = YRelay.FirstRelay()
             while relay is not None:
@@ -76,6 +78,43 @@ class YoctoMultiRelay:
             self.logger.info(f"{len(self.relays)} relais détectés.")
             self.logger.debug(self.relays)
             return True
+
+    def _register_yapi_callbacks(self):
+        """Journalise ce que la bibliothèque voit : arrivée/retrait du module, journal yapi.
+
+        Constat 2026-09-14 : carte ré-énumérée toutes les 8–13 s, nœud visible dans le
+        conteneur, et pourtant aucune reprise en 5 min. Sans ces callbacks, impossible de
+        savoir si yapi détecte les retours (UpdateDeviceList les déclenche) ou s'il
+        échoue plus loin (ouverture, détachement d'usbhid, handshake). Idempotent.
+        """
+        if getattr(self, '_callbacks_registered', False):
+            return
+        try:
+            YAPI.RegisterDeviceArrivalCallback(self._on_device_arrival)
+            YAPI.RegisterDeviceRemovalCallback(self._on_device_removal)
+            YAPI.RegisterLogFunction(self._on_yapi_log)
+            self._callbacks_registered = True
+        except Exception as exc:  # bibliothèque simulée ou native indisponible : non bloquant
+            self.logger.debug(f"Callbacks yapi non enregistrés : {exc!r}")
+
+    def _on_device_arrival(self, module):
+        try:
+            ident = f"{module.get_serialNumber()} ({module.get_productName()})"
+        except Exception:
+            ident = "module inconnu"
+        self.logger.warning(f"🔌 yapi : module {ident} détecté (arrivée USB)")
+
+    def _on_device_removal(self, module):
+        try:
+            ident = module.get_serialNumber()
+        except Exception:
+            ident = "module inconnu"
+        self.logger.warning(f"🔌 yapi : module {ident} retiré (déconnexion USB)")
+
+    def _on_yapi_log(self, line):
+        # Journal interne de la bibliothèque (erreurs USB, handshakes) — en INFO, il est
+        # peu verbeux et c'est lui qui nomme la cause d'une reprise qui échoue.
+        self.logger.info(f"yapi : {str(line).rstrip()}")
 
     def check_health(self):
         """Constate si le module répond. Appelé périodiquement par le watchdog fail-safe.

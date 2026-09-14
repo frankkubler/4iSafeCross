@@ -463,6 +463,7 @@ bloquerait `compose up` par collision de nom.
 | `nvidia` absent de `docker info` | `nvidia-container-toolkit` non configuré | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` |
 | `apt` bloqué (`2 not fully installed`) | `postinst` de `nvidia-l4t-bootloader` (carte Seeed) | [install-system-deps.md](install-system-deps.md) § « Carte porteuse Seeed » |
 | `Aucune image reçue pour rtsp://… en 15s après la mise en PLAYING` en boucle, `/health` → `cameras_online: 0` | Le port 554 accepte la connexion TCP mais aucun flux RTSP n'est servi (caméra en initialisation, mauvais chemin de flux, autre équipement sur l'IP) | Sonde GStreamer hors application (§ 12.2) ; vérifier `STREAM` et les identifiants dans `/data/4isafecross/config/config.ini` |
+| `MODULE RELAIS INJOIGNABLE` en boucle alors que `dmesg` montre la carte revenir (`New USB device found`) | Hot-plug invisible dans le conteneur : `/run/udev` non monté (libyapi → libusb/libudev), ou `/dev/bus/usb` non monté (nœud figé) | Les deux montages sont dans le compose du dépôt — recopier le compose et **recréer** le conteneur ; vérifier `docker exec 4isafecross ls /run/udev /dev/bus/usb/001/` |
 | `createContainer hook #2: exit status 2` + `panic: slice bounds out of range` dans `cudacompat` | Hook CDI `cudacompat` du container-toolkit : il parse l'en-tête ELF de `/usr/local/cuda/compat` de l'image et panique | Voir § 12.1 ci-dessous — image ≥ `v3.0.1-arm64`, ou désactivation du hook |
 
 
