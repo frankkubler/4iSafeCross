@@ -224,10 +224,29 @@ redémarrage, `privileged: true` ou pas. Vérification :
 `ls /dev/bus/usb/001/` sur l'hôte et `docker exec 4isafecross ls /dev/bus/usb/001/`
 doivent lister le même numéro que `lsusb | grep 24e0`.
 
-**Limite connue** : la cause de la première perte de communication (sans événement
-USB, avec deux caméras actives) n'est pas établie ; le correctif rend la panne
-visible et récupérable, il ne la prévient pas. Piste d'architecture : VirtualHub
-Yoctopuce sur l'hôte et application connectée en TCP local.
+**Constat du 2026-09-14 (même boîtier)** : image corrigée (`c98af42`) mais compose
+déployé **sans** le montage `/dev/bus/usb` (copie manuelle antérieure au correctif).
+Preuve directe du mécanisme : `ls /dev/bus/usb/001/` donnait `080` côté hôte et `029`
+côté conteneur — la carte s'était ré-énumérée 51 fois depuis le démarrage, le conteneur
+ne voyait que le nœud d'origine. Commandes confirmées au démarrage (relais ON puis OFF),
+première perte détectée par `check_health()` au tick +30 s, jamais de retour ;
+`/health` en 503. Après recopie du compose et recréation du conteneur : carte retrouvée
+immédiatement (`relays_online: true`).
+
+Pendant cette période, `dmesg` montrait des `USB disconnect` / `new device` sur
+`usb 1-2.3` toutes les 1 à 12 s **alors qu'aucun logiciel ne pouvait atteindre la carte**
+(service hôte inactif, pas de VirtualHub, conteneur aveugle sur un nœud fantôme). La
+ré-énumération en boucle n'est donc pas provoquée par yapi : elle est autonome —
+alimentation 5 V du port (carte derrière un hub), câble/connecteur, ou rail
+d'alimentation du boîtier (cf. défaut thermique du convertisseur 48 V documenté sur ce
+même boîtier). À confirmer par le test « conteneur arrêté, 2 min de `dmesg` ».
+
+**Limite connue** : le montage `/dev/bus/usb` permet de **retrouver** la carte après
+chaque ré-énumération et de resynchroniser les relais ; il ne prévient pas les
+ré-énumérations elles-mêmes, et une carte qui redémarre toutes les quelques secondes
+(relais OFF à chaque reset) n'émet pas d'alerte fiable : le défaut matériel doit être
+traité. Piste d'architecture : VirtualHub Yoctopuce sur l'hôte et application connectée
+en TCP local.
 
 ## 🔍 Logs et Diagnostic
 

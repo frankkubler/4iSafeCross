@@ -40,6 +40,11 @@ class YoctoMultiRelay:
         self.last_error = None         # texte de la dernière erreur
         self.last_error_time = None    # time.time() de la dernière erreur
         self.failed_commands = 0       # commandes perdues depuis la dernière réussite
+        # Dernière COMMANDE (set/get) perdue, avec le texte de l'exception. Distinct de
+        # last_error : le watchdog appelle check_health() toutes les 5 s, son message
+        # (« isOnline() faux ») écrase last_error avant chaque rappel périodique et
+        # l'exception réelle levée par set_state n'apparaissait jamais dans le log.
+        self.last_command_error = None
         self._last_failure_log = 0.0
         self._connect()
 
@@ -131,10 +136,10 @@ class YoctoMultiRelay:
                 self.logger.info(f"Relais {index} -> état {self.last_states[index]}")
                 return True
             except YAPI_Exception as exc:
-                self._mark_failure(f"commande relais {index} -> état {state} perdue : {exc}")
+                self._mark_failure(f"commande relais {index} -> état {state} perdue : {exc}", command=True)
                 return False
             except Exception as exc:
-                self._mark_failure(f"commande relais {index} -> état {state} perdue (erreur inattendue) : {exc!r}")
+                self._mark_failure(f"commande relais {index} -> état {state} perdue (erreur inattendue) : {exc!r}", command=True)
                 return False
 
     def get_relay_state(self, index):
@@ -149,14 +154,14 @@ class YoctoMultiRelay:
             try:
                 state = self.relays[index].get_state()
             except YAPI_Exception as exc:
-                self._mark_failure(f"lecture relais {index} : {exc}")
+                self._mark_failure(f"lecture relais {index} : {exc}", command=True)
                 return None
             except Exception as exc:
-                self._mark_failure(f"lecture relais {index} (erreur inattendue) : {exc!r}")
+                self._mark_failure(f"lecture relais {index} (erreur inattendue) : {exc!r}", command=True)
                 return None
             if state == YRelay.STATE_INVALID:
                 # Les getters Yoctopuce ne lèvent pas : ils renvoient INVALID hors ligne.
-                self._mark_failure(f"lecture relais {index} : module hors ligne (état invalide)")
+                self._mark_failure(f"lecture relais {index} : module hors ligne (état invalide)", command=True)
                 return None
             self.last_states[index] = state
             self._mark_online()
@@ -170,18 +175,26 @@ class YoctoMultiRelay:
 
     # ── Suivi de l'état de santé ─────────────────────────────────────────────
 
-    def _mark_failure(self, message):
+    def _mark_failure(self, message, command=False):
         now = time.time()
         first = self.online or self.failed_commands == 0
         self.online = False
         self.failed_commands += 1
         self.last_error = message
         self.last_error_time = now
+        if command:
+            self.last_command_error = message
         if first or now - self._last_failure_log >= self.FAILURE_LOG_INTERVAL:
             self._last_failure_log = now
+            # Le rappel porte aussi la dernière commande perdue si elle diffère du
+            # message courant (typiquement celui de check_health) : c'est l'exception
+            # de set_state qui distingue « périphérique introuvable » de « muet ».
+            detail = ""
+            if self.last_command_error and self.last_command_error != message:
+                detail = f" ; dernière commande perdue : {self.last_command_error}"
             self.logger.error(
                 f"⚠️  MODULE RELAIS INJOIGNABLE — {message} "
-                f"({self.failed_commands} commande(s) perdue(s) depuis la dernière réussite)"
+                f"({self.failed_commands} commande(s) perdue(s) depuis la dernière réussite{detail})"
             )
         else:
             self.logger.debug(f"Module relais toujours injoignable — {message}")
@@ -193,3 +206,4 @@ class YoctoMultiRelay:
             )
         self.online = True
         self.failed_commands = 0
+        self.last_command_error = None

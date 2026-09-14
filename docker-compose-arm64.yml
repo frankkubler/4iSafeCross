@@ -61,9 +61,11 @@ services:
       # Carte relais Yoctopuce (USB). Docker peuple /dev au démarrage du conteneur
       # et ne le met plus à jour : après une ré-énumération USB (nouveau numéro de
       # périphérique) le nœud /dev/bus/usb/001/NNN n'existe pas dans le conteneur,
-      # la bibliothèque yapi ne peut plus ouvrir la carte et la réinitialise en
-      # boucle (dmesg : « USB disconnect » toutes les 2 s). Ce montage suit les
-      # ré-énumérations — privileged: true ne suffit PAS.
+      # la bibliothèque yapi ne peut plus ouvrir la carte, définitivement, jusqu'au
+      # redémarrage du conteneur (constat 2026-09-14 : hôte n° 080, conteneur n° 029).
+      # Ce montage suit les ré-énumérations — privileged: true ne suffit PAS. Il ne
+      # les empêche pas : des « USB disconnect » répétés dans dmesg sont un problème
+      # matériel (alimentation du port, câble), voir failsafe-mode.md scénario 6.
       - /dev/bus/usb:/dev/bus/usb
       - /tmp/argus_socket:/tmp/argus_socket
       - /etc/enctune.conf:/etc/enctune.conf:ro

@@ -89,6 +89,7 @@ def relays_status():
         'initialized': initialized,
         'online': initialized and state.relays_online,
         'last_error': getattr(relays, 'last_error', None),
+        'last_command_error': getattr(relays, 'last_command_error', None),
         'failed_commands': getattr(relays, 'failed_commands', 0),
     })
 
@@ -127,6 +128,7 @@ def failsafe_status():
         'relays_initialized': state.relays.is_initialized,
         'relays_online': state.relays.is_initialized and state.relays_online,
         'relays_last_error': getattr(state.relays, 'last_error', None),
+        'relays_last_command_error': getattr(state.relays, 'last_command_error', None),
         'message': (
             'Système opérationnel' if not active
             else '⚠️  MODE FAIL-SAFE ACTIF - Alertes maintenues ON'

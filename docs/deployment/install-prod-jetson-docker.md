@@ -390,9 +390,17 @@ cd /opt/4isafecross
 sudo docker save "$(sudo docker inspect --format '{{.Config.Image}}' 4isafecross)" \
   -o /media/<support>/backup/4isafecross_<tag_courant>-arm64.tar
 
-# 2. Charger/récupérer la nouvelle image (§3.2 ou §3.3), puis pointer le nouveau tag
-sudo sed -i 's|:v3\.0\.0-arm64|:<nouveau-tag>-arm64|' docker-compose-arm64.yml
+# 2. Recopier le fichier compose DU DÉPÔT à la version livrée, puis pointer le tag.
+#    Une image seule ne suffit pas : montages, devices et variables évoluent avec
+#    elle (ex. v3.0.2+ : /dev/bus/usb pour la carte relais). Le 2026-09-14, une image
+#    à jour lancée avec un compose ancien a laissé la carte relais injoignable après
+#    la première ré-énumération USB, sans aucune erreur au démarrage.
+sudo cp docker-compose-arm64.yml docker-compose-arm64.yml.bak-$(date +%F)
+sudo cp /tmp/docker-compose-arm64.yml docker-compose-arm64.yml     # copie scp depuis le dépôt (§2)
+sudo sed -i 's|:latest-arm64|:<nouveau-tag>-arm64|' docker-compose-arm64.yml
 grep -n 'image:' docker-compose-arm64.yml      # vérifier le tag effectivement référencé
+sudo docker compose -f docker-compose-arm64.yml config >/dev/null && echo "compose valide"
+diff docker-compose-arm64.yml.bak-$(date +%F) docker-compose-arm64.yml   # relire ce qui change
 
 # 3. Recréer le conteneur — config/, db/, detections/, logs/ sont préservés (bind-mounts)
 sudo docker compose -f docker-compose-arm64.yml up -d

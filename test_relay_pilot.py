@@ -193,3 +193,31 @@ def test_index_invalide(lib, caplog):
         assert pilot.get_relay_state(7) is None
     assert all("Index de relais invalide" in r.getMessage() for r in errors(caplog))
     assert pilot.is_online, "un index invalide est une erreur de programme, pas une panne du module"
+
+
+def test_le_rappel_periodique_porte_la_derniere_commande_perdue(lib, caplog, monkeypatch):
+    """Constat 2026-09-14 : check_health() (toutes les 5 s) écrasait last_error avant chaque
+    rappel, et l'exception réelle de set_state n'apparaissait jamais dans le log."""
+    relay = FakeRelay()
+    lib([relay])
+    pilot = relay_pilot.YoctoMultiRelay()
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(relay_pilot.time, "time", lambda: clock["t"])
+    relay.fail = True
+    with caplog.at_level(logging.ERROR, logger=LOGGER):
+        assert pilot.check_health() is False           # 1re ERROR : isOnline() faux, aucune commande encore
+        assert pilot.action_on(0) is False             # commande perdue, throttlée (DEBUG)
+        assert "commande relais 0" in pilot.last_command_error
+        assert "Device not connected" in pilot.last_command_error
+        clock["t"] += pilot.FAILURE_LOG_INTERVAL + 1
+        assert pilot.check_health() is False           # 2e ERROR : rappel déclenché par check_health
+    errs = errors(caplog)
+    assert len(errs) == 2
+    assert "dernière commande perdue" not in errs[0].getMessage()
+    assert "isOnline() faux" in errs[1].getMessage()
+    assert "dernière commande perdue : commande relais 0" in errs[1].getMessage()
+    assert "Device not connected" in errs[1].getMessage()
+    # Retour du module : le détail est effacé, il ne doit pas ressurgir à la panne suivante
+    relay.fail = False
+    assert pilot.check_health() is True
+    assert pilot.last_command_error is None
