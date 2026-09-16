@@ -73,3 +73,52 @@ def test_demarrage_attend_qu_au_moins_une_camera_reponde(boot):
 def test_rtsp_host_masque_les_identifiants():
     assert rtsp_host(A) == "172.16.10.169"
     assert rtsp_host(0) == "0"            # index V4L2, renvoyé tel quel
+
+
+# ── Mot de passe non percent-encodé : l'hôte et le masquage ne doivent pas en dépendre ──
+# Constat boîtier 2026-09-16 : « Caméras : 0=admin, 1=admin » et libellé « Camera 1 — admin »
+# dans l'IHM — urlsplit prenait un ``?`` ou ``#`` du mot de passe pour le début de la
+# requête/du fragment et renvoyait le login comme hôte.
+from src.core.camera_order import split_userinfo, strip_userinfo
+
+MOTS_DE_PASSE_PIEGES = ["Se?ret1", "Se#ret1", "Se/ret1", "Se@ret1", "Se%ret1", "Se[ret1", "a:b:c", ""]
+
+
+@pytest.mark.parametrize("pw", MOTS_DE_PASSE_PIEGES)
+def test_rtsp_host_ignore_le_contenu_du_mot_de_passe(pw):
+    assert rtsp_host(f"rtsp://admin:{pw}@172.16.10.169:554/stream1") == "172.16.10.169"
+    assert rtsp_host(f"rtsps://admin:{pw}@cam-nord.local/stream1") == "cam-nord.local"
+
+
+@pytest.mark.parametrize("pw", MOTS_DE_PASSE_PIEGES)
+def test_strip_userinfo_ne_laisse_jamais_fuir_le_mot_de_passe(pw):
+    url = f"rtsp://admin:{pw}@172.16.10.169:554/stream1"
+    masque = strip_userinfo(url)
+    assert masque == "rtsp://***@172.16.10.169:554/stream1"
+    if pw:
+        assert pw not in masque
+    assert "admin" not in masque
+
+
+def test_strip_userinfo_sans_identifiants_et_non_url():
+    assert strip_userinfo("rtsp://172.16.10.169:554/stream1") == "rtsp://172.16.10.169:554/stream1"
+    assert strip_userinfo(0) == 0
+    assert strip_userinfo(None) is None
+    assert split_userinfo("pas une url") is None
+
+
+from src.core.camera_order import rtsp_host_port
+
+
+@pytest.mark.parametrize("pw", MOTS_DE_PASSE_PIEGES)
+def test_rtsp_host_port_pour_le_test_tcp(pw):
+    assert rtsp_host_port(f"rtsp://admin:{pw}@172.16.10.169:554/stream1") == ("172.16.10.169", 554)
+    assert rtsp_host_port(f"rtsps://admin:{pw}@172.16.11.91/stream1") == ("172.16.11.91", 554)
+    assert rtsp_host_port(f"rtsp://admin:{pw}@cam.local:8554/live") == ("cam.local", 8554)
+
+
+def test_rtsp_host_port_sans_identifiants_et_cas_limites():
+    assert rtsp_host_port("rtsp://172.16.10.169:554/stream1") == ("172.16.10.169", 554)
+    assert rtsp_host_port("rtsp://172.16.10.169") == ("172.16.10.169", 554)
+    assert rtsp_host_port("http://172.16.10.169/") is None
+    assert rtsp_host_port(0) is None

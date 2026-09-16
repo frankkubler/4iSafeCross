@@ -15,7 +15,38 @@ et une zone dessinée dans l'éditeur était enregistrée sous le mauvais ``_cam
 
 Module sans dépendance (ni GStreamer, ni état applicatif) : testable à sec.
 """
+import re
 from urllib.parse import urlsplit
+
+# Autorité d'une URL RTSP telle que l'application la construit :
+# ``<schéma>://<login>:<mot de passe>@<hôte>[:<port>]/<chemin>``. Le mot de passe
+# n'est PAS percent-encodé (config.ini / .env bruts) : il peut contenir ``?``, ``#``,
+# ``/`` ou ``@``, que urlsplit interprète comme début de requête, de fragment, de
+# chemin ou fin d'userinfo — l'hôte devient alors le login. On repère donc le
+# DERNIER ``@`` suivi d'un hôte plausible, et on ne fait confiance qu'à ce qui suit.
+_AUTHORITY_RE = re.compile(r'^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)(?P<userinfo>.*)@(?P<rest>[^/@?#]+(?:/.*)?)$')
+
+
+def split_userinfo(url):
+    """``(préfixe 'rtsp://', userinfo, reste 'hôte[:port]/chemin')`` ou ``None``.
+
+    ``None`` si l'URL n'a pas d'userinfo (``rtsp://hôte/…``) ou n'est pas une URL.
+    """
+    if not isinstance(url, str):
+        return None
+    m = _AUTHORITY_RE.match(url)
+    if not m:
+        return None
+    return m.group('scheme'), m.group('userinfo'), m.group('rest')
+
+
+def strip_userinfo(url, replacement='***@'):
+    """Masque login et mot de passe : ``rtsp://***@172.16.10.169:554/stream1``."""
+    parts = split_userinfo(url)
+    if parts is None:
+        return url
+    scheme, _, rest = parts
+    return f"{scheme}{replacement}{rest}"
 
 
 def order_cameras(configured, results):
@@ -34,6 +65,24 @@ def order_cameras(configured, results):
     return toutes, disponibles
 
 
+def rtsp_host_port(url, default_port=554):
+    """``(hôte, port)`` d'une URL RTSP, ou ``None`` si ce n'en est pas une.
+
+    Sert au test TCP de disponibilité : l'ancienne expression ``(?:[^@]+@)?([^/:]+)``
+    s'arrêtait au PREMIER ``@`` — un ``@`` dans le mot de passe donnait l'hôte
+    ``ret1@172.16.10.169`` et une caméra déclarée absente au démarrage.
+    """
+    if not isinstance(url, str) or not re.match(r'^rtsps?://', url):
+        return None
+    parts = split_userinfo(url)
+    rest = parts[2] if parts is not None else url.split('://', 1)[1]
+    authority = rest.split('/', 1)[0]
+    m = re.match(r'^([^:]+)(?::(\d+))?$', authority)
+    if not m or not m.group(1):
+        return None
+    return m.group(1), int(m.group(2)) if m.group(2) else default_port
+
+
 def rtsp_host(cam_id):
     """Hôte d'une URL RTSP, pour libeller les vues sans exposer les identifiants.
 
@@ -42,6 +91,12 @@ def rtsp_host(cam_id):
     """
     if not isinstance(cam_id, str):
         return str(cam_id)
+    parts = split_userinfo(cam_id)
+    if parts is not None:
+        # Hôte = ce qui suit le dernier « @ », avant « : » (port) ou « / » (chemin).
+        rest = parts[2]
+        host = re.split(r'[:/]', rest, maxsplit=1)[0]
+        return host or cam_id
     try:
         return urlsplit(cam_id).hostname or cam_id
     except ValueError:

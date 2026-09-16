@@ -1,5 +1,4 @@
 import cv2
-import re
 import threading
 import logging
 import platform
@@ -10,10 +9,14 @@ from gi.repository import Gst
 import os
 import numpy as np
 
+from src.core.camera_order import strip_userinfo, rtsp_host_port
+
 # Un identifiant de caméra RTSP est une URL complète, credentials inclus
 # (rtsp://login:password@host:554/stream1). Elle est interpolée dans de nombreux
 # messages de log — d'où ce filtre, à appliquer systématiquement avant journalisation.
-_USERINFO_RE = re.compile(r'(?<=://)[^/@]+@')
+# L'ancienne expression ``(?<=://)[^/@]+@`` laissait passer le mot de passe EN CLAIR
+# dès qu'il contenait un ``/`` et ne masquait qu'à moitié s'il contenait un ``@`` ;
+# la primitive partagée (src/core/camera_order) repère le dernier ``@`` de l'autorité.
 
 
 def redact_rtsp_url(value):
@@ -24,7 +27,7 @@ def redact_rtsp_url(value):
     """
     if not isinstance(value, str):
         return value
-    return _USERINFO_RE.sub('***@', value)
+    return strip_userinfo(value)
 
 # ---------------------------------------------------------------------------
 # Backends GStreamer H.264 supportés :
@@ -408,12 +411,12 @@ class CameraManager:
         logger = logging.getLogger(__name__).getChild('test_rtsp_stream')
         safe_cid = redact_rtsp_url(cid)
         logger.info(f"Test du flux RTSP {safe_cid} avec connexion TCP...")
-        match = re.match(r"rtsps?://(?:[^@]+@)?([^/:]+)(?::(\d+))?", cid)
-        if not match:
+        # Extraction insensible au contenu du mot de passe (« @ », « / », « ? »…).
+        host_port = rtsp_host_port(cid)
+        if host_port is None:
             logger.warning(f"Impossible d'extraire le host du flux RTSP : {safe_cid}")
             return False
-        host = match.group(1)
-        port = int(match.group(2)) if match.group(2) else 554
+        host, port = host_port
         try:
             with socket.create_connection((host, port), timeout=timeout):
                 pass
