@@ -903,15 +903,28 @@
                             return;
                         }
                         box.innerHTML = cam.zones.map((z) => {
+                            // Rouge = un projecteur de la zone est ALLUMÉ (ce que voit le
+                            // piéton), y compris pendant la temporisation d'extinction ou
+                            // si un relais partagé est allumé par une autre zone.
                             const cls = z.alert ? 'alert' : (z.detection ? 'detection' : '');
                             const sansRelais = z.relays.length === 0 ? ' norelay' : '';
                             const relais = z.relays.length
                                 ? `<span class="relays">R${z.relays.join(' R')}</span>`
                                 : '<span class="relays">—</span>';
-                            const etat = z.alert ? 'alerte active — relais maintenus'
-                                       : (z.detection ? 'personne détectée' : 'au repos');
+                            let etat;
+                            if (z.alert && z.detection) {
+                                etat = `alerte active (R${z.relays_on.join(', R')} allumé) — personne détectée`;
+                            } else if (z.alert && z.holding) {
+                                etat = `alerte active (R${z.relays_on.join(', R')} allumé) — zone encore occupée`;
+                            } else if (z.alert) {
+                                etat = `projecteur allumé (R${z.relays_on.join(', R')}) — temporisation, fail-safe, ou relais partagé`;
+                            } else if (z.detection) {
+                                etat = 'personne détectée — alerte pas encore déclenchée';
+                            } else {
+                                etat = 'au repos';
+                            }
                             const titre = `${z.name} — ${etat}` +
-                                (z.relays.length ? ` — relais ${z.relays.join(', ')}` : ' — aucun relais affecté');
+                                (z.relays.length ? ` — projecteurs ${z.relays.join(', ')}` : ' — aucun projecteur affecté');
                             return `<span class="zone-pill ${cls}${sansRelais}" title="${titre}">` +
                                    `<span class="dot"></span>${z.name} ${relais}</span>`;
                         }).join('');

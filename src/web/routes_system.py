@@ -105,18 +105,23 @@ def alerts_status():
     (relay_on, relay_active_zones), pas l'état physique relu sur le bus, sinon
     chaque client chargerait la liaison USB de la carte.
 
-    Deux niveaux, volontairement distincts :
+    Trois indicateurs, volontairement distincts :
       - « detection » : une personne est vue dans la zone à l'instant t ;
-      - « alert »     : la zone maintient effectivement un ou plusieurs relais
-                        actifs (détection confirmée par le debounce). C'est ce
-                        que voit le piéton sur le terrain.
+      - « alert »     : au moins un relais de la zone est ALLUMÉ — c'est ce que
+                        voit le piéton sur le terrain. Reste vrai pendant les 11 s
+                        de temporisation qui suivent la fin de détection, pendant
+                        le fail-safe, et si un relais partagé est allumé par une
+                        autre zone ;
+      - « holding »   : c'est cette zone qui maintient le relais actif (elle
+                        figure dans relay_active_zones). Distingue « la zone tient
+                        l'alerte » de « le relais est allumé pour une autre raison ».
     """
     am = state.alert_manager
     # Copies défensives : ces structures sont écrites depuis la boucle asyncio
     # (alertes) et le thread watchdog (fail-safe) pendant qu'on les lit ici.
     relay_active = {int(r): set(z) for r, z in dict(getattr(am, 'relay_active_zones', {})).items()}
     relay_on = {int(r): bool(v) for r, v in dict(getattr(am, 'relay_on', {})).items()}
-    zones_en_alerte = {zone for zones in relay_active.values() for zone in zones}
+    zones_maintenues = {zone for zones in relay_active.values() for zone in zones}
 
     with state.shared_detections_lock:
         detections_par_cam = {
@@ -142,16 +147,21 @@ def alerts_status():
         for zone in state.zones_by_camera.get(idx, []):
             nom = zone['name']
             relais = sorted(am._get_relay_nums_from_zone(nom)) if am else []
-            en_alerte = nom in zones_en_alerte
+            relais_allumes = [r for r in relais if relay_on.get(r)]
+            # L'alerte suit l'état du RELAIS, pas la détection : une zone dont le
+            # projecteur est encore allumé (temporisation de 11 s, fail-safe, relais
+            # partagé) reste signalée tant que la lumière est visible sur le terrain.
+            en_alerte = bool(relais_allumes)
             zones.append({
                 'name': nom,
                 'relays': relais,
-                'relays_on': [r for r in relais if relay_on.get(r)],
+                'relays_on': relais_allumes,
                 'detection': nom in zones_vues,
                 'alert': en_alerte,
+                'holding': nom in zones_maintenues,
             })
             if en_alerte:
-                alertes.append({'camera': idx, 'zone': nom, 'relays': relais})
+                alertes.append({'camera': idx, 'zone': nom, 'relays': relais_allumes})
         # Projecteurs posés sur cette caméra, avec leur état courant. Les zones
         # déclenchées sont celles qui les déclarent : l'éditeur les dérive de la
         # position, le serveur s'en tient à ce que zones.ini déclare.

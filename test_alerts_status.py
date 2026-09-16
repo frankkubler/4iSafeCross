@@ -159,3 +159,49 @@ def test_resolution_absente_repli_1920x1080(client):
     d = client.get('/alerts_status').get_json()
     p = d['cameras'][0]['projectors'][0]
     assert (p['x_pct'], p['y_pct']) == (50.0, 50.0)
+
+
+# ── L'alerte suit l'état du relais, pas la détection ─────────────────────────
+
+def test_alerte_maintenue_pendant_la_temporisation(client):
+    """Fin de détection : la zone sort de relay_active_zones, mais _delayed_off_relay
+    garde le relais allumé 11 s. Le projecteur est visible sur le terrain, la pastille
+    doit le rester aussi."""
+    state.alert_manager.relay_active_zones = {0: set(), 1: set(), 4: set()}   # plus personne
+    state.alert_manager.relay_on = {0: True, 1: True, 4: False}               # relais encore ON
+    state.shared_detections = {}
+    d = client.get('/alerts_status').get_json()
+    z = _zones(d, 0)["zone1_cam0"]
+    assert z["alert"] is True, "relais allumé : la zone reste signalée"
+    assert z["detection"] is False
+    assert z["holding"] is False, "mais ce n'est plus elle qui le maintient"
+    assert z["relays_on"] == [0, 1]
+
+
+def test_zone_signalee_quand_un_relais_partage_est_allume_par_une_autre(client):
+    """R1 sert zone1_cam0 et (ici) zone2_cam0 : si zone1 l'allume, le projecteur de
+    zone2 est allumé lui aussi — la pastille de zone2 doit le refléter."""
+    state.alert_manager.mapping = {"zone1_cam0": [0, 1], "zone2_cam0": [1], "zone1_cam1": [4]}
+    state.alert_manager.relay_active_zones = {0: {"zone1_cam0"}, 1: {"zone1_cam0"}}
+    state.alert_manager.relay_on = {0: True, 1: True, 4: False}
+    d = client.get('/alerts_status').get_json()
+    z0 = _zones(d, 0)
+    assert z0["zone1_cam0"]["alert"] is True and z0["zone1_cam0"]["holding"] is True
+    assert z0["zone2_cam0"]["alert"] is True, "son projecteur est allumé"
+    assert z0["zone2_cam0"]["holding"] is False, "mais elle ne le maintient pas"
+
+
+def test_relais_eteints_aucune_alerte(client):
+    state.alert_manager.relay_on = {0: False, 1: False, 4: False}
+    state.alert_manager.relay_active_zones = {0: set(), 1: set(), 4: set()}
+    d = client.get('/alerts_status').get_json()
+    assert all(not z["alert"] for cam in d["cameras"] for z in cam["zones"])
+    assert d["alerts_count"] == 0
+
+
+def test_zone_sans_relais_jamais_en_alerte(client):
+    """zone2_cam0 n'a aucun relais : même tous projecteurs allumés, elle ne peut rien
+    signaler physiquement."""
+    state.alert_manager.relay_on = {0: True, 1: True, 4: True}
+    d = client.get('/alerts_status').get_json()
+    assert _zones(d, 0)["zone2_cam0"]["alert"] is False
