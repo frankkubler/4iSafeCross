@@ -309,14 +309,29 @@
                 relayPositions = {};
                 placedRelayIds = new Set();
                 removedRelayIds = new Set();
+                const horsChamp = [];
                 Object.entries(data).forEach(([rid, coords]) => {
                     const realId = parseInt(rid, 10);
-                    relayPositions[realId] = {
-                        x: coords[0] / scaleFactor,
-                        y: coords[1] / scaleFactor,
-                    };
+                    const x = coords[0] / scaleFactor;
+                    const y = coords[1] / scaleFactor;
+                    // Une position hors de l'image (constat 2026-09-17 : relay0_cam0 à
+                    // x = -97) rend le projecteur invisible ET absent des disponibles :
+                    // introuvable dans l'interface, alors qu'il n'affecte aucune zone
+                    // puisqu'il n'est dans aucun polygone. On le remet au stock et on
+                    // programme la suppression de sa position.
+                    if (x < 0 || y < 0 || x > canvasWidth || y > canvasHeight) {
+                        horsChamp.push(realId);
+                        removedRelayIds.add(realId);
+                        return;
+                    }
+                    relayPositions[realId] = { x: x, y: y };
                     placedRelayIds.add(realId);   // une position enregistrée = projecteur posé
                 });
+                if (horsChamp.length) {
+                    const liste = horsChamp.map((r) => `R${r}`).join(', ');
+                    console.warn(`[Projecteur] position hors de l'image pour ${liste} : remis dans les disponibles`);
+                    setStatus(`${liste} était hors de l'image — remis dans les projecteurs disponibles`, 'error');
+                }
                 refreshProjectorIcons();
                 recomputeRelayAssignments();
                 checkRelayMismatch();
@@ -767,6 +782,14 @@
         fabricCanvas.on("object:moving", function (opt) {
             if (opt.target && opt.target._relayId !== undefined) {
                 const rid = opt.target._relayId;
+                // Borner au plan : un projecteur glissé hors de l'image serait perdu de
+                // vue et sans effet, sa position n'ayant aucun sens hors du champ.
+                const marge = PROJ_RADIUS;
+                opt.target.set({
+                    left: Math.min(Math.max(opt.target.left, marge), canvasWidth - marge),
+                    top: Math.min(Math.max(opt.target.top, marge), canvasHeight - marge),
+                });
+                opt.target.setCoords();
                 relayPositions[rid] = { x: opt.target.left, y: opt.target.top };
                 movedRelayIds.add(rid);
                 const icon = projectorIcons[rid];

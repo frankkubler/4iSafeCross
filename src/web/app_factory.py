@@ -19,7 +19,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Flask, Response, request
+from flask import Flask, Response, request, url_for
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -240,6 +240,27 @@ def _register_audit(app):
         return response
 
 
+def _register_static_versioning(app):
+    """Expose ``static_url()`` aux gabarits : URL statique + empreinte de version.
+
+    Sans cela, le navigateur garde indéfiniment l'ancien CSS/JS. Le gabarit portait
+    un ``?v=6`` écrit à la main, jamais incrémenté : après la mise à jour de l'image,
+    le poste continuait d'exécuter le zone_editor.js d'une version antérieure — un
+    projecteur invisible et des instructions au mauvais endroit, sans que rien ne
+    l'explique. L'empreinte est la date de modification du fichier : elle change dès
+    que le fichier change (mise au point comme livraison), et reste stable entre deux
+    builds pour que le cache serve à quelque chose. Repli sur la version applicative
+    si le fichier est illisible.
+    """
+    @app.template_global()
+    def static_url(filename):          # noqa: F841 — utilisé par les gabarits Jinja
+        try:
+            empreinte = int((PROJECT_ROOT / 'static' / filename).stat().st_mtime)
+        except OSError:
+            empreinte = 'x'      # fichier illisible : empreinte neutre, pas de cache figé
+        return f"{url_for('static', filename=filename)}?v={empreinte}"
+
+
 def create_app(state):
     """Crée l'app Flask et enregistre tous les blueprints (sans url_prefix :
     les URLs publiques sont un contrat, voir AGENTS.md).
@@ -253,6 +274,7 @@ def create_app(state):
         static_folder=str(PROJECT_ROOT / 'static'),
     )
 
+    _register_static_versioning(app)
     _register_auth(app)
     _register_security(app)
     _register_audit(app)

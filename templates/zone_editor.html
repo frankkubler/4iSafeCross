@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ app_name }} — Éditeur de zones — {{ cam_name }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/design_system.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/zone_editor.css') }}">
-    <script src="{{ url_for('static', filename='js/fabric.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ static_url('css/design_system.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/zone_editor.css') }}">
+    <script src="{{ static_url('js/fabric.min.js') }}"></script>
 </head>
 <body>
 
@@ -102,6 +102,6 @@
     </div>
 
     <script>const NUM_RELAYS = {{ num_relays }};</script>
-    <script src="{{ url_for('static', filename='js/zone_editor.js') }}?v=6"></script>
+    <script src="{{ static_url('js/zone_editor.js') }}"></script>
 </body>
 </html>
