@@ -39,7 +39,8 @@ class RelaysInterdits:
 
 
 SAVED = ('cam_ids', 'zones_by_camera', 'alert_manager', 'manager', 'relays',
-         'shared_detections', 'relays_online', 'camera_failsafe')
+         'shared_detections', 'relays_online', 'camera_failsafe',
+         'relay_positions_by_camera')
 
 A = "rtsp://u:p@172.16.10.169:554/stream1"
 B = "rtsp://u:p@172.16.11.91:554/stream1"
@@ -61,6 +62,8 @@ def client(monkeypatch):
         relay_on={0: True, 1: True, 4: False},
     )
     state.manager = FakeManager({A: 'online', B: 'offline'})
+    state.manager.frame_width, state.manager.frame_height = 1920, 1080
+    state.relay_positions_by_camera = {}
     state.relays = RelaysInterdits()
     state.relays_online = True
     state.camera_failsafe = {1: True}
@@ -118,3 +121,41 @@ def test_aucun_acces_au_bus_usb(client):
     # RelaysInterdits lève si get_relay_state est appelé : la route doit rester lisible
     # à 1 Hz sans charger la liaison USB de la carte.
     assert client.get('/alerts_status').status_code == 200
+
+
+# ── Projecteurs en surimpression sur la vue caméra ───────────────────────────
+
+def test_projecteurs_positionnes_en_pourcentage(client, monkeypatch):
+    """Les positions sont en pixels de la frame ; la surimpression HTML est posée sur
+    une vue redimensionnée, elle doit donc recevoir des pourcentages."""
+    state.relay_positions_by_camera = {0: {0: (192, 108), 4: (1728, 972)}}
+    state.manager.frame_width, state.manager.frame_height = 1920, 1080
+    d = client.get('/alerts_status').get_json()
+    projs = {p['relay']: p for p in d['cameras'][0]['projectors']}
+    assert (projs[0]['x_pct'], projs[0]['y_pct']) == (10.0, 10.0)
+    assert (projs[4]['x_pct'], projs[4]['y_pct']) == (90.0, 90.0)
+
+
+def test_etat_et_zones_de_chaque_projecteur(client):
+    # zone1_cam0 → relais 0 et 1 ; relais 0 et 1 sont ON dans la fixture
+    state.relay_positions_by_camera = {0: {0: (960, 540), 4: (100, 100)}}
+    d = client.get('/alerts_status').get_json()
+    projs = {p['relay']: p for p in d['cameras'][0]['projectors']}
+    assert projs[0]['on'] is True and projs[0]['zones'] == ['zone1_cam0']
+    # R4 n'est déclaré par aucune zone de la caméra 0 : posé mais sans effet
+    assert projs[4]['on'] is False and projs[4]['zones'] == []
+
+
+def test_camera_sans_projecteur_positionne(client):
+    state.relay_positions_by_camera = {}
+    d = client.get('/alerts_status').get_json()
+    assert all(cam['projectors'] == [] for cam in d['cameras'])
+
+
+def test_resolution_absente_repli_1920x1080(client):
+    state.relay_positions_by_camera = {0: {0: (960, 540)}}
+    state.manager.frame_width = None      # CameraManager sans taille cible
+    state.manager.frame_height = None
+    d = client.get('/alerts_status').get_json()
+    p = d['cameras'][0]['projectors'][0]
+    assert (p['x_pct'], p['y_pct']) == (50.0, 50.0)

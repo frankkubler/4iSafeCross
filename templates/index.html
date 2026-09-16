@@ -370,6 +370,37 @@
             top: 0; left: 0;
             transition: width 0.3s, height 0.3s;
         }
+        /* Projecteurs en surimpression sur la vue : position en % de l'image
+           (l'<img> est en object-fit: contain sur un cadre 16/9 de même ratio que
+           la source, elle le remplit donc exactement). Aucun coût sur le pipeline
+           vidéo — l'état vient de /alerts_status, déjà interrogé à 1 Hz. */
+        .projector-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            pointer-events: none;   /* ne gêne ni le clic ni le plein écran */
+        }
+        .projector-pin {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .78rem; font-weight: 700;
+            background: #2a2a3e; color: #ffcc00;
+            border: 2px solid #ffcc00;
+            box-shadow: 0 1px 4px rgba(0,0,0,.7);
+            pointer-events: auto;   /* mais reste survolable pour son infobulle */
+        }
+        /* Relais actif : le projecteur est allumé sur le terrain */
+        .projector-pin.on {
+            background: #ffcc00; color: #101019;
+            border-color: #fff;
+            box-shadow: 0 0 10px 3px rgba(255,204,0,.75);
+        }
+        /* Posé mais déclaré dans aucune zone : n'allumera jamais rien */
+        .projector-pin.unbound { border-style: dashed; opacity: .75; }
+
         .cam-video-box span {
             position: absolute;
             left: 0; right: 0; top: 0; bottom: 0;
@@ -872,6 +903,21 @@
                             detail.textContent = libelles.join('  •  ');
                         }
                     }
+                    // Projecteurs en surimpression sur la vue caméra
+                    (data.cameras || []).forEach((cam) => {
+                        const ov = document.getElementById('proj-overlay-' + cam.index);
+                        if (ov) {
+                            ov.innerHTML = (cam.projectors || []).map((p) => {
+                                const etat = p.on ? 'allumé' : 'éteint';
+                                const zones = p.zones.length
+                                    ? `déclenché par ${p.zones.join(', ')}`
+                                    : 'déclaré dans aucune zone';
+                                const cls = (p.on ? ' on' : '') + (p.zones.length ? '' : ' unbound');
+                                return `<span class="projector-pin${cls}" style="left:${p.x_pct}%;top:${p.y_pct}%"` +
+                                       ` title="Projecteur R${p.relay} — ${etat} — ${zones}">${p.relay}</span>`;
+                            }).join('');
+                        }
+                    });
                     (data.cameras || []).forEach((cam) => {
                         const box = document.getElementById('zone-pills-' + cam.index);
                         if (!box) return;
@@ -1071,6 +1117,8 @@
                 <div class="cam-video-box" id="cam_box_{{ cam.idx }}">
                     <img id="cam_img_{{ cam.idx }}" data-src="{{ url_for('stream.video_feed', cid=cam.idx) }}" src="" style="display:none;" onerror="onCamImgError({{ cam.idx }})" onload="onCamImgLoad({{ cam.idx }})" />
                     <span id="placeholder_{{ cam.idx }}">Vidéo masquée</span>
+                    <!-- Projecteurs et leur état, alimentés par /alerts_status -->
+                    <div class="projector-overlay" id="proj-overlay-{{ cam.idx }}"></div>
                 </div>
                 {# Les contrôles luminosité/exposition sont masqués #}
                 <!--

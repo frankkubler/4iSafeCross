@@ -124,6 +124,12 @@ def alerts_status():
             for cid, dets in state.shared_detections.items()
         }
 
+    # Référence pour convertir les positions de projecteurs (pixels de la frame)
+    # en pourcentages : la surimpression HTML est posée sur une vue redimensionnée,
+    # elle ne doit dépendre ni de la résolution source ni de la taille d'affichage.
+    frame_w = getattr(state.manager, 'frame_width', None) or 1920
+    frame_h = getattr(state.manager, 'frame_height', None) or 1080
+
     cameras = []
     alertes = []
     for idx, cam_id in enumerate(state.cam_ids):
@@ -146,6 +152,20 @@ def alerts_status():
             })
             if en_alerte:
                 alertes.append({'camera': idx, 'zone': nom, 'relays': relais})
+        # Projecteurs posés sur cette caméra, avec leur état courant. Les zones
+        # déclenchées sont celles qui les déclarent : l'éditeur les dérive de la
+        # position, le serveur s'en tient à ce que zones.ini déclare.
+        projecteurs = []
+        for relay_id, (x, y) in sorted((state.relay_positions_by_camera.get(idx) or {}).items()):
+            zones_du_relais = sorted(z['name'] for z in zones if relay_id in z['relays'])
+            projecteurs.append({
+                'relay': relay_id,
+                'x_pct': round(100.0 * x / frame_w, 2),
+                'y_pct': round(100.0 * y / frame_h, 2),
+                'on': bool(relay_on.get(relay_id)),
+                'zones': zones_du_relais,
+            })
+
         cameras.append({
             'index': idx,
             'host': rtsp_host(cam_id),
@@ -153,6 +173,7 @@ def alerts_status():
             'online': bool(state.manager) and state.manager.get_status(cam_id) == 'online',
             'failsafe': state.camera_failsafe.get(idx, False),
             'zones': zones,
+            'projectors': projecteurs,
         })
 
     return jsonify({
