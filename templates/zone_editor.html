@@ -54,7 +54,11 @@
                 <div style="color:#888;font-size:0.85rem;padding:8px;">Chargement...</div>
             </div>
 
-            <div class="instructions" id="instructions-zone">
+        </div>
+
+        <!-- Zone canvas : instructions en bandeau au-dessus de la vue caméra -->
+        <div class="canvas-area">
+            <div class="instructions instructions-bar" id="instructions-zone">
                 <h3>Instructions — Zones</h3>
                 <p><kbd>Clic gauche</kbd> — Ajouter un point</p>
                 <p><kbd>Clic droit</kbd> — Fermer le polygone (≥3 pts)</p>
@@ -62,12 +66,10 @@
                 <p><kbd>Double-clic</kbd> sur une zone — Éditer les sommets (poignées)</p>
                 <p><kbd>Suppr</kbd> — Supprimer la zone sélectionnée</p>
                 <p><kbd>Échap</kbd> — Annuler le dessin / quitter l'édition des sommets</p>
-                <p style="margin-top:8px;color:#aaa;">Icônes <kbd>⊙ R0</kbd>…<kbd>R4</kbd> — Glisser un projecteur <strong>dans une zone</strong> pour l'y affecter : le <strong>centre</strong> de l'icône fait foi. Deux zones qui se chevauchent partagent le projecteur posé dans leur intersection. <kbd>🗑</kbd> sur l'icône — le retirer du plan (retour aux projecteurs disponibles). Sélectionner une zone illumine les projecteurs qu'elle déclenche.</p>
-                <p style="margin-top:8px;color:#888;">
-                    Les points proches des bords (&lt;10px) sont alignés automatiquement.
-                </p>
+                <p class="instr-note">Icônes <kbd>⊙ R0</kbd>…<kbd>R4</kbd> — Glisser un projecteur <strong>dans une zone</strong> pour l'y affecter : le <strong>centre</strong> de l'icône fait foi. Deux zones qui se chevauchent partagent le projecteur posé dans leur intersection. Pastille rouge <kbd>✕</kbd> sur l'icône — le retirer du plan (retour aux projecteurs disponibles). Sélectionner une zone illumine les projecteurs qu'elle déclenche.</p>
+                <p class="instr-note dim">Les points proches des bords (&lt;10px) sont alignés automatiquement.</p>
             </div>
-            <div class="instructions" id="instructions-mask" style="display:none;">
+            <div class="instructions instructions-bar" id="instructions-mask" style="display:none;">
                 <h3>Instructions — Masques</h3>
                 <p><kbd>Clic gauche</kbd> — Ajouter un point</p>
                 <p><kbd>Clic droit</kbd> — Fermer le masque (≥3 pts)</p>
@@ -75,12 +77,9 @@
                 <p><kbd>Double-clic</kbd> sur un masque — Éditer les sommets (poignées)</p>
                 <p><kbd>Suppr</kbd> — Supprimer le masque sélectionné</p>
                 <p><kbd>Échap</kbd> — Annuler le dessin / quitter l'édition des sommets</p>
-                <p style="margin-top:8px;color:#e07;">Les masques noircissent la zone :<br>aucun mouvement ni détection IA<br>ne sera traité dans cette région.</p>
+                <p class="instr-note warn">Les masques noircissent la zone : aucun mouvement ni détection IA ne sera traité dans cette région.</p>
             </div>
-        </div>
 
-        <!-- Zone canvas -->
-        <div class="canvas-area">
             <div id="canvas-wrapper" class="canvas-wrapper">
                 <canvas id="editor-canvas" data-cam-id="{{ cid }}"></canvas>
             </div>

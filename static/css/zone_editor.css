@@ -349,11 +349,44 @@ body {
 .canvas-area {
     flex: 1;
     display: flex;
+    /* Colonne : le bandeau d'instructions surmonte la vue caméra. En ligne (défaut
+       précédent), il se serait placé À CÔTÉ du canvas et aurait rogné sa largeur. */
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    gap: 12px;
     padding: 20px;
     overflow: auto;
     background: #111;
+}
+
+/* === Instructions en bandeau, au-dessus de la vue caméra === */
+.instructions-bar {
+    width: 100%;
+    max-width: 1400px;          /* MAX_CANVAS_WIDTH de zone_editor.js */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 18px;
+    padding: 10px 14px;
+}
+.instructions-bar h3 {
+    margin: 0 4px 0 0;
+    white-space: nowrap;
+}
+.instructions-bar p { margin: 0; white-space: nowrap; }
+/* Les notes explicatives occupent leur propre ligne et peuvent se couper. */
+.instructions-bar .instr-note {
+    flex-basis: 100%;
+    margin-top: 4px;
+    white-space: normal;
+    color: #aaa;
+}
+.instructions-bar .instr-note.dim { color: #888; }
+.instructions-bar .instr-note.warn { color: #e07; }
+
+@media (max-width: 900px) {
+    .instructions-bar p { white-space: normal; }
 }
 
 .canvas-wrapper {
