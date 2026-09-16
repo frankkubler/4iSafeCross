@@ -265,6 +265,10 @@
                     });
                 });
                 updateZoneList();
+                // Les masques sont opaques à 60 % : sans cela, un projecteur posé
+                // sous un masque disparaîtrait de l'écran.
+                bringProjectorsToFront();
+                fabricCanvas.renderAll();
             })
             .catch(() => {
                 // Pas de masques définis — silencieux
@@ -332,13 +336,18 @@
      * Retourne { body, label } — deux objets Fabric indépendants.
      */
     function drawProjectorIcon(relayId, cx, cy) {
+        // Pastille pleine avec le numéro AU CENTRE, liseré sombre et ombre portée :
+        // l'icône doit rester lisible sur une image de caméra quelconque et sous le
+        // remplissage semi-transparent d'une zone. L'ancienne version (disque sombre,
+        // numéro dessous, gris #333 dès qu'aucune zone n'était sélectionnée) devenait
+        // invisible dans une zone colorée.
         const body = new fabric.Circle({
             left: cx,
             top: cy,
             radius: PROJ_RADIUS,
-            fill: '#1a1a2e',
-            stroke: '#ffcc00',
-            strokeWidth: 2,
+            fill: '#ffcc00',
+            stroke: '#101019',
+            strokeWidth: 3,
             originX: 'center',
             originY: 'center',
             selectable: true,
@@ -348,57 +357,71 @@
             lockRotation: true,
             lockScalingX: true,
             lockScalingY: true,
+            shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.65)', blur: 6, offsetX: 0, offsetY: 2 }),
+            hoverCursor: 'move',
         });
         body._relayId = relayId;
 
-        const label = new fabric.Text(`R${relayId}`, {
+        const label = new fabric.Text(`${relayId}`, {
             left: cx,
-            top: cy + PROJ_RADIUS + 3,
-            fontSize: 12,
-            fill: '#ffffff',
+            top: cy,
+            fontSize: 17,
+            fill: '#101019',
             fontWeight: 'bold',
+            fontFamily: 'Arial, sans-serif',
             originX: 'center',
-            originY: 'top',
+            originY: 'center',
             selectable: false,
             evented: false,
         });
 
-        // Corbeille : retire le projecteur du plan (il redevient « disponible »).
-        // Visible en permanence plutôt qu'au survol : un bouton de sûreté doit être
-        // découvrable sans exploration, et le survol est peu fiable au doigt.
-        const trash = new fabric.Text('🗑', {
-            left: cx + PROJ_RADIUS + 2,
-            top: cy - PROJ_RADIUS - 2,
-            fontSize: 13,
+        // Retrait du plan : pastille rouge avec une croix, plutôt qu'un emoji dont le
+        // rendu dépend des polices du poste. Visible en permanence — un bouton de
+        // sûreté doit être découvrable sans survol, peu fiable au doigt.
+        const trashOffset = PROJ_RADIUS - 1;
+        const trashBg = new fabric.Circle({
+            left: cx + trashOffset,
+            top: cy - trashOffset,
+            radius: 9,
+            fill: '#b91c1c',
+            stroke: '#ffffff',
+            strokeWidth: 2,
             originX: 'center',
             originY: 'center',
-            opacity: 0.75,
             selectable: false,
             evented: true,
             hoverCursor: 'pointer',
         });
-        trash._removeRelayId = relayId;
+        const trashMark = new fabric.Text('✕', {
+            left: cx + trashOffset,
+            top: cy - trashOffset,
+            fontSize: 11,
+            fill: '#ffffff',
+            fontWeight: 'bold',
+            fontFamily: 'Arial, sans-serif',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: true,
+            hoverCursor: 'pointer',
+        });
+        trashBg._removeRelayId = relayId;
+        trashMark._removeRelayId = relayId;
 
         fabricCanvas.add(body);
         fabricCanvas.add(label);
-        fabricCanvas.add(trash);
-        body.setCoords();
-        label.setCoords();
-        trash.setCoords();
-        fabricCanvas.bringToFront(body);
-        fabricCanvas.bringToFront(label);
-        fabricCanvas.bringToFront(trash);
-        return { body, label, trash };
+        fabricCanvas.add(trashBg);
+        fabricCanvas.add(trashMark);
+        [body, label, trashBg, trashMark].forEach((o) => { o.setCoords(); fabricCanvas.bringToFront(o); });
+        return { body, label, trash: trashBg, trashMark };
     }
 
     /**
      * Supprime toutes les icônes de projecteur du canvas.
      */
     function clearProjectorIcons() {
-        Object.values(projectorIcons).forEach(({ body, label, trash }) => {
-            fabricCanvas.remove(body);
-            fabricCanvas.remove(label);
-            if (trash) fabricCanvas.remove(trash);
+        Object.values(projectorIcons).forEach(({ body, label, trash, trashMark }) => {
+            [body, label, trash, trashMark].forEach((o) => { if (o) fabricCanvas.remove(o); });
         });
         projectorIcons = {};
     }
@@ -432,6 +455,14 @@
      * (src/core/geometry.point_in_zone).
      */
     function recomputeRelayAssignments() {
+        // Un projecteur réputé posé mais sans position ne serait ni dessiné ni
+        // proposé au stock : il disparaîtrait de l'interface. On le remet au stock.
+        Array.from(placedRelayIds).forEach((relayId) => {
+            if (!relayPositions[relayId]) {
+                console.warn(`[Projecteur] R${relayId} posé sans position : remis dans les disponibles`);
+                placedRelayIds.delete(relayId);
+            }
+        });
         completedZones.forEach((zone) => {
             zone.relays = [];
             placedRelayIds.forEach((relayId) => {
@@ -442,7 +473,16 @@
             });
             zone.relays.sort((a, b) => a - b);
         });
+        // Trace de diagnostic : position de chaque projecteur et zones déduites.
+        if (placedRelayIds.size) {
+            console.log('[Projecteur] affectations :', Array.from(placedRelayIds).sort().map((r) => {
+                const p = relayPositions[r];
+                const zs = completedZones.filter((z) => (z.relays || []).includes(r)).map((z) => z.name);
+                return `R${r} (${Math.round(p.x)},${Math.round(p.y)}) → ${zs.length ? zs.join('+') : 'aucune zone'}`;
+            }).join('  |  '));
+        }
         updateZoneList();
+        updateRelayStock();
         updateProjectorHighlights();
     }
 
@@ -548,25 +588,53 @@
         if (selectedZoneIndex >= 0 && selectedZoneIndex < completedZones.length) {
             (completedZones[selectedZoneIndex].relays || []).forEach((r) => activeRelays.add(r));
         }
+        // Projecteurs affectés à au moins une zone, toutes zones confondues.
+        const assignedRelays = new Set();
+        completedZones.forEach((z) => (z.relays || []).forEach((r) => assignedRelays.add(r)));
         Object.entries(projectorIcons).forEach(([rid]) => {
-            highlightProjector(parseInt(rid, 10), activeRelays.has(parseInt(rid, 10)));
+            const id = parseInt(rid, 10);
+            highlightProjector(id, activeRelays.has(id), assignedRelays.has(id));
         });
+        bringProjectorsToFront();
         fabricCanvas.renderAll();
     }
 
     /**
      * Allume (lit=true) ou éteint un projecteur relais.
      */
-    function highlightProjector(relayId, lit) {
+    /**
+     * État visuel d'un projecteur.
+     *
+     * `lit`      : la zone sélectionnée le déclenche → cerclé de blanc.
+     * `assigned` : posé dans au moins une zone → pastille jaune pleine.
+     *              Sinon pastille sombre à liseré jaune : posé sur le plan mais
+     *              n'allumant rien. Les deux états restent lisibles sur n'importe
+     *              quelle image — l'ancien gris #333/#888 disparaissait sous le
+     *              remplissage d'une zone.
+     */
+    function highlightProjector(relayId, lit, assigned) {
         const icon = projectorIcons[relayId];
         if (!icon) return;
-        if (lit) {
-            icon.body.set({ fill: '#8a6a00', stroke: '#ffcc00' });
-            icon.label.set({ fill: '#ffe066' });
+        if (assigned) {
+            icon.body.set({ fill: '#ffcc00', stroke: lit ? '#ffffff' : '#101019', strokeWidth: lit ? 4 : 3 });
+            icon.label.set({ fill: '#101019' });
         } else {
-            icon.body.set({ fill: '#333333', stroke: '#888888' });
-            icon.label.set({ fill: '#cccccc' });
+            icon.body.set({ fill: '#2a2a3e', stroke: lit ? '#ffffff' : '#ffcc00', strokeWidth: lit ? 4 : 3 });
+            icon.label.set({ fill: '#ffcc00' });
         }
+    }
+
+    /**
+     * Ramène les projecteurs au premier plan.
+     *
+     * Fabric rend dans l'ordre d'ajout : les polygones de zones et de masques, dessinés
+     * après le chargement des positions, recouvraient les icônes — un projecteur posé
+     * dans une zone devenait invisible.
+     */
+    function bringProjectorsToFront() {
+        Object.values(projectorIcons).forEach(({ body, label, trash, trashMark }) => {
+            [body, label, trash, trashMark].forEach((o) => { if (o) fabricCanvas.bringToFront(o); });
+        });
     }
 
     // === Événements canvas ===
@@ -709,13 +777,12 @@
                     });
                     icon.label.setCoords();
                 }
-                if (icon && icon.trash) {
-                    icon.trash.set({
-                        left: opt.target.left + PROJ_RADIUS + 2,
-                        top: opt.target.top - PROJ_RADIUS - 2,
-                    });
-                    icon.trash.setCoords();
-                }
+                const off = PROJ_RADIUS - 1;
+                [icon && icon.trash, icon && icon.trashMark].forEach((o) => {
+                    if (!o) return;
+                    o.set({ left: opt.target.left + off, top: opt.target.top - off });
+                    o.setCoords();
+                });
                 // L'affectation suit la position : recalcul en direct, la liste des
                 // zones montre immédiatement ce que le geste vient de changer.
                 recomputeRelayAssignments();
