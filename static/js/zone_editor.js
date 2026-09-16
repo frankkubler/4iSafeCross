@@ -129,16 +129,19 @@
             imageWidth = img.naturalWidth;
             imageHeight = img.naturalHeight;
 
-            // Calculer le facteur d'échelle si l'image est trop grande
-            if (imageWidth > MAX_CANVAS_WIDTH) {
-                scaleFactor = imageWidth / MAX_CANVAS_WIDTH;
-                canvasWidth = MAX_CANVAS_WIDTH;
-                canvasHeight = Math.round(imageHeight / scaleFactor);
-            } else {
-                scaleFactor = 1;
-                canvasWidth = imageWidth;
-                canvasHeight = imageHeight;
-            }
+            // Échelle : le plan doit tenir dans la place RÉELLEMENT disponible, en
+            // largeur comme en hauteur. Ne borner que la largeur laissait un canvas de
+            // 787 px de haut (1400 px en 16/9) sous l'en-tête et le bandeau
+            // d'instructions : le bas de l'image sortait de l'écran et il fallait
+            // dézoomer le navigateur pour dessiner près du bord inférieur.
+            const dispo = availableCanvasSize();
+            scaleFactor = Math.max(
+                imageWidth / dispo.width,
+                imageHeight / dispo.height,
+                1,                       // jamais d'agrandissement : pas de flou inutile
+            );
+            canvasWidth = Math.round(imageWidth / scaleFactor);
+            canvasHeight = Math.round(imageHeight / scaleFactor);
 
             initCanvas(img);
             loadExistingZones();
@@ -197,6 +200,38 @@
 
         setupCanvasEvents();
         updateImageInfo();
+    }
+
+    /**
+     * Place disponible pour le plan, mesurée sur la mise en page réelle.
+     *
+     * La zone canvas occupe la hauteur restante sous l'en-tête ; on en retire ses
+     * marges internes, le bandeau d'instructions visible, l'espacement entre les
+     * deux, et la barre de statut fixée en bas qui recouvrirait l'image. Repli sur
+     * MAX_CANVAS_WIDTH et la hauteur de la fenêtre si la mise en page n'est pas
+     * encore mesurable.
+     */
+    function availableCanvasSize() {
+        const area = document.querySelector('.canvas-area');
+        if (!area || !area.clientWidth) {
+            return { width: MAX_CANVAS_WIDTH, height: Math.max(320, window.innerHeight - 200) };
+        }
+        const st = getComputedStyle(area);
+        const padX = parseFloat(st.paddingLeft) + parseFloat(st.paddingRight);
+        const padY = parseFloat(st.paddingTop) + parseFloat(st.paddingBottom);
+        const gap = parseFloat(st.rowGap) || parseFloat(st.gap) || 0;
+
+        let hautBandeau = 0;
+        document.querySelectorAll('.instructions-bar').forEach((el) => {
+            if (el.offsetParent !== null) hautBandeau = el.offsetHeight + gap;   // seul le visible
+        });
+        const statut = document.querySelector('.status-bar');
+        const hautStatut = statut ? statut.offsetHeight + 8 : 0;
+
+        return {
+            width: Math.max(320, Math.min(area.clientWidth - padX, MAX_CANVAS_WIDTH)),
+            height: Math.max(240, area.clientHeight - padY - hautBandeau - hautStatut),
+        };
     }
 
     /**
