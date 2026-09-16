@@ -9,6 +9,7 @@ import psutil
 from flask import Blueprint, jsonify, send_from_directory
 
 from src.core import caches, failsafe
+from src.core.camera_order import camera_label, rtsp_host
 from src.core.state import state
 from src.core.gpu_metrics import get_gpu_metrics
 from src.core.system_metrics import get_resource_metrics
@@ -92,6 +93,74 @@ def relays_status():
         'last_command_error': getattr(relays, 'last_command_error', None),
         'failed_commands': getattr(relays, 'failed_commands', 0),
         'reenumerations': getattr(relays, 'reenumerations', 0),
+    })
+
+
+@system_bp.route('/alerts_status')
+def alerts_status():
+    """Détections et alertes en cours, par caméra et par zone. SANS accès USB.
+
+    Interrogé par le tableau de bord (1 Hz) : aucune commande n'est envoyée au
+    module relais — l'état lu est celui que l'AlerteManager maintient
+    (relay_on, relay_active_zones), pas l'état physique relu sur le bus, sinon
+    chaque client chargerait la liaison USB de la carte.
+
+    Deux niveaux, volontairement distincts :
+      - « detection » : une personne est vue dans la zone à l'instant t ;
+      - « alert »     : la zone maintient effectivement un ou plusieurs relais
+                        actifs (détection confirmée par le debounce). C'est ce
+                        que voit le piéton sur le terrain.
+    """
+    am = state.alert_manager
+    # Copies défensives : ces structures sont écrites depuis la boucle asyncio
+    # (alertes) et le thread watchdog (fail-safe) pendant qu'on les lit ici.
+    relay_active = {int(r): set(z) for r, z in dict(getattr(am, 'relay_active_zones', {})).items()}
+    relay_on = {int(r): bool(v) for r, v in dict(getattr(am, 'relay_on', {})).items()}
+    zones_en_alerte = {zone for zones in relay_active.values() for zone in zones}
+
+    with state.shared_detections_lock:
+        detections_par_cam = {
+            cid: [d for d in (dets or []) if d.get('label') == 'person']
+            for cid, dets in state.shared_detections.items()
+        }
+
+    cameras = []
+    alertes = []
+    for idx, cam_id in enumerate(state.cam_ids):
+        zones_vues = {
+            zone
+            for det in detections_par_cam.get(idx, [])
+            for zone in (det.get('zones') or [])
+        }
+        zones = []
+        for zone in state.zones_by_camera.get(idx, []):
+            nom = zone['name']
+            relais = sorted(am._get_relay_nums_from_zone(nom)) if am else []
+            en_alerte = nom in zones_en_alerte
+            zones.append({
+                'name': nom,
+                'relays': relais,
+                'relays_on': [r for r in relais if relay_on.get(r)],
+                'detection': nom in zones_vues,
+                'alert': en_alerte,
+            })
+            if en_alerte:
+                alertes.append({'camera': idx, 'zone': nom, 'relays': relais})
+        cameras.append({
+            'index': idx,
+            'host': rtsp_host(cam_id),
+            'label': camera_label(idx, cam_id),
+            'online': bool(state.manager) and state.manager.get_status(cam_id) == 'online',
+            'failsafe': state.camera_failsafe.get(idx, False),
+            'zones': zones,
+        })
+
+    return jsonify({
+        'cameras': cameras,
+        'alerts': alertes,
+        'alerts_count': len(alertes),
+        'relays_on': sorted(r for r, on in relay_on.items() if on),
+        'relays_online': state.relays is not None and state.relays.is_initialized and state.relays_online,
     })
 
 

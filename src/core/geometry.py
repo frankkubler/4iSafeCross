@@ -6,24 +6,81 @@ import cv2
 import numpy as np
 
 
+def point_in_zone(x, y, zone):
+    """Un point est-il dans une zone (polygone ou rectangle) ?
+
+    Règle unique, partagée par la détection de piéton (centre de la bbox) et par
+    l'affectation des relais (centre de l'icône de projecteur) : « dans la zone »
+    doit vouloir dire la même chose pour l'un et pour l'autre.
+    """
+    polygon = zone.get("polygon")
+    if polygon:
+        if len(polygon) < 3:
+            return False
+        pts = np.array(polygon, dtype=np.int32)
+        # cv2.pointPolygonTest attend un tableau Nx2 ; >= 0 inclut le bord.
+        return cv2.pointPolygonTest(pts, (int(x), int(y)), False) >= 0
+    rect = zone.get("rect")
+    if rect:
+        x1, y1, x2, y2 = rect
+        return x1 <= x <= x2 and y1 <= y <= y2
+    return False
+
+
 def get_zone_for_detection(det, zones):
     # det est un dictionnaire : {"x_min": ..., "y_min": ..., etc.}
     # On prend le centre du rectangle de détection
     x_centre = int((det["x_min"] + det["x_max"]) / 2)
     y_centre = int((det["y_min"] + det["y_max"]) / 2)
-    matched_zones = []
+    return [zone["name"] for zone in zones if point_in_zone(x_centre, y_centre, zone)]
+
+
+def derive_zone_relays(zones, relay_positions):
+    """``{nom_zone: [relais triés]}`` — le centre de l'icône de projecteur fait foi.
+
+    Un relais appartient à **toutes** les zones qui contiennent son centre : deux
+    zones qui se chevauchent partagent donc le relais posé dans leur intersection.
+    C'est ce qui permet le multi-zones sur une même caméra sans dupliquer l'icône,
+    une seule position étant enregistrée par couple (relais, caméra).
+
+    Args:
+        zones: zones d'UNE caméra (dicts avec 'name' et 'polygon' ou 'rect').
+        relay_positions: ``{relay_id: (x, y)}`` pour cette même caméra.
+    """
+    return {
+        zone["name"]: sorted(
+            relay_id
+            for relay_id, (x, y) in (relay_positions or {}).items()
+            if point_in_zone(x, y, zone)
+        )
+        for zone in zones
+    }
+
+
+def zone_relay_mismatches(zones, relay_positions):
+    """Écarts entre relais **déclarés** dans zones.ini et relais **dérivés** des positions.
+
+    Sert de garde-fou avant de basculer une configuration sur le modèle
+    « position = affectation » : une zone dont le relais est déclaré mais dont
+    l'icône a été posée ailleurs perdrait ce relais à la première sauvegarde de
+    l'éditeur, sans que personne ne le voie. Retourne une liste de dicts
+    ``{zone, declares, derives, perdus, gagnes}``, vide si tout concorde.
+    """
+    derives = derive_zone_relays(zones, relay_positions)
+    ecarts = []
     for zone in zones:
-        if "polygon" in zone:
-            pts = np.array(zone["polygon"], dtype=np.int32)
-            # cv2.pointPolygonTest attend un tableau Nx2
-            inside = cv2.pointPolygonTest(pts, (x_centre, y_centre), False)
-            if inside >= 0:
-                matched_zones.append(zone["name"])
-        elif "rect" in zone:
-            x1, y1, x2, y2 = zone["rect"]
-            if x1 <= x_centre <= x2 and y1 <= y_centre <= y2:
-                matched_zones.append(zone["name"])
-    return matched_zones
+        nom = zone["name"]
+        declares = sorted(zone.get("relays", []) or [])
+        obtenus = derives.get(nom, [])
+        if declares != obtenus:
+            ecarts.append({
+                "zone": nom,
+                "declares": declares,
+                "derives": obtenus,
+                "perdus": sorted(set(declares) - set(obtenus)),
+                "gagnes": sorted(set(obtenus) - set(declares)),
+            })
+    return ecarts
 
 
 def iou_overlap(a, b):

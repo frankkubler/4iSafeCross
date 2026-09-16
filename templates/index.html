@@ -146,6 +146,38 @@
             border-bottom: 3px solid #7f1d1d;
         }
         .relays-banner small { font-weight: normal; opacity: .9; }
+        /* Bandeau « alerte en cours » (alimenté par /alerts_status) */
+        .alerts-banner {
+            display: flex; align-items: center; gap: .75rem;
+            margin: 0; padding: .6rem 1.25rem;
+            background: #c2410c; color: #fff; font-weight: 600;
+            border-bottom: 3px solid #7c2d12;
+        }
+        .alerts-banner[hidden] { display: none; }
+        .alerts-banner small { font-weight: normal; opacity: .95; }
+        /* Pastilles d'état par zone, sous chaque caméra */
+        .zone-pills { display: flex; flex-wrap: wrap; gap: .4rem; padding: .3rem 0 .1rem; }
+        .zone-pill {
+            display: inline-flex; align-items: center; gap: .35rem;
+            padding: .15rem .55rem; border-radius: 999px;
+            font-size: .82em; line-height: 1.6;
+            background: #1f2937; color: #cbd5e1; border: 1px solid #374151;
+        }
+        .zone-pill .dot {
+            width: .6rem; height: .6rem; border-radius: 50%;
+            background: #4b5563; flex: 0 0 auto;
+        }
+        .zone-pill .relays { opacity: .65; font-size: .92em; }
+        /* Détection en cours : personne vue dans la zone, alerte pas encore confirmée */
+        .zone-pill.detection { background: #78350f; color: #fde68a; border-color: #b45309; }
+        .zone-pill.detection .dot { background: #f59e0b; }
+        /* Alerte active : la zone maintient un relais ON — ce que voit le piéton */
+        .zone-pill.alert { background: #7f1d1d; color: #fff; border-color: #dc2626; }
+        .zone-pill.alert .dot { background: #f87171; animation: pulse-dot 1s ease-in-out infinite; }
+        /* Zone sans relais : ne pilote rien, signalé pour éviter une fausse confiance */
+        .zone-pill.norelay { border-style: dashed; }
+        @keyframes pulse-dot { 50% { opacity: .25; } }
+        @media (prefers-reduced-motion: reduce) { .zone-pill.alert .dot { animation: none; } }
         /* `display: flex` ci-dessus l'emporte sur le `display: none` que le navigateur
            applique à l'attribut hidden : sans cette règle, le bandeau reste affiché en
            permanence, module joignable ou pas (constat 2026-09-16). */
@@ -819,6 +851,55 @@
             updateRelaysBanner();
             setInterval(updateRelaysBanner, 5000);
         });
+
+        // Détections et alertes en cours, par zone (/alerts_status : aucun accès USB).
+        function updateAlertsStatus() {
+            fetch('/alerts_status')
+                .then(r => r.json())
+                .then(data => {
+                    const banner = document.getElementById('alerts-banner');
+                    const detail = document.getElementById('alerts-banner-detail');
+                    if (banner) {
+                        const n = data.alerts_count || 0;
+                        banner.hidden = n === 0;
+                        if (n > 0) {
+                            const libelles = (data.alerts || []).map(
+                                a => `Caméra ${a.camera} / ${a.zone}` +
+                                     (a.relays && a.relays.length ? ` (R${a.relays.join(', R')})` : ' (aucun relais)')
+                            );
+                            banner.querySelector('.alerts-banner-title').textContent =
+                                n === 1 ? '⚠️ 1 alerte en cours' : `⚠️ ${n} alertes en cours`;
+                            detail.textContent = libelles.join('  •  ');
+                        }
+                    }
+                    (data.cameras || []).forEach((cam) => {
+                        const box = document.getElementById('zone-pills-' + cam.index);
+                        if (!box) return;
+                        if (!cam.zones.length) {
+                            box.innerHTML = '<span class="zone-pill" title="Aucune zone définie pour cette caméra">aucune zone</span>';
+                            return;
+                        }
+                        box.innerHTML = cam.zones.map((z) => {
+                            const cls = z.alert ? 'alert' : (z.detection ? 'detection' : '');
+                            const sansRelais = z.relays.length === 0 ? ' norelay' : '';
+                            const relais = z.relays.length
+                                ? `<span class="relays">R${z.relays.join(' R')}</span>`
+                                : '<span class="relays">—</span>';
+                            const etat = z.alert ? 'alerte active — relais maintenus'
+                                       : (z.detection ? 'personne détectée' : 'au repos');
+                            const titre = `${z.name} — ${etat}` +
+                                (z.relays.length ? ` — relais ${z.relays.join(', ')}` : ' — aucun relais affecté');
+                            return `<span class="zone-pill ${cls}${sansRelais}" title="${titre}">` +
+                                   `<span class="dot"></span>${z.name} ${relais}</span>`;
+                        }).join('');
+                    });
+                })
+                .catch(() => { /* serveur injoignable : le bandeau relais et /health le montrent */ });
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            updateAlertsStatus();
+            setInterval(updateAlertsStatus, 1000);
+        });
     </script>
 </head>
 <body>
@@ -868,6 +949,12 @@
         <small id="relays-banner-detail"></small>
     </div>
 
+    <!-- ── Bandeau : alertes en cours (masqué quand aucune) ── -->
+    <div id="alerts-banner" class="alerts-banner" role="status" aria-live="polite" hidden>
+        <span class="alerts-banner-title">⚠️ alerte en cours</span>
+        <small id="alerts-banner-detail"></small>
+    </div>
+
     <!-- ── Légende postures (dynamique depuis stature_colors) ── -->
     <div class="legend-bar">
         <span class="legend-bar-title">Légende</span>
@@ -890,6 +977,8 @@
                         Caméra {{ cam.idx }} <small style="opacity:.7;font-weight:normal;margin-left:.4em" title="Hôte RTSP — zones et masques _cam{{ cam.idx }}, images cam_{{ cam.idx }}_*.jpg, journal « caméra {{ cam.idx }} »">{{ cam.host }}</small>
                     </div>
                 </div>
+                <!-- État par zone : ● rouge = alerte active, ● orange = détection, gris = repos -->
+                <div class="zone-pills" id="zone-pills-{{ cam.idx }}"></div>
                 <div class="cam-controls">
                     <button id="btn_stream_{{ cam.idx }}" data-enabled="false" class="btn btn-slate" onclick="toggleStream({{ cam.idx }}, this)">▶ Vidéo</button>
                     <button id="btn_detect_{{ cam.idx }}" data-enabled="true" class="btn btn-green" onclick="toggleDetection({{ cam.idx }}, this)">⛔ Stop détection</button>
