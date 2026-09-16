@@ -840,6 +840,17 @@ skip_keypoint_filter = true
 # debounce_frames et debounce_reset_seconds absents → valeurs globales (2 et 0.8)
 ```
 
+> **`relays` fait foi.** La clé est la source de vérité du mappage zone → relais :
+> - `relays = 0,1` → ces relais ; `relays =` (présente, vide) → **aucun relais** — la zone
+>   compte les détections (journal, Telegram, images) sans rien piloter ;
+> - clé **absente** (fichier antérieur à ce champ) → mappage historique par **nom** :
+>   `zone1*`/`zone3*` → 0, 1, 2 ; `zone2*`/`zone4*`/`zone5*` → 1.
+>
+> L'éditeur de zones écrit toujours la clé, même vide. Avant (≤ v3.0.3), une zone
+> enregistrée sans relais coché n'avait pas la clé et héritait des relais de son nom — qui
+> change à chaque renumérotation après suppression d'une zone (`zone2` devenant `zone1`
+> passait de 1 à 0, 1, 2 sans que rien ne le signale).
+
 #### Paramètres disponibles par zone
 
 | Paramètre | Valeur | Description |

@@ -81,14 +81,17 @@ class AlerteManager:
     def _get_relay_nums_from_zone(self, zone_name):
         """Retourne la liste des relais associés à une zone.
 
-        Cherche d'abord dans la config data-driven (_zones_flat[zone_name]['relays']).
-        Si absent ou liste vide, utilise le mapping hardcodé (rétrocompatibilité).
+        La clé « relays » de la zone (zones.ini, éditeur) fait foi dès qu'elle est
+        présente — y compris vide : une zone sans relais coché ne pilote AUCUN relais.
+        Le mappage historique par nom ne sert plus qu'aux fichiers antérieurs à ce
+        champ (clé absente). Avant, une liste vide déclenchait ce repli : décocher
+        tous les relais d'une zone lui en attribuait selon son nom, et ce nom change
+        à chaque renumérotation dans l'éditeur (zone2 → zone1 : [1] → [0, 1, 2]).
         """
         zone = self._zones_flat.get(zone_name, {})
-        relays = zone.get("relays")
-        if relays:  # liste non-vide définie dans la config
-            return relays
-        # Fallback hardcodé (rétrocompatibilité zones sans champ 'relays')
+        if "relays" in zone:
+            return list(zone["relays"])
+        # Repli hérité : zones.ini sans champ « relays »
         if "zone1" in zone_name or "zone3" in zone_name:
             return [0, 1, 2]
         elif "zone2" in zone_name or "zone4" in zone_name or "zone5" in zone_name:

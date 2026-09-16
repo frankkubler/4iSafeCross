@@ -56,8 +56,17 @@ def load_zones_by_camera_from_ini(ini_path):
             zone["polygon"] = [ (int(x), int(y)) for x, y in pts ]
         if "color" in config[section]:
             zone["color"] = tuple(map(int, config[section]["color"].split(',')))
-        relays_str = config[section].get("relays", "").strip()
-        zone["relays"] = [int(r.strip()) for r in relays_str.split(',') if r.strip().isdigit()]
+        # « relays » est la source de vérité du mappage zone → relais :
+        #   - clé présente, même vide (« relays = ») → liste explicite, [] = aucun relais ;
+        #   - clé absente (fichier antérieur à ce champ) → pas de clé dans le dict, et
+        #     AlerteManager retombe sur le mappage historique par nom.
+        # Avant, la clé était toujours posée ([] dans les deux cas) : impossible de
+        # distinguer « aucun relais voulu » de « non renseigné », et une zone
+        # enregistrée sans relais héritait des relais de son NOM — qui change à chaque
+        # renumérotation dans l'éditeur.
+        if "relays" in config[section]:
+            relays_str = config[section]["relays"].strip()
+            zone["relays"] = [int(r.strip()) for r in relays_str.split(',') if r.strip().isdigit()]
         skip_str = config[section].get("skip_keypoint_filter", "false").strip().lower()
         zone["skip_keypoint_filter"] = skip_str in ("true", "1", "yes")
         debounce_frames_str = config[section].get("debounce_frames", "").strip()

@@ -65,9 +65,10 @@ def save_zones_to_ini(ini_path, cam_id, zones):
         entries = [
             ("polygon", poly_str),
             ("color", color_str),
+            # Toujours écrite, même vide : « relays = » signifie « aucun relais »,
+            # sans quoi le chargeur ne pose pas la clé et le mappage par nom reprend.
+            ("relays", ",".join(str(int(r)) for r in relays)),
         ]
-        if relays:
-            entries.append(("relays", ",".join(str(r) for r in relays)))
         if zone.get("skip_keypoint_filter"):
             entries.append(("skip_keypoint_filter", "true"))
         if zone.get("debounce_frames") is not None:
