@@ -185,6 +185,12 @@
             selection: false,
             hoverCursor: "crosshair",
             defaultCursor: "crosshair",
+            // Sans cette option (défaut false), Fabric dessine l'objet en cours de
+            // manipulation AU-DESSUS de tous les autres, quel que soit l'ordre de la
+            // pile : le disque d'un projecteur passait devant son propre numéro, qui
+            // disparaissait pendant tout le déplacement. Avec true, l'ordre d'ajout
+            // est respecté — le numéro, la corbeille et sa croix restent visibles.
+            preserveObjectStacking: true,
         });
 
         // Placer l'image en fond
