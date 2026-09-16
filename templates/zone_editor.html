@@ -32,6 +32,20 @@
         <!-- Panneau latéral -->
         <div class="side-panel">
             <h2>Zones ({{ cam_name }})</h2>
+
+            <!-- Avertissement : relais déclarés dans zones.ini mais icône posée ailleurs -->
+            <div id="relay-mismatch" class="relay-mismatch" role="alert" hidden></div>
+
+            <!-- Projecteurs non posés sur le plan : cliquer pour les placer -->
+            <div class="relay-stock-box">
+                <div class="relay-stock-title">Projecteurs disponibles</div>
+                <div id="relay-stock" class="relay-stock"></div>
+                <div class="relay-stock-hint">
+                    Cliquer un projecteur pour le poser au centre, puis le glisser dans une zone.
+                    Un projecteur déclenche <strong>toutes</strong> les zones qui contiennent son centre.
+                </div>
+            </div>
+
             <div id="zone-list" class="zone-list">
                 <div style="color:#888;font-size:0.85rem;padding:8px;">Chargement...</div>
             </div>
@@ -44,7 +58,7 @@
                 <p><kbd>Double-clic</kbd> sur une zone — Éditer les sommets (poignées)</p>
                 <p><kbd>Suppr</kbd> — Supprimer la zone sélectionnée</p>
                 <p><kbd>Échap</kbd> — Annuler le dessin / quitter l'édition des sommets</p>
-                <p style="margin-top:8px;color:#aaa;">Icônes <kbd>⊙ R0</kbd>…<kbd>R4</kbd> — Glisser pour positionner les projecteurs sur le plan caméra. Sélectionner une zone illumine les projecteurs qu'elle déclenche.</p>
+                <p style="margin-top:8px;color:#aaa;">Icônes <kbd>⊙ R0</kbd>…<kbd>R4</kbd> — Glisser un projecteur <strong>dans une zone</strong> pour l'y affecter : le <strong>centre</strong> de l'icône fait foi. Deux zones qui se chevauchent partagent le projecteur posé dans leur intersection. <kbd>🗑</kbd> sur l'icône — le retirer du plan (retour aux projecteurs disponibles). Sélectionner une zone illumine les projecteurs qu'elle déclenche.</p>
                 <p style="margin-top:8px;color:#888;">
                     Les points proches des bords (&lt;10px) sont alignés automatiquement.
                 </p>

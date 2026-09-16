@@ -864,6 +864,15 @@ sa place, donc son index, ses zones et son fail-safe.
 > enregistrée sans relais coché n'avait pas la clé et héritait des relais de son nom — qui
 > change à chaque renumérotation après suppression d'une zone (`zone2` devenant `zone1`
 > passait de 1 à 0, 1, 2 sans que rien ne le signale).
+>
+> **Depuis la v3.0.4, l'éditeur calcule cette clé à partir de la position des projecteurs** :
+> un projecteur déclenche toutes les zones dont le polygone contient le **centre** de son
+> icône. Un projecteur sert donc plusieurs zones d'une même caméra si elles se chevauchent
+> et qu'il est posé dans leur intersection ; sur des caméras différentes, les positions
+> sont indépendantes (une par couple relais/caméra dans `relay_positions.ini`). Un
+> projecteur retiré du plan (corbeille) n'allume plus rien. `GET /api/zone_relay_check/<cid>`
+> compare le déclaré au dérivé ; l'éditeur l'interroge à l'ouverture et avertit avant toute
+> sauvegarde.
 
 #### Paramètres disponibles par zone
 

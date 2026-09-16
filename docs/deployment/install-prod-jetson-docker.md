@@ -614,6 +614,11 @@ docker exec -i 4isafecross /app/.venv/bin/python - < scripts/rtsp_probe.py
 - [ ] Correspondance vue ↔ caméra vérifiée : l'hôte affiché à côté de « Caméra `<i>` »
       est bien `HOST[<i>]` de `config.ini`, et les zones dessinées sur cette vue sont
       enregistrées en `*_cam<i>`
+- [ ] **Affectation des projecteurs vérifiée caméra par caméra** (v3.0.4+) : ouvrir
+      `/zone_editor/<i>`, lire l'encadré orange s'il apparaît (relais déclarés ≠ position
+      des icônes), poser chaque projecteur dans la ou les zones qu'il doit déclencher,
+      enregistrer, puis contrôler sur l'IHM principale que chaque pastille de zone porte
+      les bons `R<n>` — une zone affichant « aucun » ne déclenche aucune alerte physique
 - [ ] `harden-run.sh` exécuté, sortie jointe au dossier de recette
 
 ---

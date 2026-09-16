@@ -8,6 +8,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from src.core import caches
+from src.core.geometry import zone_relay_mismatches
 from src.core.state import state
 from utils.constants import (NUM_RELAYS,
                              load_zones_by_camera_from_ini,
@@ -67,6 +68,22 @@ def get_zones(cid):
             'debounce_reset_seconds': zone.get('debounce_reset_seconds'),
         })
     return jsonify(result)
+
+
+@zones_api_bp.route('/api/zone_relay_check/<int:cid>', methods=['GET'])
+def zone_relay_check(cid):
+    """Écarts entre relais déclarés dans zones.ini et relais dérivés des positions.
+
+    L'éditeur affecte les relais par la position de leur icône (le centre fait foi).
+    Une configuration antérieure peut déclarer un relais dans une zone tout en ayant
+    posé son icône ailleurs : la première sauvegarde le retirerait silencieusement.
+    L'éditeur interroge donc cette route à l'ouverture et avertit avant toute
+    modification. Lecture seule.
+    """
+    zones = state.zones_by_camera.get(cid, [])
+    positions = state.relay_positions_by_camera.get(cid, {})
+    ecarts = zone_relay_mismatches(zones, positions)
+    return jsonify({'mismatches': ecarts, 'count': len(ecarts)})
 
 
 @zones_api_bp.route('/api/zones/<int:cid>', methods=['POST'])
@@ -163,9 +180,19 @@ def get_relay_positions(cid):
 
 @zones_api_bp.route('/api/relay_positions/<int:cid>', methods=['POST'])
 def save_relay_positions_route(cid):
-    """Sauvegarde les positions des icônes de projecteurs dans relay_positions.ini."""
+    """Sauvegarde les positions des icônes de projecteurs dans relay_positions.ini.
+
+    Deux champs, complémentaires :
+      - ``positions`` : les icônes déplacées (fusionnées avec l'existant, car
+        l'éditeur n'envoie que celles qui ont bougé) ;
+      - ``removed`` : les relais **retirés du plan** (corbeille). Leur position est
+        supprimée, sinon un relais renvoyé au stock resterait positionné dans le
+        fichier et redeviendrait affecté à sa zone au prochain chargement — une
+        alerte réapparaîtrait sans que personne ne l'ait demandé.
+    """
     data = request.get_json()
     positions_data = data.get('positions', {})
+    removed = {str(r) for r in (data.get('removed') or [])}
     try:
         # Merger avec les positions existantes (on ne reçoit que les déplacés)
         existing = state.relay_positions_by_camera.get(cid, {})
@@ -178,10 +205,15 @@ def save_relay_positions_route(cid):
                 merged[str(k)] = v
         for rid, pos in positions_data.items():
             merged[str(rid)] = pos
+        for rid in removed:
+            merged.pop(rid, None)
         save_relay_positions_to_ini(RELAY_POSITIONS_INI_PATH, cid, merged)
         state.relay_positions_by_camera = load_relay_positions_from_ini(RELAY_POSITIONS_INI_PATH)
-        logger.info(f"✅ Positions relais cam{cid} sauvegardées ({len(positions_data)} entrée(s))")
-        return jsonify({'status': 'ok', 'count': len(positions_data)})
+        logger.info(
+            f"✅ Positions relais cam{cid} sauvegardées "
+            f"({len(positions_data)} déplacée(s), {len(removed)} retirée(s))"
+        )
+        return jsonify({'status': 'ok', 'count': len(positions_data), 'removed': len(removed)})
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde positions relais cam{cid}: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -65,7 +65,9 @@
     // Projecteurs relais — icônes draggables sur canvas
     let projectorIcons = {};   // {relayId: {body, label}}
     let relayPositions = {};   // {relayId: {x, y}} — coordonnées canvas
-    let movedRelayIds = new Set();  // Relais déplacés depuis le chargement
+    let movedRelayIds = new Set();    // Relais déplacés depuis le chargement
+    let placedRelayIds = new Set();   // Relais posés sur le plan (les autres sont « disponibles »)
+    let removedRelayIds = new Set();  // Relais retirés du plan : leur position doit être supprimée
 
     // État du dessin en cours
     let isDrawing = false;
@@ -227,6 +229,9 @@
                 });
 
                 updateZoneList();
+                // Les positions peuvent être déjà chargées (ordre des requêtes non
+                // garanti) : dériver maintenant, et loadRelayPositions le refera.
+                recomputeRelayAssignments();
                 showLoading(false);
                 setStatus(
                     `${completedZones.length} zone(s) chargée(s) — Image ${imageWidth}×${imageHeight}px`
@@ -298,20 +303,27 @@
             })
             .then((data) => {
                 relayPositions = {};
+                placedRelayIds = new Set();
+                removedRelayIds = new Set();
                 Object.entries(data).forEach(([rid, coords]) => {
                     const realId = parseInt(rid, 10);
                     relayPositions[realId] = {
                         x: coords[0] / scaleFactor,
                         y: coords[1] / scaleFactor,
                     };
+                    placedRelayIds.add(realId);   // une position enregistrée = projecteur posé
                 });
                 refreshProjectorIcons();
+                recomputeRelayAssignments();
+                checkRelayMismatch();
             })
             .catch((err) => {
                 console.warn("Impossible de charger les positions relais :", err);
                 relayPositions = {};
+                placedRelayIds = new Set();
                 movedRelayIds.clear();
-                refreshProjectorIcons();  // Afficher les icônes aux positions par défaut
+                removedRelayIds.clear();
+                refreshProjectorIcons();   // aucun projecteur posé : tous « disponibles »
             });
     }
 
@@ -351,50 +363,164 @@
             evented: false,
         });
 
+        // Corbeille : retire le projecteur du plan (il redevient « disponible »).
+        // Visible en permanence plutôt qu'au survol : un bouton de sûreté doit être
+        // découvrable sans exploration, et le survol est peu fiable au doigt.
+        const trash = new fabric.Text('🗑', {
+            left: cx + PROJ_RADIUS + 2,
+            top: cy - PROJ_RADIUS - 2,
+            fontSize: 13,
+            originX: 'center',
+            originY: 'center',
+            opacity: 0.75,
+            selectable: false,
+            evented: true,
+            hoverCursor: 'pointer',
+        });
+        trash._removeRelayId = relayId;
+
         fabricCanvas.add(body);
         fabricCanvas.add(label);
+        fabricCanvas.add(trash);
         body.setCoords();
         label.setCoords();
+        trash.setCoords();
         fabricCanvas.bringToFront(body);
         fabricCanvas.bringToFront(label);
-        console.log(`[Projecteur] R${relayId} ajouté à (${Math.round(cx)}, ${Math.round(cy)})`);
-        return { body, label };
+        fabricCanvas.bringToFront(trash);
+        return { body, label, trash };
     }
 
     /**
      * Supprime toutes les icônes de projecteur du canvas.
      */
     function clearProjectorIcons() {
-        Object.values(projectorIcons).forEach(({ body, label }) => {
+        Object.values(projectorIcons).forEach(({ body, label, trash }) => {
             fabricCanvas.remove(body);
             fabricCanvas.remove(label);
+            if (trash) fabricCanvas.remove(trash);
         });
         projectorIcons = {};
     }
 
     /**
-     * Recrée les icônes de projecteur à partir de relayPositions.
-     * Crée des icônes par défaut (R0–R4) si non encore positionnées.
+     * Recrée les icônes des projecteurs POSÉS sur le plan.
+     *
+     * Un projecteur sans position enregistrée n'est plus placé d'office : il reste
+     * « disponible » dans le panneau latéral. Poser une icône vaut affectation (le
+     * centre fait foi), donc en placer d'office cinq au bord de l'image les aurait
+     * affectés à toute zone touchant ce bord.
      */
     function refreshProjectorIcons() {
         clearProjectorIcons();
-        console.log(`[Projecteur] refreshProjectorIcons — canvasWidth=${canvasWidth} canvasHeight=${canvasHeight}`);
-        Object.entries(relayPositions).forEach(([rid, pos]) => {
-            const relayId = parseInt(rid, 10);
-            projectorIcons[relayId] = drawProjectorIcon(relayId, pos.x, pos.y);
+        placedRelayIds.forEach((relayId) => {
+            const pos = relayPositions[relayId];
+            if (pos) projectorIcons[relayId] = drawProjectorIcon(relayId, pos.x, pos.y);
         });
+        updateProjectorHighlights();
+        updateRelayStock();
+        fabricCanvas.renderAll();
+    }
+
+    /**
+     * Affecte les relais aux zones d'après la position de leur icône.
+     *
+     * Le centre de l'icône fait foi : un projecteur déclenche TOUTES les zones qui
+     * le contiennent, ce qui permet le multi-zones sur une même caméra dès lors que
+     * les zones se chevauchent — sans dupliquer l'icône ni la position. Même règle
+     * géométrique que pour décider qu'un piéton est dans une zone
+     * (src/core/geometry.point_in_zone).
+     */
+    function recomputeRelayAssignments() {
+        completedZones.forEach((zone) => {
+            zone.relays = [];
+            placedRelayIds.forEach((relayId) => {
+                const pos = relayPositions[relayId];
+                if (pos && isPointInPolygon(pos.x, pos.y, zone.polygon)) {
+                    zone.relays.push(relayId);
+                }
+            });
+            zone.relays.sort((a, b) => a - b);
+        });
+        updateZoneList();
+        updateProjectorHighlights();
+    }
+
+    /**
+     * Panneau « Projecteurs disponibles » : ceux qui ne sont pas posés sur le plan.
+     */
+    function updateRelayStock() {
+        const box = $("relay-stock");
+        if (!box) return;
         const relayCount = (typeof NUM_RELAYS !== 'undefined' && NUM_RELAYS > 0) ? NUM_RELAYS : 5;
+        let html = "";
         for (let i = 0; i < relayCount; i++) {
-            if (!projectorIcons[i]) {
-                const defaultX = (canvasWidth / (relayCount + 1)) * (i + 1);
-                const defaultY = PROJ_RADIUS + 10;   // haut du canvas
-                relayPositions[i] = { x: defaultX, y: defaultY };
-                projectorIcons[i] = drawProjectorIcon(i, defaultX, defaultY);
+            if (!placedRelayIds.has(i)) {
+                html += `<span class="relay-chip" title="Poser le projecteur R${i} au centre du plan"
+                              onclick="zoneEditor.placeRelay(${i})">⊙ R${i}</span>`;
             }
         }
-        updateProjectorHighlights();
-        fabricCanvas.renderAll();
-        console.log(`[Projecteur] ${Object.keys(projectorIcons).length} icônes dans fabricCanvas (${fabricCanvas.getObjects().length} objets total)`);
+        box.innerHTML = html;
+    }
+
+    /**
+     * Pose un projecteur au centre du plan : à glisser ensuite dans une zone.
+     */
+    function placeRelay(relayId) {
+        if (placedRelayIds.has(relayId)) return;
+        relayPositions[relayId] = { x: canvasWidth / 2, y: canvasHeight / 2 };
+        placedRelayIds.add(relayId);
+        movedRelayIds.add(relayId);
+        removedRelayIds.delete(relayId);
+        refreshProjectorIcons();
+        recomputeRelayAssignments();
+        setStatus(`Projecteur R${relayId} posé au centre — le glisser dans une zone pour l'affecter`);
+    }
+
+    /**
+     * Retire un projecteur du plan (corbeille) : il redevient « disponible » et
+     * n'affecte plus aucune zone. Sa position sera supprimée à la sauvegarde.
+     */
+    function removeRelay(relayId) {
+        if (!placedRelayIds.has(relayId)) return;
+        const zonesConcernees = completedZones
+            .filter((z) => (z.relays || []).includes(relayId))
+            .map((z) => z.name);
+        placedRelayIds.delete(relayId);
+        movedRelayIds.delete(relayId);
+        removedRelayIds.add(relayId);
+        delete relayPositions[relayId];
+        refreshProjectorIcons();
+        recomputeRelayAssignments();
+        setStatus(zonesConcernees.length
+            ? `Projecteur R${relayId} retiré — n'est plus affecté à ${zonesConcernees.join(', ')}`
+            : `Projecteur R${relayId} retiré du plan`);
+    }
+
+    /**
+     * Compare les relais déclarés dans zones.ini aux relais dérivés des positions.
+     * Une configuration antérieure peut déclarer un relais dans une zone tout en
+     * ayant posé son icône ailleurs : la sauvegarde le retirerait silencieusement.
+     */
+    function checkRelayMismatch() {
+        const box = $("relay-mismatch");
+        if (!box || camId === null || camId === undefined) return;
+        fetch(`/api/zone_relay_check/${camId}`)
+            .then((r) => r.json())
+            .then((data) => {
+                const ecarts = data.mismatches || [];
+                box.hidden = ecarts.length === 0;
+                if (!ecarts.length) return;
+                box.innerHTML =
+                    `<strong>⚠️ ${ecarts.length} zone(s) : relais déclarés ≠ position des projecteurs.</strong><br>` +
+                    ecarts.map((e) => {
+                        const perdus = e.perdus.length ? `perdrait R${e.perdus.join(', R')}` : '';
+                        const gagnes = e.gagnes.length ? `gagnerait R${e.gagnes.join(', R')}` : '';
+                        return `${e.zone} : ${[perdus, gagnes].filter(Boolean).join(', ')}`;
+                    }).join('<br>') +
+                    `<br>L'affectation suit désormais la position de l'icône. Vérifier avant d'enregistrer.`;
+            })
+            .catch(() => { box.hidden = true; });
     }
 
     /**
@@ -450,6 +576,11 @@
             if (opt.e.button !== 0) return;
             const pointer = fabricCanvas.getPointer(opt.e);
 
+            // Corbeille d'un projecteur : le retirer du plan
+            if (opt.target && opt.target._removeRelayId !== undefined) {
+                removeRelay(opt.target._removeRelayId);
+                return;
+            }
             // Ignorer les clics sur les icônes de projecteur
             if (opt.target && opt.target._relayId !== undefined) return;
 
@@ -578,6 +709,16 @@
                     });
                     icon.label.setCoords();
                 }
+                if (icon && icon.trash) {
+                    icon.trash.set({
+                        left: opt.target.left + PROJ_RADIUS + 2,
+                        top: opt.target.top - PROJ_RADIUS - 2,
+                    });
+                    icon.trash.setCoords();
+                }
+                // L'affectation suit la position : recalcul en direct, la liste des
+                // zones montre immédiatement ce que le geste vient de changer.
+                recomputeRelayAssignments();
                 return;
             }
             if (editingIndex < 0 || !opt.target || opt.target._vertexIndex === undefined) return;
@@ -591,6 +732,9 @@
                 : completedMasks[editingIndex];
             item.polygon[i] = [x, y];
             updateEditEdges();
+            // Redimensionner une zone change ce qu'elle contient : un projecteur peut
+            // entrer ou sortir de son périmètre, donc être affecté ou désaffecté.
+            if (editingType === 'zone') recomputeRelayAssignments();
         });
     }
 
@@ -733,9 +877,13 @@
         tempCircles = [];
         isDrawing = false;
 
-        updateZoneList();
+        // Une zone tracée autour d'un projecteur déjà posé l'adopte aussitôt :
+        // l'affectation est géométrique, elle ne dépend pas de l'ordre des gestes.
+        recomputeRelayAssignments();
         fabricCanvas.renderAll();
-        setStatus(`Zone "${name}" créée — ${completedZones.length} zone(s) au total`);
+        const adoptes = completedZones[completedZones.length - 1].relays;
+        setStatus(`Zone "${name}" créée — ${completedZones.length} zone(s) au total` +
+                  (adoptes.length ? ` — projecteurs R${adoptes.join(', R')}` : ' — aucun projecteur dedans'));
     }
 
     /**
@@ -1114,19 +1262,15 @@
                 const [r, g, b] = zone.color;
                 const selected = i === selectedZoneIndex ? " selected" : "";
                 const pts = zone.polygon.length;
-                const numRelays = typeof NUM_RELAYS !== 'undefined' ? NUM_RELAYS : 0;
-                let relayCheckboxes = '';
-                if (numRelays > 0) {
-                    let checkboxHtml = '';
-                    for (let rn = 0; rn < numRelays; rn++) {
-                        const checked = (zone.relays || []).includes(rn) ? 'checked' : '';
-                        checkboxHtml += `<label class="relay-cb" title="Relais ${rn}">
-                            <input type="checkbox" ${checked} onchange="zoneEditor.toggleRelay(${i}, ${rn})">
-                            <span>${rn}</span>
-                        </label>`;
-                    }
-                    relayCheckboxes = `<div class="zone-relays" onclick="event.stopPropagation()"><span class="zone-relays-label">Relais :</span>${checkboxHtml}</div>`;
-                }
+                // Relais en lecture seule : l'affectation vient de la POSITION des
+                // icônes (le centre fait foi). Des cases à cocher ici créeraient une
+                // seconde source de vérité, qui divergerait au premier déplacement.
+                const relaisAffectes = zone.relays || [];
+                const badges = relaisAffectes.length
+                    ? relaisAffectes.map((rn) => `<span class="relay-badge" title="Projecteur R${rn} posé dans cette zone">R${rn}</span>`).join('')
+                    : '<span class="relay-badge none" title="Aucun projecteur posé dans cette zone : elle ne déclenche aucune alerte physique">aucun</span>';
+                const relayCheckboxes = `<div class="zone-relays-derived" onclick="event.stopPropagation()">
+                    <span class="zone-relays-label">Projecteurs :</span>${badges}</div>`;
                 const skipChecked = zone.skip_keypoint_filter ? 'checked' : '';
                 const skipCheckbox = `<div class="zone-skip-kp" onclick="event.stopPropagation()">
                     <label class="skip-kp-label" title="Désactive le filtre anti-chariot sur cette zone. À utiliser uniquement si vous êtes sûr que seuls des piétons y passent.">
@@ -1254,11 +1398,17 @@
                 };
             }
         });
-        const saveRelayPosReq = movedRelayIds.size > 0
+        // `removed` est indispensable : sans lui, un projecteur renvoyé au stock
+        // garderait sa position dans relay_positions.ini et redeviendrait affecté à
+        // sa zone au prochain chargement.
+        const saveRelayPosReq = (movedRelayIds.size > 0 || removedRelayIds.size > 0)
             ? fetch(`/api/relay_positions/${camId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ positions: relayPosData }),
+                body: JSON.stringify({
+                    positions: relayPosData,
+                    removed: Array.from(removedRelayIds),
+                }),
             }).then((res) => res.json())
             : Promise.resolve({ status: 'ok', count: 0 });
 
@@ -1269,6 +1419,7 @@
                 const mOk = mData.status === "ok";
                 if (zOk && mOk) {
                     movedRelayIds.clear();
+                    removedRelayIds.clear();
                     showToast(
                         `${zData.zones_count} zone(s) et ${mData.masks_count} masque(s) sauvegardé(s)`,
                         "success"
@@ -1456,28 +1607,12 @@
         zone.debounce_reset_seconds = v !== '' ? Math.max(0.1, parseFloat(v)) : null;
     }
 
-    /**
-     * Bascule l'activation d'un relais pour une zone.
-     */
-    function toggleRelay(zoneIdx, relayNum) {
-        const zone = completedZones[zoneIdx];
-        if (!zone) return;
-        const idx = zone.relays.indexOf(relayNum);
-        if (idx >= 0) {
-            zone.relays.splice(idx, 1);
-        } else {
-            zone.relays.push(relayNum);
-            zone.relays.sort((a, b) => a - b);
-        }
-        updateZoneList();
-        updateProjectorHighlights();
-    }
-
     // === API publique (pour les onclick du HTML) ===
     window.zoneEditor = {
         selectZone: selectZone,
         deleteZone: deleteZone,
-        toggleRelay: toggleRelay,
+        placeRelay: placeRelay,
+        removeRelay: removeRelay,
         toggleSkipKeypointFilter: toggleSkipKeypointFilter,
         setDebounceFrames: setDebounceFrames,
         setDebounceResetSeconds: setDebounceResetSeconds,

@@ -521,3 +521,58 @@ body {
     flex-shrink: 0;
     display: inline-block;
 }
+
+
+/* ── Projecteurs disponibles (non posés sur le plan) ─────────────────────── */
+.relay-stock-box {
+    margin: 8px 0 12px;
+    padding: 8px 10px;
+    background: #17171f;
+    border: 1px solid #2c2c3a;
+    border-radius: 6px;
+}
+.relay-stock-title {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #8b8b9e;
+    margin-bottom: 6px;
+}
+.relay-stock { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+.relay-stock:empty::after {
+    content: "tous les projecteurs sont posés";
+    color: #5c5c6e;
+    font-size: .78rem;
+    font-style: italic;
+}
+.relay-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .2rem .55rem;
+    background: #1a1a2e; color: #ffcc00;
+    border: 2px solid #ffcc00; border-radius: 999px;
+    font-size: .82rem; font-weight: 700;
+    cursor: pointer;
+}
+.relay-chip:hover { background: #ffcc00; color: #1a1a2e; }
+.relay-stock-hint { margin-top: 8px; font-size: .74rem; color: #7a7a8c; line-height: 1.45; }
+
+/* ── Avertissement de cohérence position / déclaration ───────────────────── */
+.relay-mismatch {
+    margin: 8px 0;
+    padding: 8px 10px;
+    background: #78350f; color: #fde68a;
+    border: 1px solid #b45309; border-radius: 6px;
+    font-size: .78rem; line-height: 1.5;
+}
+.relay-mismatch[hidden] { display: none; }
+.relay-mismatch strong { color: #fff; }
+
+/* ── Relais affectés à une zone (lecture seule : la position fait foi) ───── */
+.zone-relays-derived { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 8px 0; }
+.relay-badge {
+    display: inline-block; padding: .05rem .4rem;
+    background: #2b2b3d; color: #ffcc00;
+    border: 1px solid #4a4a63; border-radius: 4px;
+    font-size: .74rem; font-weight: 700;
+}
+.relay-badge.none { color: #9a9aae; border-style: dashed; font-weight: 400; }
