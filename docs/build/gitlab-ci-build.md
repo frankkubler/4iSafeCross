@@ -33,12 +33,26 @@ Ce document décrit le pipeline `.gitlab-ci.yml` utilisé pour compiler et publi
 
 ## Déclenchement
 
-| Événement | security | build | release |
-|-----------|----------|-------|---------|
-| Push sur `main` | ✅ | ✅ | — |
-| Push sur `jetson_gpu` | — | ✅ | — |
-| Tag `v*.*.*` | — | ✅ | ✅ |
-| Merge Request | ✅ | — | — |
+| Événement | `sast` | `gitleaks` | build images | release |
+|-----------|--------|------------|--------------|---------|
+| Push sur `main` | ✅ | ✅ | ▶ manuel | — |
+| Push sur une autre branche | — | — | ▶ manuel | — |
+| Tag `v*.*.*` | — | ✅ | ✅ | ✅ |
+| Merge request | ✅ | ✅ | — | — |
+
+**Une image n'est construite automatiquement que sur un tag.** C'est la seule
+livraison, et un build ARM64 sous QEMU est long — les deux jobs partagent le daemon
+Docker de l'hôte (`resource_group: docker-host`) et ne peuvent pas tourner en parallèle.
+Un push sur `main` déclenche donc les contrôles de sécurité, mais pas de build.
+
+Pour construire sans taguer (mise au point, image de test) : ouvrir le pipeline dans
+**CI/CD → Pipelines**, puis cliquer ▶ sur `build:docker:arm64` ou `build:docker:amd64`.
+Le job produit `<sha-court>-<arch>` et, sur `main`, met aussi à jour `latest-<arch>`.
+
+> ⚠️ **`latest-arm64` / `latest-amd64` ne suivent plus chaque push sur `main`** : ils ne
+> bougent qu'à un tag ou à un build lancé manuellement. Un déploiement qui pointerait
+> `latest-*` peut donc rester sur une image ancienne sans que rien ne le signale — raison
+> de plus pour déployer un tag de version en production (§ 3.1 d'install-prod).
 
 ## Prérequis Runner
 
