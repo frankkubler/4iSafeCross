@@ -770,19 +770,23 @@
                 relayPositions[rid] = { x: opt.target.left, y: opt.target.top };
                 movedRelayIds.add(rid);
                 const icon = projectorIcons[rid];
-                if (icon && icon.label) {
-                    icon.label.set({
-                        left: opt.target.left,
-                        top: opt.target.top + PROJ_RADIUS + 4,
+                if (icon) {
+                    // Le numéro est AU CENTRE du disque (originX/Y 'center') : il suit
+                    // donc le corps sans décalage. Le décalage vertical d'origine datait
+                    // de la version où il était écrit sous l'icône — il faisait sortir le
+                    // chiffre du rond dès le premier déplacement.
+                    const off = PROJ_RADIUS - 1;
+                    const suivis = [
+                        [icon.label, 0, 0],
+                        [icon.trash, off, -off],
+                        [icon.trashMark, off, -off],
+                    ];
+                    suivis.forEach(([o, dx, dy]) => {
+                        if (!o) return;
+                        o.set({ left: opt.target.left + dx, top: opt.target.top + dy });
+                        o.setCoords();
                     });
-                    icon.label.setCoords();
                 }
-                const off = PROJ_RADIUS - 1;
-                [icon && icon.trash, icon && icon.trashMark].forEach((o) => {
-                    if (!o) return;
-                    o.set({ left: opt.target.left + off, top: opt.target.top - off });
-                    o.setCoords();
-                });
                 // L'affectation suit la position : recalcul en direct, la liste des
                 // zones montre immédiatement ce que le geste vient de changer.
                 recomputeRelayAssignments();
