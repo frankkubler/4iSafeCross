@@ -146,16 +146,8 @@
             border-bottom: 3px solid #7f1d1d;
         }
         .relays-banner small { font-weight: normal; opacity: .9; }
-        /* Bandeau « alerte en cours » (alimenté par /alerts_status) */
-        .alerts-banner {
-            display: flex; align-items: center; gap: .75rem;
-            margin: 0; padding: .6rem 1.25rem;
-            background: #c2410c; color: #fff; font-weight: 600;
-            border-bottom: 3px solid #7c2d12;
-        }
-        .alerts-banner[hidden] { display: none; }
-        .alerts-banner small { font-weight: normal; opacity: .95; }
-        /* Pastilles d'état par zone, sous chaque caméra */
+        /* Pastilles d'état par zone, sous chaque caméra : elles localisent l'alerte
+           (caméra + zone + projecteurs). Un bandeau global en plus faisait doublon. */
         .zone-pills { display: flex; flex-wrap: wrap; gap: .4rem; padding: .3rem 0 .1rem; }
         .zone-pill {
             display: inline-flex; align-items: center; gap: .35rem;
@@ -888,21 +880,6 @@
             fetch('/alerts_status')
                 .then(r => r.json())
                 .then(data => {
-                    const banner = document.getElementById('alerts-banner');
-                    const detail = document.getElementById('alerts-banner-detail');
-                    if (banner) {
-                        const n = data.alerts_count || 0;
-                        banner.hidden = n === 0;
-                        if (n > 0) {
-                            const libelles = (data.alerts || []).map(
-                                a => `Caméra ${a.camera} / ${a.zone}` +
-                                     (a.relays && a.relays.length ? ` (R${a.relays.join(', R')})` : ' (aucun relais)')
-                            );
-                            banner.querySelector('.alerts-banner-title').textContent =
-                                n === 1 ? '⚠️ 1 alerte en cours' : `⚠️ ${n} alertes en cours`;
-                            detail.textContent = libelles.join('  •  ');
-                        }
-                    }
                     // Projecteurs en surimpression sur la vue caméra
                     (data.cameras || []).forEach((cam) => {
                         const ov = document.getElementById('proj-overlay-' + cam.index);
@@ -993,12 +970,6 @@
     <div id="relays-banner" class="relays-banner" role="alert" hidden>
         <span>⚠️ MODULE RELAIS INJOIGNABLE — aucune alerte ne peut être signalée physiquement</span>
         <small id="relays-banner-detail"></small>
-    </div>
-
-    <!-- ── Bandeau : alertes en cours (masqué quand aucune) ── -->
-    <div id="alerts-banner" class="alerts-banner" role="status" aria-live="polite" hidden>
-        <span class="alerts-banner-title">⚠️ alerte en cours</span>
-        <small id="alerts-banner-detail"></small>
     </div>
 
     <!-- ── Légende postures (dynamique depuis stature_colors) ── -->
