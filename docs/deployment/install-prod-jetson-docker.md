@@ -415,6 +415,15 @@ sudo docker compose -f docker-compose-arm64.yml up -d
 > nécessaire après une mise à jour d'image ; une clé `APP_VERSION` résiduelle dans le
 > `config.ini` d'un boîtier déjà déployé est simplement ignorée.
 >
+> ⚠️ **À partir de la v3.0.4, la numérotation affichée change** : l'IHM affiche
+> « Caméra 0 » / « Caméra 1 » (l'index technique) là où elle affichait « Camera 1 » /
+> « Camera 2 ». L'ancienne « Camera 2 » devient donc « Caméra 1 ». C'est désormais le
+> **même** numéro que les zones `*_cam<i>`, les images `cam_<i>_*.jpg`, les URL
+> `/zone_editor/<i>` et les messages de journal — auparavant, « caméra 1 » dans un
+> journal désignait la vue « Camera 2 » de l'écran. **Prévenir les exploitants** et
+> vérifier, à la remise en service, que chaque vue porte bien l'hôte RTSP attendu
+> (affiché à côté du numéro).
+>
 > Relever la version réellement déployée, sans passer par l'IHM :
 > ```bash
 > sudo docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' 4isafecross
@@ -602,6 +611,9 @@ docker exec -i 4isafecross /app/.venv/bin/python - < scripts/rtsp_probe.py
 - [ ] Serveurs d'inférence démarrés, liés à `127.0.0.1` (`8002` / `8004`)
 - [ ] Conteneur `healthy`, IHM HTTPS accessible depuis le seul sous-réseau de maintenance
 - [ ] Acquisition caméra réelle + cycle d'alerte relais vérifiés
+- [ ] Correspondance vue ↔ caméra vérifiée : l'hôte affiché à côté de « Caméra `<i>` »
+      est bien `HOST[<i>]` de `config.ini`, et les zones dessinées sur cette vue sont
+      enregistrées en `*_cam<i>`
 - [ ] `harden-run.sh` exécuté, sortie jointe au dossier de recette
 
 ---

@@ -122,3 +122,20 @@ def test_rtsp_host_port_sans_identifiants_et_cas_limites():
     assert rtsp_host_port("rtsp://172.16.10.169") == ("172.16.10.169", 554)
     assert rtsp_host_port("http://172.16.10.169/") is None
     assert rtsp_host_port(0) is None
+
+
+# ── Libellé de vue : index technique, sans décalage (2026-09-16) ──────────────
+from src.core.camera_order import camera_label
+
+
+def test_camera_label_affiche_l_index_technique():
+    assert camera_label(0, A) == "Caméra 0 — 172.16.10.169"
+    assert camera_label(1, B) == "Caméra 1 — 172.16.11.91"
+
+
+@pytest.mark.parametrize("pw", MOTS_DE_PASSE_PIEGES)
+def test_camera_label_ne_fuit_pas_le_mot_de_passe(pw):
+    libelle = camera_label(0, f"rtsp://admin:{pw}@172.16.10.169:554/stream1")
+    assert libelle == "Caméra 0 — 172.16.10.169"
+    if pw:
+        assert pw not in libelle

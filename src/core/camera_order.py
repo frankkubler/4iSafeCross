@@ -65,6 +65,18 @@ def order_cameras(configured, results):
     return toutes, disponibles
 
 
+def camera_label(idx, cam_id):
+    """Libellé d'une vue caméra : ``Caméra 0 — 172.16.10.169``.
+
+    L'index affiché est l'index technique, **sans décalage** : c'est celui des
+    sections ``*_cam<i>``, des images ``cam_<i>_*.jpg``, des URL ``/zone_editor/<i>``
+    et de tous les messages de journal. L'IHM affichait auparavant ``Camera <i+1>``,
+    seule numérotation 1-based du système : un « caméra 1 » lu dans un journal
+    désignait la vue « Camera 2 » de l'écran.
+    """
+    return f"Caméra {idx} — {rtsp_host(cam_id)}"
+
+
 def rtsp_host_port(url, default_port=554):
     """``(hôte, port)`` d'une URL RTSP, ou ``None`` si ce n'en est pas une.
 

@@ -840,6 +840,20 @@ skip_keypoint_filter = true
 # debounce_frames et debounce_reset_seconds absents → valeurs globales (2 et 0.8)
 ```
 
+### Index des caméras
+
+L'index d'une caméra est **sa position dans `[RTSP] HOST` de `config.ini`**, et il est le
+même partout — aucune numérotation décalée :
+
+| `config.ini` | IHM | Zones / masques | Images | Journal | Éditeur |
+|---|---|---|---|---|---|
+| `HOST[0]` | `Caméra 0 — <hôte>` | `*_cam0` | `cam_0_*.jpg` | « caméra 0 » | `/zone_editor/0` |
+| `HOST[1]` | `Caméra 1 — <hôte>` | `*_cam1` | `cam_1_*.jpg` | « caméra 1 » | `/zone_editor/1` |
+
+Jusqu'à la v3.0.3, l'IHM seule affichait `Camera <i+1>` : « caméra 1 » dans un journal
+désignait alors la vue « Camera 2 » de l'écran. Une caméra absente au démarrage conserve
+sa place, donc son index, ses zones et son fail-safe.
+
 > **`relays` fait foi.** La clé est la source de vérité du mappage zone → relais :
 > - `relays = 0,1` → ces relais ; `relays =` (présente, vide) → **aucun relais** — la zone
 >   compte les détections (journal, Telegram, images) sans rien piloter ;
