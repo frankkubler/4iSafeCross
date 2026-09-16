@@ -408,9 +408,12 @@ sudo docker compose -f docker-compose-arm64.yml up -d
 
 > **La version affichée dans l'IHM suit l'image automatiquement** : elle provient de la
 > variable d'environnement `APP_VERSION`, injectée au build par la CI avec le tag Git
-> (`ARG APP_VERSION` dans le `Dockerfile`) et non de `config/config.ini` — ce dernier est
-> un bind-mount du site, figé au premier déploiement, qui resterait sur l'ancienne valeur.
-> Aucune édition manuelle n'est donc nécessaire après une mise à jour d'image.
+> (`ARG APP_VERSION` dans le `Dockerfile`). En exécution depuis les sources, elle est lue
+> dans `pyproject.toml` (`[project] version`). Elle n'est **jamais** lue dans
+> `config/config.ini` : ce fichier est un bind-mount du site, figé au premier
+> déploiement, qui resterait sur l'ancienne valeur. Aucune édition manuelle n'est donc
+> nécessaire après une mise à jour d'image ; une clé `APP_VERSION` résiduelle dans le
+> `config.ini` d'un boîtier déjà déployé est simplement ignorée.
 >
 > Relever la version réellement déployée, sans passer par l'IHM :
 > ```bash

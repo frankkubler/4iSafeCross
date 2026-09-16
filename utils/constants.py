@@ -16,6 +16,45 @@ import re
 logger = logging.getLogger(__name__)
 
 
+def _project_version_from_text(text):
+    """``[project] version`` d'un pyproject.toml, sans tomllib (Python 3.10).
+
+    Lecture restreinte à la section ``[project]`` : un ``[tool.*]`` versionné plus
+    bas dans le fichier ne doit pas être pris pour la version du projet.
+    """
+    section = re.search(r'^\[project\]([^\[]*)', text, re.MULTILINE)
+    if not section:
+        return None
+    m = re.search(r'''^version\s*=\s*["']([^"']+)["']''', section.group(1), re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def _version_from_pyproject():
+    """Version déclarée dans ``[project] version`` de pyproject.toml, ou ``None``.
+
+    Source unique de la version du projet. Sert l'exécution depuis les sources
+    (développement, service systemd) : en conteneur, ``APP_VERSION`` est toujours
+    défini par l'image et prime — pyproject.toml n'y est d'ailleurs pas copié
+    (voir les étages finaux du Dockerfile).
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        'pyproject.toml')
+    try:
+        with open(path, encoding='utf-8') as f:
+            text = f.read()
+    except OSError:
+        return None
+    try:
+        import tomllib  # stdlib depuis Python 3.11
+    except ModuleNotFoundError:
+        return _project_version_from_text(text)
+    try:
+        return tomllib.loads(text).get('project', {}).get('version')
+    except Exception as exc:
+        logger.warning("pyproject.toml illisible (%s) : version inconnue.", exc)
+        return None
+
+
 def _parse_cam_id(section):
     """Extrait l'index caméra d'un nom de section ``<prefixe><n>_cam<j>``.
 
@@ -200,13 +239,15 @@ MOTION_GAUSSIAN_BLUR = config.getboolean('APP', 'MOTION_GAUSSIAN_BLUR', fallback
 MOTION_ASPECT_FILTER = config.getboolean('APP', 'MOTION_ASPECT_FILTER', fallback=False)
 MOTION_MIN_SINGLE_CONTOUR = config.getint('APP', 'MOTION_MIN_SINGLE_CONTOUR', fallback=1500)
 APP_NAME = config.get('APP', 'APP_NAME')
-# La version identifie l'IMAGE, pas le site. Elle est injectée au build
-# (ARG APP_VERSION -> ENV, voir Dockerfile et .gitlab-ci.yml) et prime donc sur
-# config.ini : ce dernier est un bind-mount depuis /data/4isafecross/config, figé
-# au premier déploiement, qui resterait sur l'ancienne valeur après une mise à jour
-# d'image et afficherait une version fausse (CS-1141-01).
-# Le repli config.ini sert l'exécution depuis les sources (dev, service systemd).
-APP_VERSION = os.environ.get('APP_VERSION') or config.get('APP', 'APP_VERSION', fallback='dev')
+# Version : une seule source par contexte, jamais config.ini.
+#   1. conteneur — ENV APP_VERSION, gravée au build avec le tag Git
+#      (ARG APP_VERSION, voir Dockerfile et .gitlab-ci.yml) ;
+#   2. sources (dev, service systemd) — [project] version de pyproject.toml ;
+#   3. 'dev' si aucune des deux.
+# config.ini est un bind-mount depuis /data/4isafecross/config, figé au premier
+# déploiement : y lire la version affichait l'ancienne après une mise à jour
+# d'image, en contradiction avec l'exigence d'identité de version (CS-1141-01).
+APP_VERSION = os.environ.get('APP_VERSION') or _version_from_pyproject() or 'dev'
 INF_THRESHOLD = config.getfloat('APP', 'INF_THRESHOLD')
 # Credentials RTSP : lus depuis les variables d'environnement en priorité.
 # Exporter avant de lancer l'application :

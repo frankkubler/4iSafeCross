@@ -180,8 +180,24 @@ Ou dans l'interface : **CI/CD > Pipelines > job échoué > logs**.
 git commit -m "chore: mise à jour doc [skip ci]"
 ```
 
+## Publier une version
+
+La version du projet est déclarée **au seul endroit** `pyproject.toml` (`[project] version`) :
+
+```bash
+sed -i '3s|^version = ".*"|version = "X.Y.Z"|' pyproject.toml
+git add pyproject.toml && git commit -m "chore(release): vX.Y.Z"
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push gitlab-https main vX.Y.Z      # le tag déclenche le build des images
+```
+
+Rien à modifier dans `config/config.ini` : l'application lit la version dans
+`pyproject.toml` en exécution depuis les sources, et dans la variable d'environnement
+`APP_VERSION` en conteneur — gravée au build par la CI avec le tag Git.
+
 ## Checklist avant push
 
+- [ ] Version portée dans `pyproject.toml` si c'est une livraison
 - [ ] Runner actif avec tag `docker` et `privileged = true`
 - [ ] Tous les fichiers source commités
 - [ ] `pyproject.toml` / `uv.lock` à jour
