@@ -46,6 +46,10 @@ class YoctoMultiRelay:
         # l'exception réelle levée par set_state n'apparaissait jamais dans le log.
         self.last_command_error = None
         self._last_failure_log = 0.0
+        # Séries déjà vues par les callbacks yapi : le premier UpdateDeviceList signale
+        # les modules présents comme « arrivés » — seule une 2e arrivée est un retour.
+        self._seen_serials = set()
+        self.reenumerations = 0        # retours USB constatés par yapi depuis le démarrage
         self._connect()
 
     # ── Connexion / reprise ──────────────────────────────────────────────────
@@ -99,10 +103,18 @@ class YoctoMultiRelay:
 
     def _on_device_arrival(self, module):
         try:
-            ident = f"{module.get_serialNumber()} ({module.get_productName()})"
+            serial = module.get_serialNumber()
+            ident = f"{serial} ({module.get_productName()})"
         except Exception:
-            ident = "module inconnu"
-        self.logger.warning(f"🔌 yapi : module {ident} détecté (arrivée USB)")
+            serial, ident = None, "module inconnu"
+        if serial is not None and serial not in self._seen_serials:
+            self._seen_serials.add(serial)
+            self.logger.info(f"🔌 yapi : module {ident} présent (énumération initiale)")
+            return
+        self.reenumerations += 1
+        self.logger.warning(
+            f"🔌 yapi : module {ident} de retour (ré-énumération USB n°{self.reenumerations} depuis le démarrage)"
+        )
 
     def _on_device_removal(self, module):
         try:

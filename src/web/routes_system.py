@@ -91,6 +91,7 @@ def relays_status():
         'last_error': getattr(relays, 'last_error', None),
         'last_command_error': getattr(relays, 'last_command_error', None),
         'failed_commands': getattr(relays, 'failed_commands', 0),
+        'reenumerations': getattr(relays, 'reenumerations', 0),
     })
 
 

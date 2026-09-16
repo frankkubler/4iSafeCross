@@ -146,6 +146,10 @@
             border-bottom: 3px solid #7f1d1d;
         }
         .relays-banner small { font-weight: normal; opacity: .9; }
+        /* `display: flex` ci-dessus l'emporte sur le `display: none` que le navigateur
+           applique à l'attribut hidden : sans cette règle, le bandeau reste affiché en
+           permanence, module joignable ou pas (constat 2026-09-16). */
+        .relays-banner[hidden] { display: none; }
         .legend-bar {
             display: flex;
             flex-wrap: wrap;
