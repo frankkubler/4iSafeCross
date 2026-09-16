@@ -146,6 +146,22 @@
             border-bottom: 3px solid #7f1d1d;
         }
         .relays-banner small { font-weight: normal; opacity: .9; }
+        /* Légende : réutilise les classes réelles pour montrer exactement ce que
+           l'écran affiche, mais en version statique (hors flux, sans animation). */
+        .legend-sep {
+            width: 1px; align-self: stretch;
+            background: var(--border); margin: 0 .35rem;
+        }
+        .legend-pill { cursor: help; }
+        .legend-pill.alert .dot { animation: none; }
+        .legend-pin {
+            position: static; transform: none;
+            width: 22px; height: 22px;
+            margin-right: .35rem;
+            cursor: help;
+        }
+        .legend-pin.on { box-shadow: 0 0 6px 2px rgba(255,204,0,.6); }
+
         /* Pastilles d'état par zone, sous chaque caméra : elles localisent l'alerte
            (caméra + zone + projecteurs). Un bandeau global en plus faisait doublon. */
         .zone-pills { display: flex; flex-wrap: wrap; gap: .4rem; padding: .3rem 0 .1rem; }
@@ -994,6 +1010,33 @@
             <span>{{ posture }}</span>
         </div>
         {% endfor %}
+
+        <span class="legend-sep" aria-hidden="true"></span>
+        <span class="legend-bar-title">Zones</span>
+        <div class="legend-item" title="Aucune personne dans la zone et aucun projecteur allumé">
+            <span class="zone-pill legend-pill"><span class="dot"></span>repos</span>
+        </div>
+        <div class="legend-item" title="Une personne est détectée dans la zone — l'alerte n'est pas encore déclenchée (debounce)">
+            <span class="zone-pill legend-pill detection"><span class="dot"></span>détection</span>
+        </div>
+        <div class="legend-item" title="Un projecteur de la zone est allumé : temporisation d'extinction, fail-safe et relais partagé compris">
+            <span class="zone-pill legend-pill alert"><span class="dot"></span>projecteur allumé</span>
+        </div>
+        <div class="legend-item" title="Aucun projecteur n'est affecté à cette zone : elle détecte mais ne signale rien physiquement">
+            <span class="zone-pill legend-pill norelay"><span class="dot"></span>sans projecteur</span>
+        </div>
+
+        <span class="legend-sep" aria-hidden="true"></span>
+        <span class="legend-bar-title" title="Pastilles posées sur la vue caméra, à l'emplacement des projecteurs">Projecteurs</span>
+        <div class="legend-item" title="Relais actif : le projecteur éclaire sur le terrain">
+            <span class="projector-pin legend-pin on">0</span><span>allumé</span>
+        </div>
+        <div class="legend-item" title="Projecteur posé sur le plan, relais au repos">
+            <span class="projector-pin legend-pin">0</span><span>éteint</span>
+        </div>
+        <div class="legend-item" title="Projecteur posé sur le plan mais déclaré dans aucune zone : il ne s'allumera jamais">
+            <span class="projector-pin legend-pin unbound">0</span><span>sans zone</span>
+        </div>
     </div>
 
     <!-- ── Caméras ── -->
