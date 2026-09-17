@@ -152,15 +152,22 @@
             width: 1px; align-self: stretch;
             background: var(--border); margin: 0 .35rem;
         }
-        .legend-pill { cursor: help; }
-        .legend-pill.alert .dot { animation: none; }
-        .legend-pin {
-            position: static; transform: none;
+        /* Ces règles doivent l'emporter sur .zone-pill / .projector-pin, déclarées
+           plus bas : à spécificité égale c'est la dernière qui gagne, et la pastille
+           de légende héritait alors de position:absolute + translate(-50%,-50%) —
+           elle sortait du flux et chevauchait son propre libellé. On cible donc les
+           deux classes (spécificité 0,2,0), indépendamment de l'ordre du fichier. */
+        .zone-pill.legend-pill { cursor: help; }
+        .zone-pill.legend-pill.alert .dot { animation: none; }
+        .projector-pin.legend-pin {
+            position: static;
+            transform: none;
             width: 22px; height: 22px;
+            flex: 0 0 auto;
             margin-right: .35rem;
             cursor: help;
         }
-        .legend-pin.on { box-shadow: 0 0 6px 2px rgba(255,204,0,.6); }
+        .projector-pin.legend-pin.on { box-shadow: 0 0 6px 2px rgba(255,204,0,.6); }
 
         /* Pastilles d'état par zone, sous chaque caméra : elles localisent l'alerte
            (caméra + zone + projecteurs). Un bandeau global en plus faisait doublon. */
