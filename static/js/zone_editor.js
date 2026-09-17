@@ -273,6 +273,17 @@
                 // Les positions peuvent être déjà chargées (ordre des requêtes non
                 // garanti) : dériver maintenant, et loadRelayPositions le refera.
                 recomputeRelayAssignments();
+                // Zones tracées hors du plan par une version antérieure : on ne les
+                // corrige pas d'office (ce serait modifier une zone de sécurité sans
+                // demander), mais on le signale — la partie hors champ n'existe dans
+                // aucune image et ne détectera jamais rien.
+                const debordantes = completedZones
+                    .filter((z) => z.polygon.some(([px, py]) =>
+                        px < -1 || py < -1 || px > canvasWidth + 1 || py > canvasHeight + 1))
+                    .map((z) => z.name);
+                if (debordantes.length) {
+                    setStatus(`${debordantes.join(', ')} déborde(nt) de l'image — corriger les sommets concernés`, 'error');
+                }
                 showLoading(false);
                 setStatus(
                     `${completedZones.length} zone(s) chargée(s) — Image ${imageWidth}×${imageHeight}px`
@@ -738,9 +749,10 @@
                 if (editorMode === 'mask') deselectMask(); else deselectZone();
             }
 
-            // Snap aux bords
-            let x = snapToBorder(pointer.x, canvasWidth);
-            let y = snapToBorder(pointer.y, canvasHeight);
+            // Bornage au plan, puis snap aux bords. Fabric peut renvoyer un pointeur
+            // légèrement hors du canvas quand le curseur en sort pendant le geste.
+            let x = snapToBorder(clampToCanvas(pointer.x, canvasWidth), canvasWidth);
+            let y = snapToBorder(clampToCanvas(pointer.y, canvasHeight), canvasHeight);
 
             // Shift : contraindre aux axes cardinaux par rapport au dernier point
             if (isShiftDown && currentPoints.length > 0) {
@@ -860,8 +872,12 @@
             const handle = opt.target;
             const i = handle._vertexIndex;
             // La position left/top est le coin supérieur gauche du cercle
-            const x = handle.left + HANDLE_RADIUS;
-            const y = handle.top + HANDLE_RADIUS;
+            const x = clampToCanvas(handle.left + HANDLE_RADIUS, canvasWidth);
+            const y = clampToCanvas(handle.top + HANDLE_RADIUS, canvasHeight);
+            // Replacer la poignée elle-même : sans cela elle suivrait la souris hors
+            // du plan tandis que le sommet resterait au bord, les deux se séparant.
+            handle.set({ left: x - HANDLE_RADIUS, top: y - HANDLE_RADIUS });
+            handle.setCoords();
             const item = editingType === 'zone'
                 ? completedZones[editingIndex]
                 : completedMasks[editingIndex];
@@ -871,6 +887,18 @@
             // entrer ou sortir de son périmètre, donc être affecté ou désaffecté.
             if (editingType === 'zone') recomputeRelayAssignments();
         });
+    }
+
+    /**
+     * Ramène une coordonnée dans le plan.
+     *
+     * Un sommet tiré hors de l'image produit une zone qui ne correspond plus à ce
+     * que l'opérateur voit : la partie hors champ n'existe pas dans les frames, et
+     * les points sont enregistrés tels quels dans zones.ini. On borne donc à la
+     * saisie, plutôt que de corriger après coup.
+     */
+    function clampToCanvas(val, max) {
+        return Math.min(Math.max(val, 0), max);
     }
 
     /**
@@ -1367,7 +1395,33 @@
      * Retourne la prochaine couleur de la palette.
      */
     function getNextColor() {
-        return COLOR_PALETTE[completedZones.length % COLOR_PALETTE.length];
+        // Première couleur de la palette encore libre, et non la N-ième : indexer sur
+        // le nombre de zones donnait un doublon dès qu'une zone était supprimée
+        // (3 zones, on retire la 2e, la suivante reprenait la couleur de la 3e). Deux
+        // zones de même couleur sont indistinguables sur le plan comme dans la liste.
+        const utilisees = new Set(completedZones.map((z) => (z.color || []).join(',')));
+        const libre = COLOR_PALETTE.find((c) => !utilisees.has(c.join(',')));
+        if (libre) return libre;
+        // Palette épuisée (plus de 8 zones) : teinte répartie par l'angle d'or, qui
+        // maximise l'écart avec les teintes déjà posées.
+        for (let i = 0; i < 360; i++) {
+            const candidate = hslToRgb((completedZones.length * 137.508 + i * 7) % 360, 0.85, 0.55);
+            if (!utilisees.has(candidate.join(','))) return candidate;
+        }
+        return COLOR_PALETTE[0];
+    }
+
+    /**
+     * HSL → RGB (h en degrés, s et l entre 0 et 1). Sert à prolonger la palette
+     * quand toutes ses couleurs sont déjà attribuées.
+     */
+    function hslToRgb(h, s, l) {
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+        const m = l - c / 2;
+        const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
+            : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
     }
 
     /**
@@ -1490,12 +1544,18 @@
         showLoading(true);
 
         // Convertir les coordonnées canvas → réelles
+        // Conversion canvas → pixels de l'image, bornée aux dimensions réelles.
+        // L'arrondi du canvas fait déborder d'un pixel tout point collé au bord :
+        // canvasHeight = round(1080 / 1.3714) = 788, puis 788 * 1.3714 = 1080,7 → 1081.
+        // Les fichiers du dépôt portent effectivement des sommets à y = 1081.
+        const versImage = (pt) => [
+            Math.min(Math.max(Math.round(pt[0] * scaleFactor), 0), imageWidth),
+            Math.min(Math.max(Math.round(pt[1] * scaleFactor), 0), imageHeight),
+        ];
+
         const zonesData = completedZones.map((zone) => ({
             name: zone.name,
-            polygon: zone.polygon.map((pt) => [
-                Math.round(pt[0] * scaleFactor),
-                Math.round(pt[1] * scaleFactor),
-            ]),
+            polygon: zone.polygon.map(versImage),
             color: zone.color,
             relays: zone.relays || [],
             skip_keypoint_filter: zone.skip_keypoint_filter || false,
@@ -1505,10 +1565,7 @@
 
         const masksData = completedMasks.map((mask) => ({
             name: mask.name,
-            polygon: mask.polygon.map((pt) => [
-                Math.round(pt[0] * scaleFactor),
-                Math.round(pt[1] * scaleFactor),
-            ]),
+            polygon: mask.polygon.map(versImage),
         }));
 
         const saveZonesReq = fetch(`/api/zones/${camId}`, {

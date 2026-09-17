@@ -92,10 +92,17 @@ def save_zones(cid):
     data = request.get_json()
     zones_data = data.get('zones', [])
 
-    # Attribuer les couleurs automatiquement si absentes
+    # Attribuer les couleurs manquantes : première de la palette encore libre, et non
+    # la i-ème. Indexer sur la position donnait la même couleur à deux zones dès qu'une
+    # partie d'entre elles en portait déjà une — or deux zones de même couleur sont
+    # indistinguables sur le plan comme dans la liste. L'éditeur applique la même règle ;
+    # ceci ne sert qu'aux appels qui n'envoient pas de couleur.
+    deja_prises = {tuple(z['color']) for z in zones_data if z.get('color')}
     for i, zone in enumerate(zones_data):
         if 'color' not in zone or not zone['color']:
-            zone['color'] = list(ZONE_COLORS_PALETTE[i % len(ZONE_COLORS_PALETTE)])
+            libre = next((c for c in ZONE_COLORS_PALETTE if c not in deja_prises), None)
+            zone['color'] = list(libre or ZONE_COLORS_PALETTE[i % len(ZONE_COLORS_PALETTE)])
+            deja_prises.add(tuple(zone['color']))
         # S'assurer du nommage correct
         if 'name' not in zone or not zone['name']:
             zone['name'] = f'zone{i + 1}_cam{cid}'
