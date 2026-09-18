@@ -1,31 +1,35 @@
+# ── Caches d'exécution et d'outils ────────────────────────────────────────
 __pycache__
-/logs/*
-!logs/
-# Fichiers de configuration contenant des credentials sensibles
+.venv/
+.python-version
+# ruff et pytest écrivent déjà un .gitignore dans leur cache ; on l'inscrit ici
+# pour ne pas dépendre de ce comportement (version d'outil, cache recréé à la main).
+.ruff_cache/
+.pytest_cache/
+.nuitka/
+uv.toml
+
+# ── Secrets et licences : jamais versionnés ───────────────────────────────
+# Les chemins config/* sont conservés pour les déploiements antérieurs au
+# déplacement vers licenses/ ; public_key.pem reste suivi (clé publique).
 .env
-# Artefacts de licence : jamais versionnes (cf. README, section Licence).
-# Les chemins config/* sont conserves pour les deploiements anterieurs au
-# deplacement vers licenses/ ; public_key.pem reste suivi (cle publique).
 licenses/*.lic
 licenses/license_state.json
 licenses/license_state.key
 config/4isafecross.lic
 config/license_state.json
 config/license_state.key
-/logs/*.log
-__pycache__/app.cpython-312.pyc
-static/ffmpeg/bin/ffmpeg.exe
-static/ffmpeg/bin/ffplay.exe
-static/ffmpeg/bin/ffprobe.exe
+
+# ── État produit à l'exécution ────────────────────────────────────────────
+/logs/*
+!logs/
 /detections
-__pycache__/app.cpython-312.pyc
-.python-version
-.venv/
+db/*.db                 # base SQLite créée par init_db (CS hygiène)
 
-# Bac à sable de l'éditeur de zones (tools/zone_editor_sandbox.py)
-tools/sandbox/
-
-# Nuitka build artifacts
+# ── Binaires et artefacts de build ────────────────────────────────────────
+# app.* : reliquats de Nuitka au temps de app.py, supprimé en v3.0.0 au profit
+# de run.py + blueprints. Conservés tant que d'anciens arbres de travail peuvent
+# encore en contenir.
 dist/
 *.dist/
 *.build/
@@ -33,18 +37,14 @@ dist/
 app.build/
 app.dist/
 app.onefile-build/
-
-# Compiled executables
 4isafecross
 4isafecross.bin
-
-# Archives
 *.tar.gz
 *.zip
+static/ffmpeg/bin/ffmpeg.exe
+static/ffmpeg/bin/ffplay.exe
+static/ffmpeg/bin/ffprobe.exe
 
-# Nuitka cache
-.nuitka/
-uv.toml
-
-# Base SQLite créée à l'exécution (init_db) — jamais versionnée (CS hygiène)
-db/*.db
+# ── Divers ────────────────────────────────────────────────────────────────
+# Bac à sable de l'éditeur de zones (tools/zone_editor_sandbox.py)
+tools/sandbox/
