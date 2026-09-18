@@ -153,7 +153,6 @@ def gen_frames(cid):
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 2)
                 # Optionnel : afficher la confiance
                 confidence = det.get("confidence", 0)
-                class_id = det.get("class_id", -1)
                 label = f'{confidence:.2f} {label} '
                 cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
                 # Afficher la zone sur la détection
@@ -183,10 +182,12 @@ def gen_frames(cid):
                 with caches.frame_cache_lock:
                     caches.frame_cache[cid] = frame_bytes
                     caches.frame_cache_timestamp[cid] = current_time
-                    cache_size = len(caches.frame_cache)
 
-                avg_generation_time = caches.cache_performance_stats['total_generation_time'] / caches.cache_performance_stats['misses']
-                hit_rate = caches.cache_performance_stats['hits'] / (caches.cache_performance_stats['hits'] + caches.cache_performance_stats['misses']) * 100
+                # Le taux de succès du cache et le temps de génération moyen sont
+                # calculés — et protégés de la division par zéro — dans
+                # caches.log_cache_performance(). Ils étaient recalculés ici à chaque
+                # image, pour des variables que plus rien ne lisait : reste d'un log de
+                # diagnostic retiré depuis.
 
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
