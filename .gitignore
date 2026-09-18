@@ -24,7 +24,9 @@ config/license_state.key
 /logs/*
 !logs/
 /detections
-db/*.db                 # base SQLite créée par init_db (CS hygiène)
+# Base SQLite créée par init_db (CS hygiène) — un commentaire de FIN de ligne
+# ferait partie du motif : .gitignore ne les reconnaît pas.
+db/*.db
 
 # ── Binaires et artefacts de build ────────────────────────────────────────
 # app.* : reliquats de Nuitka au temps de app.py, supprimé en v3.0.0 au profit
