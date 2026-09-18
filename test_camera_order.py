@@ -139,3 +139,38 @@ def test_camera_label_ne_fuit_pas_le_mot_de_passe(pw):
     assert libelle == "Caméra 0 — 172.16.10.169"
     if pw:
         assert pw not in libelle
+
+
+# ── Le masquage doit opérer AU MILIEU d'un texte ─────────────────────────────
+# Régression réelle (v3.0.4 → v3.0.12) : l'expression était ancrée sur l'URL entière,
+# or camera_manager journalise la chaîne de pipeline GStreamer complète. Le mot de
+# passe RTSP est apparu en clair dans les journaux du boîtier.
+
+PIPELINE = ("rtspsrc location={url} latency=200 protocols=tcp ! rtph264depay ! h264parse "
+            "! nvv4l2decoder ! nvvidconv ! video/x-raw,format=BGRx,width=1920,height=1080 "
+            "! videoconvert ! video/x-raw,format=BGR ! appsink name=sink")
+
+
+@pytest.mark.parametrize("pw", MOTS_DE_PASSE_PIEGES)
+def test_masquage_dans_une_chaine_de_pipeline(pw):
+    url = f"rtsp://admin:{pw}@172.16.11.91:554/stream1"
+    masque = strip_userinfo(PIPELINE.format(url=url))
+    assert "rtsp://***@172.16.11.91:554/stream1" in masque
+    assert "admin" not in masque
+    if pw:
+        assert pw not in masque
+    # le reste du pipeline est intact
+    assert masque.endswith("! appsink name=sink")
+    assert "latency=200 protocols=tcp" in masque
+
+
+def test_masquage_de_plusieurs_urls_dans_un_meme_texte():
+    texte = ("essai rtsp://u1:p1@10.0.0.1:554/s1 puis rtsps://u2:p2@cam.local/s2 fin")
+    masque = strip_userinfo(texte)
+    assert masque == "essai rtsp://***@10.0.0.1:554/s1 puis rtsps://***@cam.local/s2 fin"
+
+
+def test_texte_sans_identifiants_inchange():
+    for texte in ("rtspsrc location=rtsp://10.0.0.1:554/s1 latency=200",
+                  "aucune url ici", "http://exemple.local/page"):
+        assert strip_userinfo(texte) == texte

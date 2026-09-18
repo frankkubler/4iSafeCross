@@ -40,13 +40,31 @@ def split_userinfo(url):
     return m.group('scheme'), m.group('userinfo'), m.group('rest')
 
 
-def strip_userinfo(url, replacement='***@'):
-    """Masque login et mot de passe : ``rtsp://***@172.16.10.169:554/stream1``."""
-    parts = split_userinfo(url)
-    if parts is None:
-        return url
-    scheme, _, rest = parts
-    return f"{scheme}{replacement}{rest}"
+# Une URL RTSP telle qu'elle apparaît DANS un texte : chaîne de pipeline GStreamer,
+# message d'erreur, ligne de commande. Elle s'arrête au premier blanc.
+_URL_IN_TEXT = re.compile(r'rtsps?://\S*')
+
+
+def strip_userinfo(value, replacement='***@'):
+    """Masque login et mot de passe de **toute** URL RTSP contenue dans ``value``.
+
+    Le masquage doit fonctionner au milieu d'un texte, pas seulement sur une URL
+    isolée : le pipeline GStreamer est journalisé en entier
+    (``rtspsrc location=rtsp://login:mdp@hote:554/stream1 latency=200 ! …``) et
+    c'est là que le mot de passe a fui — une expression ancrée sur l'URL entière
+    ne reconnaissait pas cette chaîne et la renvoyait telle quelle.
+    """
+    if not isinstance(value, str):
+        return value
+
+    def _masque(m):
+        parts = split_userinfo(m.group(0))
+        if parts is None:
+            return m.group(0)          # URL sans identifiants : rien à masquer
+        scheme, _, rest = parts
+        return f"{scheme}{replacement}{rest}"
+
+    return _URL_IN_TEXT.sub(_masque, value)
 
 
 def order_cameras(configured, results):
