@@ -1,7 +1,7 @@
-from waitress import serve
 import faulthandler
 import logging
 
+from waitress import serve
 
 if __name__ == '__main__':
     # Dump de pile sur crash natif (SIGSEGV/SIGABRT — GStreamer, OpenCV…) :
