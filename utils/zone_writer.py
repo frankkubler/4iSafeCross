@@ -5,9 +5,9 @@ Fournit les fonctions pour sauvegarder les polygones de zones
 dans le format attendu par load_zones_by_camera_from_ini().
 """
 
+import logging
 import os
 import re
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ def _parse_ini_sections(ini_path):
         return sections
 
     current_section = None
-    with open(ini_path, "r", encoding="utf-8") as f:
+    with open(ini_path, encoding="utf-8") as f:
         for line in f:
             stripped = line.strip()
             # Ignorer les lignes vides et commentaires hors section

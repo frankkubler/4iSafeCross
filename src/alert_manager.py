@@ -1,14 +1,15 @@
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
-from utils.utils import save_frame_to_file
-from datetime import datetime
-import logging
-import cv2
 import asyncio
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from queue import Queue
+
+import cv2
+
 from src.detection_db import init_db, insert_relay_event, purge_old_relay_events
 from utils.constants import RELAY_EVENTS_KEEP_DAYS
+from utils.utils import save_frame_to_file
 
 # Queue avec limite pour éviter l'accumulation de tâches en mémoire
 MAX_RECORDING_QUEUE_SIZE = 20

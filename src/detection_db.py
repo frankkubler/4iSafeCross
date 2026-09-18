@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime, timedelta
+
 from utils.constants import DB_PATH, RELAY_EVENTS_KEEP_DAYS
 
 

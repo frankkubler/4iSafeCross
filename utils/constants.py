@@ -3,8 +3,8 @@
 #
 # Aucun credential en dur dans ce fichier : les secrets (Telegram, RTSP) sont
 # lus depuis l'environnement plus bas, avec config.ini en dernier recours.
-import configparser
 import ast
+import configparser
 import logging
 import os
 import re

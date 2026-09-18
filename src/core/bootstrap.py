@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 from src.alert_manager import AlerteManager
+
 # src.bot_aiogram (client Telegram) est importé paresseusement dans
 # create_application(), uniquement si TELEGRAM_ENABLED : hors de ce cas, le
 # client Telegram et sa pile aiogram/aiohttp ne sont pas chargés au boot
@@ -24,26 +25,43 @@ from src.alert_manager import AlerteManager
 from src.camera_manager import CameraManager, redact_rtsp_url
 from src.collect_dataset import DatasetCollectionThread
 from src.core import caches, failsafe
-from src.core.detection_pipeline import detection_callback_factory, get_frame_func_factory
 from src.core.camera_order import order_cameras, rtsp_host
+from src.core.detection_pipeline import detection_callback_factory, get_frame_func_factory
 from src.core.state import state
 from src.inference import InferenceServerThread
 from src.relay_pilot import YoctoMultiRelay
 from src.web.app_factory import create_app, require_auth_config
-from utils.constants import (MOTIONTHRESHOLD, RTSP_LOGIN,
-                             RTSP_PASSWORD, RTSP_HOST, RTSP_PORT, RTSP_STREAM,
-                             RTSP_SCHEME, RTSP_TLS_CA, LOG_LEVEL,
-                             ZONES_BY_CAMERA, WAIT_BEFORE_TEST_RTSP,
-                             RTSP_FIRST_FRAME_TIMEOUT, RTSP_FRAME_LOSS_TIMEOUT,
-                             DATASET_COLLECTION, DATASET_COLLECTION_INTERVAL,
-                             DATASET_COLLECTION_START_HOUR, DATASET_COLLECTION_END_HOUR,
-                             DATASET_COLLECTION_MAX_PER_CLASS, DATASET_OUTPUT_DIR, DATASET_FILES_KEEP_DAYS,
-                             DATASET_BG_INTERVAL, DATASET_BG_ENABLED,
-                             DATASET_HARD_NEG_CONFIDENCE, DATASET_HARD_NEG_ENABLED,
-                             URL_YOLO, FONCTION_YOLO,
-                             MASKS_BY_CAMERA,
-                             RELAY_POSITIONS_BY_CAMERA,
-                             TELEGRAM_ENABLED)
+from utils.constants import (
+    DATASET_BG_ENABLED,
+    DATASET_BG_INTERVAL,
+    DATASET_COLLECTION,
+    DATASET_COLLECTION_END_HOUR,
+    DATASET_COLLECTION_INTERVAL,
+    DATASET_COLLECTION_MAX_PER_CLASS,
+    DATASET_COLLECTION_START_HOUR,
+    DATASET_FILES_KEEP_DAYS,
+    DATASET_HARD_NEG_CONFIDENCE,
+    DATASET_HARD_NEG_ENABLED,
+    DATASET_OUTPUT_DIR,
+    FONCTION_YOLO,
+    LOG_LEVEL,
+    MASKS_BY_CAMERA,
+    MOTIONTHRESHOLD,
+    RELAY_POSITIONS_BY_CAMERA,
+    RTSP_FIRST_FRAME_TIMEOUT,
+    RTSP_FRAME_LOSS_TIMEOUT,
+    RTSP_HOST,
+    RTSP_LOGIN,
+    RTSP_PASSWORD,
+    RTSP_PORT,
+    RTSP_SCHEME,
+    RTSP_STREAM,
+    RTSP_TLS_CA,
+    TELEGRAM_ENABLED,
+    URL_YOLO,
+    WAIT_BEFORE_TEST_RTSP,
+    ZONES_BY_CAMERA,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +127,7 @@ def _log_license_boot_failure(err: Exception) -> None:
 def _verify_license():
     # Import ici : après la configuration du logging, comme historiquement,
     # et pour que les modules sans licence (tests) restent importables.
-    from license_validator import load_and_verify_license, get_machine_id
+    from license_validator import get_machine_id, load_and_verify_license
 
     lic_path = os.environ.get("SAFECROSS_LICENSE", "licenses/4isafecross.lic")
     logger.info(f"Vérification de la licence dans : {lic_path}")

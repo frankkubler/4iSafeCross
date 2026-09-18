@@ -1,15 +1,18 @@
-import cv2
-import threading
 import logging
 import platform
+import threading
 import time
-import gi
-gi.require_version('Gst', '1.0')
-from gi.repository import Gst
-import os
-import numpy as np
 
-from src.core.camera_order import strip_userinfo, rtsp_host_port
+import cv2
+import gi
+
+gi.require_version('Gst', '1.0')
+import os
+
+import numpy as np
+from gi.repository import Gst
+
+from src.core.camera_order import rtsp_host_port, strip_userinfo
 
 # Un identifiant de caméra RTSP est une URL complète, credentials inclus
 # (rtsp://login:password@host:554/stream1). Elle est interpolée dans de nombreux
@@ -406,8 +409,8 @@ class CameraManager:
         ThreadPoolExecutor en Docker) par un connect() TCP pur Python.
         Retourne True si la connexion TCP aboutit, False sinon.
         """
-        import socket
         import logging
+        import socket
         logger = logging.getLogger(__name__).getChild('test_rtsp_stream')
         safe_cid = redact_rtsp_url(cid)
         logger.info(f"Test du flux RTSP {safe_cid} avec connexion TCP...")
@@ -437,6 +440,6 @@ class CameraManager:
                 cid = future_to_cid[future]
                 try:
                     results[cid] = future.result()
-                except Exception as e:
+                except Exception:
                     results[cid] = False
         return results

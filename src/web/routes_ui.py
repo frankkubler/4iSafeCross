@@ -4,12 +4,21 @@ from flask import Blueprint, render_template
 from src.camera_manager import redact_rtsp_url
 from src.core.camera_order import camera_label, rtsp_host
 from src.core.state import state
-from utils.constants import (MOTIONTHRESHOLD, APP_NAME, APP_VERSION, OBJECT_COLORS,
-                             NUM_RELAYS,
-                             FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS,
-                             MOTION_ON_FRAMES, MOTION_OFF_FRAMES,
-                             MOTION_GAUSSIAN_BLUR, MOTION_ASPECT_FILTER,
-                             MOTION_MIN_SINGLE_CONTOUR)
+from utils.constants import (
+    APP_NAME,
+    APP_VERSION,
+    FGBG_DETECT_SHADOWS,
+    FGBG_HISTORY,
+    FGBG_VAR_THRESHOLD,
+    MOTION_ASPECT_FILTER,
+    MOTION_GAUSSIAN_BLUR,
+    MOTION_MIN_SINGLE_CONTOUR,
+    MOTION_OFF_FRAMES,
+    MOTION_ON_FRAMES,
+    MOTIONTHRESHOLD,
+    NUM_RELAYS,
+    OBJECT_COLORS,
+)
 
 ui_bp = Blueprint('ui', __name__)
 

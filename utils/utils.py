@@ -1,8 +1,10 @@
+import logging
 import os
 import time
+
 import cv2
-import logging
-from utils.constants import DETECTION_FILES_MAX, DETECTION_FILES_KEEP_DAYS
+
+from utils.constants import DETECTION_FILES_KEEP_DAYS, DETECTION_FILES_MAX
 
 logger = logging.getLogger(__name__).getChild('utils')
 
@@ -138,8 +140,8 @@ def get_service_status(service_name):
             pass
         # Ajout température GPU (Jetson)
         try:
-            import subprocess
             import re
+            import subprocess
             proc = subprocess.Popen(["tegrastats"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             first_line = proc.stdout.readline()
             proc.terminate()

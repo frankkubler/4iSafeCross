@@ -10,11 +10,13 @@ from flask import Blueprint, jsonify, request
 from src.core import caches
 from src.core.geometry import zone_relay_mismatches
 from src.core.state import state
-from utils.constants import (NUM_RELAYS,
-                             load_zones_by_camera_from_ini,
-                             load_masks_by_camera_from_ini,
-                             load_relay_positions_from_ini)
-from utils.zone_writer import save_zones_to_ini, save_masks_to_ini, save_relay_positions_to_ini
+from utils.constants import (
+    NUM_RELAYS,
+    load_masks_by_camera_from_ini,
+    load_relay_positions_from_ini,
+    load_zones_by_camera_from_ini,
+)
+from utils.zone_writer import save_masks_to_ini, save_relay_positions_to_ini, save_zones_to_ini
 
 logger = logging.getLogger(__name__)
 

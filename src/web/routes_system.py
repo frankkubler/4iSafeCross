@@ -10,11 +10,11 @@ from flask import Blueprint, jsonify, send_from_directory
 
 from src.core import caches, failsafe
 from src.core.camera_order import camera_label, rtsp_host
-from src.core.state import state
 from src.core.gpu_metrics import get_gpu_metrics
+from src.core.state import state
 from src.core.system_metrics import get_resource_metrics
 from src.web.app_factory import PROJECT_ROOT
-from utils.utils import get_non_local_ips, get_docker_info, get_service_status
+from utils.utils import get_docker_info, get_non_local_ips, get_service_status
 
 logger = logging.getLogger(__name__)
 

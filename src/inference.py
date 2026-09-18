@@ -1,22 +1,36 @@
+import io
+import logging
 import threading
 import time
-import numpy as np
-import logging
-import requests
-import io
-import cv2
 from collections import deque
-from utils.constants import (MOTIONTHRESHOLD, INF_THRESHOLD,
-                             DETECTION, POSE_ENABLED,
-                             URL_RFDETR, FONCTION_RFDETR, URL_YOLO, FONCTION_YOLO,
-                             EXTENDED_CLASSES, TRANSFERT_CLASSES, SIMPLE_CLASSES,
-                             FGBG_HISTORY, FGBG_VAR_THRESHOLD, FGBG_DETECT_SHADOWS,
-                             MOTION_ON_FRAMES, MOTION_OFF_FRAMES,
-                             MOTION_GAUSSIAN_BLUR, MOTION_ASPECT_FILTER,
-                             MOTION_MIN_SINGLE_CONTOUR)
+
+import cv2
+import numpy as np
+import requests
 
 from src.motion import MotionDetector
 from src.pose_analyser import PoseAnalyzer
+from utils.constants import (
+    DETECTION,
+    EXTENDED_CLASSES,
+    FGBG_DETECT_SHADOWS,
+    FGBG_HISTORY,
+    FGBG_VAR_THRESHOLD,
+    FONCTION_RFDETR,
+    FONCTION_YOLO,
+    INF_THRESHOLD,
+    MOTION_ASPECT_FILTER,
+    MOTION_GAUSSIAN_BLUR,
+    MOTION_MIN_SINGLE_CONTOUR,
+    MOTION_OFF_FRAMES,
+    MOTION_ON_FRAMES,
+    MOTIONTHRESHOLD,
+    POSE_ENABLED,
+    SIMPLE_CLASSES,
+    TRANSFERT_CLASSES,
+    URL_RFDETR,
+    URL_YOLO,
+)
 
 
 class InferenceServerThread(threading.Thread):

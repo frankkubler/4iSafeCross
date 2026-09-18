@@ -1,19 +1,21 @@
+import asyncio
+import io
+import logging
 import os
+import platform
+import time
+
+import cv2
+import psutil
+import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-import asyncio
-import requests
-from utils.constants import TOKEN, CHAT_ID
-import logging
-import cv2
-import time
-import io
-import psutil
-import platform
-from utils.utils import get_non_local_ips, get_docker_info, get_service_status
+
+from utils.constants import CHAT_ID, TOKEN
+from utils.utils import get_docker_info, get_non_local_ips, get_service_status
 
 
-class BotThread():
+class BotThread:
 
     def __init__(self, overwrite_file, state=None):
         super().__init__()
